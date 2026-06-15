@@ -1,0 +1,60 @@
+# =========================
+# Node / Next.js
+# =========================
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+.next/
+out/
+build/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.tsbuildinfo
+next-env.d.ts
+
+# =========================
+# Python / FastAPI
+# =========================
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+*.egg
+
+# =========================
+# Database
+# =========================
+personapress.db
+*.db
+*.sqlite
+
+# =========================
+# Environment files
+# =========================
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# =========================
+# Misc
+# =========================
+.DS_Store
+*.pem
+.vercel
+.idea/
+.vscode/
+*.log

@@ -1,0 +1,46 @@
+# Web framework
+fastapi[standard]==0.135.1
+uvicorn[standard]==0.34.3
+
+# Database
+sqlmodel
+alembic
+asyncpg
+
+# Settings
+pydantic-settings
+python-dotenv==1.1.0
+
+# Auth & security
+python-jose[cryptography]
+passlib[bcrypt]
+cryptography
+
+# Rate limiting
+slowapi
+
+# HTTP client
+httpx==0.28.1
+
+# LLM
+google-generativeai
+
+# Image generation
+replicate==1.0.7
+
+# Publishing integrations
+stripe
+
+# Email
+resend
+
+# Background jobs
+apscheduler==3.11.0
+
+# Web scraping
+beautifulsoup4==4.13.4
+lxml==6.1.1
+python-multipart
+
+# Observability
+sentry-sdk

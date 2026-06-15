@@ -1,0 +1,116 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  /* Paper Style brand colors */
+  --color-paper: #F9F9F6;
+  --color-ink: #111111;
+  --color-graphite: #555555;
+  --color-border: #E5E5E5;
+  --color-highlighter: #FFF1B8;
+  --color-danger: #8B0000;
+  --color-success: #2E4F2E;
+  --color-white: #FFFFFF;
+  --color-highlight: #FFF1B8;
+
+  /* Typography font stacks */
+  --font-display: var(--font-playfair), Georgia, serif;
+  --font-heading: var(--font-playfair), Georgia, serif;
+  --font-body: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "Courier New", monospace;
+
+  /* Spacing tokens */
+  --sidebar-width: 240px;
+  --sidebar-collapsed: 56px;
+  --content-max: 720px;
+
+  /* prose overrides */
+  --tw-prose-body: #111111;
+  --tw-prose-headings: #111111;
+  --tw-prose-links: #111111;
+  --tw-prose-bold: #111111;
+  --tw-prose-counters: #555555;
+  --tw-prose-bullets: #E5E5E5;
+  --tw-prose-hr: #E5E5E5;
+  --tw-prose-quotes: #111111;
+  --tw-prose-quote-borders: #E5E5E5;
+  --tw-prose-captions: #555555;
+  --tw-prose-code: #111111;
+  --tw-prose-pre-code: #111111;
+  --tw-prose-pre-bg: #F9F9F6;
+  --tw-prose-th-borders: #E5E5E5;
+  --tw-prose-td-borders: #E5E5E5;
+}
+
+/* Keyframes */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes typewriter {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0% 0 0); }
+}
+
+/* Base */
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+
+/* Subtle dot paper texture */
+.paper-texture {
+  background-image: radial-gradient(circle, #d4d4cc 0.8px, transparent 0.8px);
+  background-size: 20px 20px;
+}
+
+/* Brutalist hard shadow */
+.shadow-brutal {
+  box-shadow: 4px 4px 0px 0px var(--color-ink);
+}
+
+.shadow-brutal-sm {
+  box-shadow: 2px 2px 0px 0px var(--color-ink);
+}
+
+/* Animation utilities */
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+.animate-typewriter {
+  animation: typewriter 1.8s steps(40, end) forwards;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--color-paper); }
+::-webkit-scrollbar-thumb { background: var(--color-border); }
+::-webkit-scrollbar-thumb:hover { background: var(--color-graphite); }
