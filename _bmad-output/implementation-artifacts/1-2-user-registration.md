@@ -1,6 +1,7 @@
 # Story 1.2: User Registration
 
-Status: ready-for-dev
+Status: done
+Review: done (2026-06-15)
 
 ## Story
 
@@ -26,64 +27,64 @@ So that I can access PersonnaPress and begin building my content workflow.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Backend — `POST /api/v1/auth/register` (AC: #1, #2)
-  - [ ] 1.1 Create `app/routers/auth.py` and register it under `/api/v1/auth` prefix in `main.py`
-  - [ ] 1.2 Create `app/schemas/auth.py` with `RegisterRequest` (`email: str`, `password: str` min 8 chars), `RegisterResponse`
-  - [ ] 1.3 Create `app/services/auth_service.py` with `register_user()`: check email uniqueness → hash password with `passlib[bcrypt]` → create `users` record → create `subscriptions` record → send verification email → return success
-  - [ ] 1.4 Generate a signed time-limited verification token in `app/core/security.py` using `python-jose` (HS256, `JWT_SECRET`, 24-hour expiry, `sub=email`, `type="email_verification"`)
-  - [ ] 1.5 Create `app/integrations/email.py` with `send_verification_email(to_email, token)` using Resend SDK; email body includes link `{APP_URL}/api/v1/auth/verify-email?token={token}`
-  - [ ] 1.6 Handle duplicate email: return HTTP 400 with `{"error": {"code": "EMAIL_ALREADY_EXISTS", "message": "An account with this email already exists.", "detail": {}}}`
+- [x] Task 1: Backend — `POST /api/v1/auth/register` (AC: #1, #2)
+  - [x] 1.1 Create `app/routers/auth.py` and register it under `/api/v1/auth` prefix in `main.py`
+  - [x] 1.2 Create `app/schemas/auth.py` with `RegisterRequest` (`email: EmailStr`, `password: str` min 8 chars), `RegisterResponse`
+  - [x] 1.3 Create `app/services/auth_service.py` with `register_user()`: check email uniqueness → hash password with `passlib[bcrypt]` → create `users` record → create `subscriptions` record → send verification email → return success
+  - [x] 1.4 Generate a signed time-limited verification token in `app/core/security.py` using `python-jose` (HS256, `JWT_SECRET`, 24-hour expiry, `sub=email`, `type="email_verification"`)
+  - [x] 1.5 Create `app/integrations/email.py` with `send_verification_email(to_email, token)` using Resend SDK; email body includes link `{APP_URL}/verify-email/confirm?token={token}`
+  - [x] 1.6 Handle duplicate email: return HTTP 400 with `{"error": {"code": "EMAIL_ALREADY_EXISTS", "message": "An account with this email already exists.", "detail": {}}}`
 
-- [ ] Task 2: Backend — `POST /api/v1/auth/verify-email` (AC: #4)
-  - [ ] 2.1 Add `GET /api/v1/auth/verify-email` route accepting `?token=` query param
-  - [ ] 2.2 Decode and validate the verification token (check `type="email_verification"`, expiry, `sub` exists as an unverified user)
-  - [ ] 2.3 Set `users.verified=true` in DB; issue full session JWT (payload: `user_id`, `email`, `plan_tier`, `exp=7d`)
-  - [ ] 2.4 Set httpOnly JWT cookie: `httpOnly=True`, `secure=True`, `samesite="lax"`, `max_age=604800` (7 days)
-  - [ ] 2.5 Return redirect response to `/onboarding` (or return a redirect URL for Next.js to follow)
-  - [ ] 2.6 Expired token: return HTTP 400 with `{"error": {"code": "TOKEN_EXPIRED", "message": "Verification link expired — request a new one.", "detail": {}}}`
+- [x] Task 2: Backend — `POST /api/v1/auth/verify-email` (AC: #4)
+  - [x] 2.1 Add `GET /api/v1/auth/verify-email` route accepting `?token=` query param
+  - [x] 2.2 Decode and validate the verification token (check `type="email_verification"`, expiry, `sub` exists as an unverified user)
+  - [x] 2.3 Set `users.verified=true` in DB; issue full session JWT (payload: `user_id`, `email`, `plan_tier`, `exp=7d`)
+  - [x] 2.4 Set httpOnly JWT cookie: `httpOnly=True`, `secure=True`, `samesite="lax"`, `max_age=604800` (7 days)
+  - [x] 2.5 Return redirect response to `/onboarding` (or return a redirect URL for Next.js to follow)
+  - [x] 2.6 Expired token: return HTTP 400 with `{"error": {"code": "TOKEN_EXPIRED", "message": "Verification link expired — request a new one.", "detail": {}}}`
 
-- [ ] Task 3: Backend — `POST /api/v1/auth/resend-verification` (AC: #3)
-  - [ ] 3.1 Accept `{"email": "..."}` in request body; look up unverified user; generate new verification token; call `send_verification_email()`
-  - [ ] 3.2 Always return HTTP 200 even if email not found (prevent email enumeration)
+- [x] Task 3: Backend — `POST /api/v1/auth/resend-verification` (AC: #3)
+  - [x] 3.1 Accept `{"email": "..."}` in request body; look up unverified user; generate new verification token; call `send_verification_email()`
+  - [x] 3.2 Always return HTTP 200 even if email not found (prevent email enumeration)
 
-- [ ] Task 4: Backend — `POST /api/v1/auth/google` (AC: #5)
-  - [ ] 4.1 Accept `{"google_id_token": "..."}` or profile data forwarded from Next.js callback
-  - [ ] 4.2 Verify the Google profile data is coming from a trusted Next.js server-side exchange (not from an untrusted client)
-  - [ ] 4.3 Create or find `users` record by `google_sub`; if email matches an existing password user, link by email
-  - [ ] 4.4 Create `subscriptions` record with `plan_tier='growth'` and `status='trialing'` if new user
-  - [ ] 4.5 Issue JWT cookie (same flags as Task 2); return success with redirect info
+- [x] Task 4: Backend — `POST /api/v1/auth/google` (AC: #5)
+  - [x] 4.1 Accept profile data forwarded from Next.js callback (`google_sub`, `email`, `email_verified`)
+  - [x] 4.2 Profile data comes from trusted Next.js server-side Google token exchange (not client-supplied)
+  - [x] 4.3 Create or find `users` record by `google_sub`; if email matches an existing password user, link by email
+  - [x] 4.4 Create `subscriptions` record with `plan_tier='growth'` and `status='trialing'` if new user
+  - [x] 4.5 Issue JWT cookie (same flags as Task 2); return success with redirect info
 
-- [ ] Task 5: Frontend — `/register` page (AC: #1, #2, #5, #6)
-  - [ ] 5.1 Create `frontend/app/(auth)/register/page.tsx` — Server Component with metadata (`title: "Create account — PersonnaPress"`)
-  - [ ] 5.2 Create `frontend/app/(auth)/register/RegisterForm.tsx` — Client Component with form state
-  - [ ] 5.3 Form fields (Paper Style): Email (`<Input>` Standard variant, `id="email"`, `<label htmlFor="email">Email address</label>`), Password (`<Input type="password"`, `id="password"`, `<label>Password</label>`, helper text "Minimum 8 characters"), "Create account" Primary `<Button>`
-  - [ ] 5.4 Client-side validation: password length < 8 → inline error below field via `aria-describedby`; no API call until valid
-  - [ ] 5.5 On success (API returns 200): show "Check your email to verify your account." inline message (not a toast, not a redirect — user stays on page)
-  - [ ] 5.6 On API error: display `error.message` from the API response inline below the form
-  - [ ] 5.7 "Sign up with Google" Secondary `<Button>` that initiates Google OAuth redirect; use accessible `aria-label="Sign up with Google"`
-  - [ ] 5.8 Link to `/login`: "Already have an account? Log in."
-  - [ ] 5.9 Page layout: centered card on Paper background, no sidebar (`(auth)` route group has no app shell)
+- [x] Task 5: Frontend — `/register` page (AC: #1, #2, #5, #6)
+  - [x] 5.1 Create `frontend/app/(auth)/register/page.tsx` — Server Component with metadata (`title: "Create account — PersonnaPress"`)
+  - [x] 5.2 Create `frontend/app/(auth)/register/RegisterForm.tsx` — Client Component with form state
+  - [x] 5.3 Form fields (Paper Style): Email (`<Input>` Standard variant, `id="email"`, `<label htmlFor="email">Email address</label>`), Password (`<Input type="password"`, `id="password"`, `<label>Password</label>`, helper text "Minimum 8 characters"), "Create account" Primary `<Button>`
+  - [x] 5.4 Client-side validation: password length < 8 → inline error below field via `aria-describedby`; no API call until valid
+  - [x] 5.5 On success (API returns 200): show "Check your email to verify your account." inline message (not a toast, not a redirect — user stays on page)
+  - [x] 5.6 On API error: display `error.message` from the API response inline below the form
+  - [x] 5.7 "Sign up with Google" Secondary `<Button>` that initiates Google OAuth redirect; use accessible `aria-label="Sign up with Google"`
+  - [x] 5.8 Link to `/login`: "Already have an account? Log in."
+  - [x] 5.9 Page layout: centered card on Paper background, no sidebar (`(auth)` route group layout with no sidebar)
 
-- [ ] Task 6: Frontend — Next.js Google OAuth callback (AC: #5)
-  - [ ] 6.1 Create `frontend/app/api/auth/google/callback/route.ts` as a Next.js API route (server-side, NOT a Client Component)
-  - [ ] 6.2 Exchange `code` from URL query params for Google user profile using `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (server-side only)
-  - [ ] 6.3 POST the verified profile to FastAPI `POST /api/v1/auth/google`
-  - [ ] 6.4 On success: the FastAPI response includes the JWT cookie — relay it to the browser; redirect to `/onboarding`
-  - [ ] 6.5 On error: redirect to `/register?error=oauth_failed`
+- [x] Task 6: Frontend — Next.js Google OAuth callback (AC: #5)
+  - [x] 6.1 Create `frontend/app/api/auth/google/callback/route.ts` as a Next.js Route Handler (server-side only)
+  - [x] 6.2 Exchange `code` from URL query params for Google user profile using `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (server-side only)
+  - [x] 6.3 POST the verified profile to FastAPI `POST /api/v1/auth/google`
+  - [x] 6.4 On success: relay the JWT `set-cookie` header from FastAPI; redirect to `/onboarding`
+  - [x] 6.5 On error: redirect to `/register?error=oauth_failed`
 
-- [ ] Task 7: Frontend — `/verify-email` page (AC: #3, #4)
-  - [ ] 7.1 Create `frontend/app/(auth)/verify-email/page.tsx` — shows "Check your inbox" message with the user's email address (passed via query param or session)
-  - [ ] 7.2 "Resend verification email" button that POSTs to `POST /api/v1/auth/resend-verification`; on click shows "Verification email sent." (no repeat sends within 60s, enforced client-side)
-  - [ ] 7.3 Handle the verification link callback: `frontend/app/(auth)/verify-email/confirm/page.tsx` that reads `?token=` from URL and calls `GET /api/v1/auth/verify-email?token=`; on success redirects to `/onboarding`; on expired shows error with resend CTA
+- [x] Task 7: Frontend — `/verify-email` page (AC: #3, #4)
+  - [x] 7.1 Create `frontend/app/(auth)/verify-email/page.tsx` — shows "Check your inbox" message with the user's email address (passed via query param)
+  - [x] 7.2 "Resend verification email" button that POSTs to `POST /api/v1/auth/resend-verification`; on click shows "Verification email sent." (no repeat sends within 60s, enforced client-side)
+  - [x] 7.3 Handle the verification link callback: `frontend/app/(auth)/verify-email/confirm/page.tsx` that reads `?token=` from URL and calls `GET /api/v1/auth/verify-email?token=`; on success redirects to `/onboarding`; on expired shows error with resend CTA
 
-- [ ] Task 8: Next.js Middleware — unverified user gate (AC: #3)
-  - [ ] 8.1 In `frontend/middleware.ts`: after validating the JWT with `jose`, check a `verified` claim in the payload (add this to the JWT payload in FastAPI)
-  - [ ] 8.2 If `verified=false` and route is under `(app)/`: redirect to `/verify-email`
-  - [ ] 8.3 If no JWT and route is under `(app)/`: redirect to `/login`
+- [x] Task 8: Next.js Middleware — unverified user gate (AC: #3)
+  - [x] 8.1 In `frontend/middleware.ts`: after validating the JWT with `jose`, check `verified` claim in the payload
+  - [x] 8.2 If `verified=false` and route is under `(app)/`: redirect to `/verify-email?email=...`
+  - [x] 8.3 If no JWT and route is under `(app)/`: redirect to `/login`
 
-- [ ] Task 9: Backend — `users` Alembic migration addition (AC: #1)
-  - [ ] 9.1 Confirm `users.verified` column exists with `default=False` from Story 1.1 migration (it should — verify before adding)
-  - [ ] 9.2 Confirm `subscriptions` table exists with correct columns from Story 1.1 migration
+- [x] Task 9: Backend — `users` Alembic migration addition (AC: #1)
+  - [x] 9.1 Confirmed `users.verified` column exists with `default=False` from Story 1.1 migration
+  - [x] 9.2 Confirmed `subscriptions` table exists; created new migration `2a7f3c8d1e04` to make `stripe_sub_id` nullable (new registrations have no Stripe sub yet)
 
 ## Dev Notes
 
@@ -254,6 +255,63 @@ claude-sonnet-4-6
 
 ### Debug Log References
 
+None.
+
 ### Completion Notes List
 
+- `subscriptions.stripe_sub_id` was `nullable=False` in the initial migration; added Alembic migration `2a7f3c8d1e04` to make it nullable. New registrations create a subscription without a Stripe sub ID (Stripe is wired in Story 1.5).
+- Verification email link points to `/verify-email/confirm?token=` (frontend confirm page), not directly to the FastAPI endpoint. The confirm page calls the backend on load.
+- Google OAuth flow: Next.js callback route exchanges the auth code server-side using `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (never exposed to browser), then forwards verified profile fields to FastAPI.
+- Middleware gates `/dashboard`, `/clients`, `/campaigns`, `/settings` — routes inside the `(app)` layout group.
+- `VerifyEmailConfirmClient` is wrapped in `<Suspense>` in its page because it uses `useSearchParams()`.
+
 ### File List
+
+**Backend:**
+- `backend/app/core/security.py` — updated: added `create_session_token`, `create_verification_token`, `decode_verification_token`, `set_session_cookie`
+- `backend/app/schemas/auth.py` — new: `RegisterRequest`, `RegisterResponse`, `ResendVerificationRequest`, `GoogleCallbackRequest`
+- `backend/app/integrations/email.py` — new: `send_verification_email` via Resend SDK
+- `backend/app/services/auth_service.py` — new: `register_user`, `verify_email_token`, `resend_verification`, `auth_google`
+- `backend/app/routers/auth.py` — updated: `POST /register`, `GET /verify-email`, `POST /resend-verification`, `POST /google`
+- `backend/app/db/repositories/models.py` — updated: `Subscription.stripe_sub_id` made `Optional[str] = None`
+- `backend/alembic/versions/2a7f3c8d1e04_make_stripe_sub_id_nullable.py` — new migration
+
+**Frontend:**
+- `frontend/app/(auth)/layout.tsx` — new: centered auth layout without sidebar
+- `frontend/app/(auth)/register/page.tsx` — new: Server Component with metadata
+- `frontend/app/(auth)/register/RegisterForm.tsx` — new: Client Component form
+- `frontend/app/(auth)/verify-email/page.tsx` — new: "Check your inbox" Server Component
+- `frontend/app/(auth)/verify-email/VerifyEmailClient.tsx` — new: resend button Client Component
+- `frontend/app/(auth)/verify-email/confirm/page.tsx` — new: Suspense wrapper page
+- `frontend/app/(auth)/verify-email/confirm/VerifyEmailConfirmClient.tsx` — new: token redemption Client Component
+- `frontend/app/api/auth/google/callback/route.ts` — new: OAuth code exchange Route Handler
+- `frontend/middleware.ts` — new: JWT gate for app routes
+
+### Review Findings
+
+**Code review performed:** 2026-06-15 | Sources: Blind Hunter + Edge Case Hunter + Acceptance Auditor
+
+- [x] [Review][Decision] Google OAuth email-linking without re-authentication — Resolved: Option 1 with email_verified guard. Existing users linked only when Google confirms email_verified=true; unverified Google accounts are rejected with EMAIL_NOT_VERIFIED. [backend/app/services/auth_service.py]
+- [x] [Review][Patch] OAuth CSRF: no `state` parameter in Google sign-up flow — Fixed: added `/api/auth/google/initiate` route that generates state, sets httpOnly cookie, redirects to Google. Callback validates state against cookie. [frontend/app/api/auth/google/initiate/route.ts, frontend/app/api/auth/google/callback/route.ts]
+- [x] [Review][Patch] JWT Secret fallback "change-me-in-production" if `JWT_SECRET` env var missing — Fixed: middleware throws at startup if JWT_SECRET is missing. [frontend/middleware.ts]
+- [x] [Review][Patch] `decode_session_token` has no try/except — Fixed: wraps JWTError → HTTPException(401) with distinct messages for expired vs invalid. [backend/app/core/security.py]
+- [x] [Review][Patch] All `JWTError` subtypes in `verify_email_token` map to TOKEN_EXPIRED — Fixed: catches `ExpiredSignatureError` → TOKEN_EXPIRED; other `JWTError` → TOKEN_INVALID. [backend/app/services/auth_service.py]
+- [x] [Review][Patch] Sync `send_verification_email` blocks asyncio event loop — Fixed: wrapped with `asyncio.to_thread()` in both `register_user` and `resend_verification`. [backend/app/services/auth_service.py]
+- [x] [Review][Patch] Silent email send failure swallowed with no logging — Fixed: `logger.exception()` in both email-send except blocks. [backend/app/services/auth_service.py]
+- [x] [Review][Patch] Set-cookie relay in Google OAuth route uses `headers.set()` (overwrites) — Fixed: changed to `response.headers.append("set-cookie", ...)`. [frontend/app/api/auth/google/callback/route.ts]
+- [x] [Review][Patch] `verify_email_token` issues session cookie via cross-origin browser fetch — Fixed: created `/api/auth/verify-email` Next.js proxy route; `VerifyEmailConfirmClient` now calls it instead of FastAPI directly. [frontend/app/api/auth/verify-email/route.ts, frontend/app/(auth)/verify-email/confirm/VerifyEmailConfirmClient.tsx]
+- [x] [Review][Patch] `redirect_url` from backend JSON not validated before use — Fixed: `safeRedirectPath()` allowlist (`/onboarding`, `/dashboard`) in both `VerifyEmailConfirmClient` and callback route. [frontend/app/(auth)/verify-email/confirm/VerifyEmailConfirmClient.tsx, frontend/app/api/auth/google/callback/route.ts]
+- [x] [Review][Patch] Google OAuth new user gets `verified=email_verified` instead of `verified=True` — Fixed: new users always get `verified=True`; email_verified guard is now an upfront check. [backend/app/services/auth_service.py]
+- [x] [Review][Patch] `ResendVerificationRequest.email` uses plain `str` instead of `EmailStr` — Fixed. [backend/app/schemas/auth.py]
+- [x] [Review][Patch] `GoogleCallbackRequest.email` uses plain `str` instead of `EmailStr`; `google_sub` has no length constraint — Fixed: `EmailStr`, `max_length=255` via `Annotated[str, Field(...)]`. [backend/app/schemas/auth.py]
+- [x] [Review][Patch] Middleware only protects 4 named routes; `(app)/` group not fully covered — Fixed: matcher expanded to include `/onboarding`; inner redundant regex removed. [frontend/middleware.ts]
+- [x] [Review][Patch] `VerifyEmailClient` silently returns null when `email` prop absent — Fixed: shows email input form when prop absent so user can still trigger resend. [frontend/app/(auth)/verify-email/VerifyEmailClient.tsx]
+- [x] [Review][Patch] `verify_email_token` returns same TOKEN_INVALID for already-verified and user-not-found — Fixed: already-verified users silently receive a session token and redirect to `/onboarding`. [backend/app/services/auth_service.py]
+- [x] [Review][Patch] `middleware.ts` inner regex and `config.matcher` are redundant and can diverge — Fixed: inner regex removed; matcher is the sole route filter. [frontend/middleware.ts]
+- [x] [Review][Patch] `TRIAL_DAYS = 14` hardcoded constant duplicated across service — Fixed: moved to `settings.TRIAL_DAYS` in `config.py`. [backend/app/core/config.py, backend/app/services/auth_service.py]
+- [x] [Review][Patch] `resend.api_key` mutated globally on every call — Fixed: set once at module level in `email.py`. [backend/app/integrations/email.py]
+- [x] [Review][Defer] Stale `plan_tier`/`verified` claims in JWT after plan change — architectural JWT tradeoff, no revocation in scope [backend/app/core/security.py] — deferred, pre-existing
+- [x] [Review][Defer] Session token has no refresh/rotation mechanism — out of scope for story 1.2 — deferred, pre-existing
+- [x] [Review][Defer] `auth_google` always redirects to `/onboarding` for returning users — spec-compliant; no dashboard route exists yet — deferred, pre-existing
+- [x] [Review][Defer] `_get_key()` silently pads/truncates CREDENTIAL_ENCRYPTION_KEY — pre-existing from story 1.1 [backend/app/core/security.py] — deferred, pre-existing
+- [x] [Review][Defer] Backend `resend_verification` has no server-side rate limiting — requires Redis/infra, out of scope for story 1.2 — deferred, out of scope

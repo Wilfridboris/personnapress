@@ -44,7 +44,7 @@ class Subscription(SQLModel, table=True):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
-    stripe_sub_id: str
+    stripe_sub_id: Optional[str] = None
     plan_tier: str
     status: str
     campaigns_used: int = Field(default=0)

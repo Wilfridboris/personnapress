@@ -53,6 +53,7 @@ personapress.db
 # Misc
 # =========================
 .DS_Store
+.claude/settings.local.json
 *.pem
 .vercel
 .idea/

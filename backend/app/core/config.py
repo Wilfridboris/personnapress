@@ -22,5 +22,7 @@ class Settings(BaseSettings):
 
     APP_URL: str = "http://localhost:3000"
 
+    TRIAL_DAYS: int = 14
+
 
 settings = Settings()
