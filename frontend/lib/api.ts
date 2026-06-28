@@ -3,20 +3,47 @@ import type { Client, Campaign, DashboardStats } from "./types";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+export class APIError extends Error {
+  readonly code: string;
+  constructor(message: string, code: string) {
+    super(message);
+    this.name = "APIError";
+    this.code = code;
+  }
+}
+
+export async function fetchAPI<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
     credentials: "include",
-    ...options,
     headers: {
       "Content-Type": "application/json",
-      ...options?.headers,
+      ...init?.headers,
     },
   });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: { message: "Request failed" } }));
-    throw new Error(error.error?.message || error.detail || "Request failed");
+
+  let data: Record<string, unknown>;
+  try {
+    data = (await res.json()) as Record<string, unknown>;
+  } catch {
+    throw new APIError(`Request failed (${res.status})`, "NETWORK_ERROR");
   }
-  return res.json() as Promise<T>;
+
+  if (!res.ok) {
+    const errShape = data?.error as { message?: string; code?: string } | undefined;
+    const message =
+      errShape?.message ??
+      (typeof data?.detail === "string" ? data.detail : undefined) ??
+      "Something went wrong.";
+    const code = errShape?.code ?? "UNKNOWN_ERROR";
+    throw new APIError(message, code);
+  }
+
+  return data as T;
+}
+
+async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  return fetchAPI<T>(path, options);
 }
 
 export const clientsApi = {

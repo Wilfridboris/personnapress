@@ -3,9 +3,11 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.connection import get_session
-from app.schemas.auth import GoogleCallbackRequest, RegisterRequest, ResendVerificationRequest
+from app.schemas.auth import GoogleCallbackRequest, LoginRequest, RegisterRequest, ResendVerificationRequest
 from app.services.auth_service import (
     auth_google,
+    login_user,
+    logout_user,
     register_user,
     resend_verification,
     verify_email_token,
@@ -29,6 +31,16 @@ async def resend_verification_email(
     body: ResendVerificationRequest, db: AsyncSession = Depends(get_session)
 ) -> JSONResponse:
     return await resend_verification(body.email, db)
+
+
+@router.post("/login", response_model=None)
+async def login(body: LoginRequest, db: AsyncSession = Depends(get_session)) -> JSONResponse:
+    return await login_user(body.email, body.password, db)
+
+
+@router.post("/logout", response_model=None)
+async def logout() -> JSONResponse:
+    return logout_user()
 
 
 @router.post("/google", response_model=None)

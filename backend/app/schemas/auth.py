@@ -23,6 +23,11 @@ class ResendVerificationRequest(BaseModel):
     email: EmailStr
 
 
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: Annotated[str, Field(min_length=1, max_length=128)]
+
+
 class GoogleCallbackRequest(BaseModel):
     google_sub: Annotated[str, Field(min_length=1, max_length=255)]
     email: EmailStr

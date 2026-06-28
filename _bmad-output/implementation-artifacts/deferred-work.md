@@ -7,3 +7,8 @@
 - **`auth_google` always redirects returning users to `/onboarding`** — Spec says `/onboarding` for AC#5 but doesn't distinguish new vs returning users. Once a `/dashboard` route exists, returning Google sign-ins should go there instead. Fix when Story 1.4 (app shell) is complete.
 - **`_get_key()` silently pads/truncates CREDENTIAL_ENCRYPTION_KEY** — Keys shorter than 32 bytes are zero-padded; keys longer are truncated silently. Pre-existing from story 1.1. Add startup validation of key length in `app/core/security.py`.
 - **Backend `resend_verification` has no server-side rate limiting** — Client-side 60s cooldown is trivially bypassed (page reload). Backend needs per-email rate limiting (Redis, DB timestamp, or infrastructure-level). Out of scope for story 1.2; address before production launch.
+
+## Deferred from: code review of 1-3-user-login-session-management (2026-06-28)
+
+- **No rate limiting on `POST /api/v1/auth/login`** — `/login` has no throttling, lockout, or CAPTCHA. Combined with brute-force tooling this is a full credential-stuffing surface. Out of v1 scope; address before production launch with a rate-limiting middleware or infrastructure-level rule.
+- **`x-user-id`/`x-plan-tier` headers can be spoofed** — Proxy injects these from the JWT payload into request headers, but if the FastAPI backend is reachable directly (dev, misconfigured infra), callers can send arbitrary header values. Backend must not use these headers for any security-critical authorization decision; always re-derive identity from the session token or a separate auth dependency.

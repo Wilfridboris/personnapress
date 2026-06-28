@@ -30,6 +30,12 @@ def _err(code: str, message: str) -> dict:
     return {"error": {"code": code, "message": message, "detail": {}}}
 
 
+def logout_user() -> JSONResponse:
+    response = JSONResponse({"success": True})
+    response.delete_cookie(key="session", path="/", httponly=True, secure=True, samesite="lax")
+    return response
+
+
 async def _new_subscription(user_id: uuid.UUID, db: AsyncSession) -> None:
     now = datetime.now(timezone.utc)
     sub = Subscription(
@@ -121,6 +127,38 @@ async def resend_verification(email: str, db: AsyncSession) -> JSONResponse:
         except Exception:
             logger.exception("Failed to resend verification email to %s", email)
     return JSONResponse({"message": "If that address is registered and unverified, a new email is on its way."})
+
+
+async def login_user(email: str, password: str, db: AsyncSession) -> JSONResponse:
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    # Always run bcrypt to prevent timing-based email enumeration
+    if user and user.hashed_password:
+        password_ok = _pwd_ctx.verify(password, user.hashed_password)
+    else:
+        _pwd_ctx.dummy_verify()
+        password_ok = False
+
+    if not password_ok:
+        return JSONResponse(
+            status_code=401,
+            content=_err("INVALID_CREDENTIALS", "Invalid email or password."),
+        )
+
+    if not user.verified:
+        return JSONResponse(
+            status_code=403,
+            content=_err("EMAIL_NOT_VERIFIED", "Please verify your email before logging in."),
+        )
+
+    result_sub = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
+    sub = result_sub.scalar_one_or_none()
+    plan_tier = sub.plan_tier if sub else "growth"
+    token = create_session_token(user.id, user.email, plan_tier, verified=bool(user.verified))
+    response = JSONResponse({"success": True})
+    set_session_cookie(response, token)
+    return response
 
 
 async def auth_google(google_sub: str, email: str, email_verified: bool, db: AsyncSession) -> JSONResponse:
