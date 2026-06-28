@@ -47,7 +47,7 @@ development_status:
   1-1-monorepo-scaffold-infrastructure-paper-style-design-system: done
   1-2-user-registration: done
   1-3-user-login-session-management: done
-  1-4-protected-app-shell-responsive-navigation: ready-for-dev
+  1-4-protected-app-shell-responsive-navigation: done
   1-5-account-subscription-management: ready-for-dev
   epic-1-retrospective: optional
 

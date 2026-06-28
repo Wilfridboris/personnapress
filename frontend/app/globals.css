@@ -109,6 +109,14 @@ body {
   animation: typewriter 1.8s steps(40, end) forwards;
 }
 
+/* Reduced-motion safe net */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: var(--color-paper); }

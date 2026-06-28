@@ -17,6 +17,10 @@ interface UIStore {
   toasts: Toast[];
   addToast: (message: string, type?: Toast["type"]) => void;
   removeToast: (id: string) => void;
+
+  isMobileDrawerOpen: boolean;
+  openMobileDrawer: () => void;
+  closeMobileDrawer: () => void;
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -37,4 +41,8 @@ export const useUIStore = create<UIStore>((set) => ({
     set((state) => ({
       toasts: state.toasts.filter((t) => t.id !== id),
     })),
+
+  isMobileDrawerOpen: false,
+  openMobileDrawer: () => set({ isMobileDrawerOpen: true }),
+  closeMobileDrawer: () => set({ isMobileDrawerOpen: false }),
 }));

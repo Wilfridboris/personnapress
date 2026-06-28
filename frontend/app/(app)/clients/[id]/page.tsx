@@ -51,7 +51,7 @@ export default async function ClientDetailPage({ params }: Props) {
   }
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <>
       {/* Back */}
       <Link
         href="/clients"
@@ -147,6 +147,6 @@ export default async function ClientDetailPage({ params }: Props) {
           </div>
         )}
       </section>
-    </div>
+    </>
   );
 }

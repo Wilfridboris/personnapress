@@ -72,7 +72,7 @@ export default function NewCampaignPage() {
   );
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <>
       {/* Back */}
       <Link
         href="/campaigns"
@@ -208,6 +208,6 @@ No structure needed. The agent reads your brand voice profile and writes the ful
           )}
         </div>
       </form>
-    </div>
+    </>
   );
 }

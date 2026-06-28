@@ -80,7 +80,7 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <>
       {/* Header */}
       <header className="mb-10">
         <h1 className="font-display text-3xl font-bold text-ink mb-1">
@@ -180,6 +180,6 @@ export default async function DashboardPage() {
           </div>
         )}
       </section>
-    </div>
+    </>
   );
 }

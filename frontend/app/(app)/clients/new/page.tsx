@@ -49,7 +49,7 @@ export default function NewClientPage() {
   const [state, action, isPending] = useActionState(createClient, null);
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
+    <>
       {/* Back */}
       <Link
         href="/clients"
@@ -141,6 +141,6 @@ export default function NewClientPage() {
           </Link>
         </div>
       </form>
-    </div>
+    </>
   );
 }

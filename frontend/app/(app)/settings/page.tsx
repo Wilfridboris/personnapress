@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 
 export default function SettingsPage() {
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <>
       <header className="mb-10">
         <h1 className="font-display text-3xl font-bold text-ink mb-1">
           Settings
@@ -24,6 +24,6 @@ export default function SettingsPage() {
           For now, configure credentials directly in the database or via the backend .env file.
         </span>
       </div>
-    </div>
+    </>
   );
 }

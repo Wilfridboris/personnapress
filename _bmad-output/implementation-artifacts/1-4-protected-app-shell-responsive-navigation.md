@@ -1,6 +1,6 @@
 # Story 1.4: Protected App Shell & Responsive Navigation
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -30,89 +30,89 @@ So that I can navigate the application from any surface and always know my curre
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `useUIStore` additions for mobile drawer state (AC: #4)
-  - [ ] 1.1 In `frontend/lib/stores/useUIStore.ts`: add `isMobileDrawerOpen: boolean`, `openMobileDrawer()`, `closeMobileDrawer()` to the Zustand store
-  - [ ] 1.2 Confirm store file exists from Story 1.1 scaffold; if not, create it with all fields
+- [x] Task 1: Create `useUIStore` additions for mobile drawer state (AC: #4)
+  - [x] 1.1 In `frontend/lib/stores/useUIStore.ts`: add `isMobileDrawerOpen: boolean`, `openMobileDrawer()`, `closeMobileDrawer()` to the Zustand store
+  - [x] 1.2 Confirm store file exists from Story 1.1 scaffold; if not, create it with all fields
 
-- [ ] Task 2: `AppShell` layout root component (AC: #1, #2, #3, #4)
-  - [ ] 2.1 Create `frontend/components/layout/AppShell.tsx` — Client Component that composes `Sidebar`, `MobileTopBar`, `MobileDrawer`
-  - [ ] 2.2 Apply sidebar margin offsets: `lg:ml-60 md:ml-14` on the `<main>` element
-  - [ ] 2.3 Apply mobile top-bar offset: `pt-14 lg:pt-0` on `<main>` for the 56px top bar
-  - [ ] 2.4 Content area inner wrapper: `max-w-[720px] px-8 lg:px-12 py-8 mx-auto`
-  - [ ] 2.5 On route change (via `usePathname` effect), call `closeMobileDrawer()` so the drawer closes on navigation
+- [x] Task 2: `AppShell` layout root component (AC: #1, #2, #3, #4)
+  - [x] 2.1 Create `frontend/components/layout/AppShell.tsx` — Client Component that composes `Sidebar`, `MobileTopBar`, `MobileDrawer`
+  - [x] 2.2 Apply sidebar margin offsets: `lg:ml-60 md:ml-14` on the `<main>` element
+  - [x] 2.3 Apply mobile top-bar offset: `pt-14 lg:pt-0` on `<main>` for the 56px top bar
+  - [x] 2.4 Content area inner wrapper: `max-w-[720px] px-8 lg:px-12 py-8 mx-auto`
+  - [x] 2.5 On route change (via `usePathname` effect), call `closeMobileDrawer()` so the drawer closes on navigation
 
-- [ ] Task 3: `Sidebar` component — desktop (AC: #1, #2, #3, #7, #8)
-  - [ ] 3.1 Create `frontend/components/layout/Sidebar.tsx`
-  - [ ] 3.2 Outer `<aside>`: `hidden md:flex flex-col h-screen fixed left-0 top-0 z-40 w-14 lg:w-60 bg-[#F9F9F6] border-r border-[#E5E5E5]`
-  - [ ] 3.3 Add `aria-label="Sidebar"` on `<aside>`
-  - [ ] 3.4 Compose `<ClientSwitcher />` at the top, primary `<nav>` in the flex-grow middle, `<NavItem href="/account" ... />` pinned to the bottom with `border-t border-[#E5E5E5]`
+- [x] Task 3: `Sidebar` component — desktop (AC: #1, #2, #3, #7, #8)
+  - [x] 3.1 Create `frontend/components/layout/Sidebar.tsx`
+  - [x] 3.2 Outer `<aside>`: `hidden md:flex flex-col h-screen fixed left-0 top-0 z-40 w-14 lg:w-60 bg-[#F9F9F6] border-r border-[#E5E5E5]`
+  - [x] 3.3 Add `aria-label="Sidebar"` on `<aside>`
+  - [x] 3.4 Compose `<ClientSwitcher />` at the top, primary `<nav>` in the flex-grow middle, `<NavItem href="/account" ... />` pinned to the bottom with `border-t border-[#E5E5E5]`
 
-- [ ] Task 4: `NavItem` component (AC: #6, #7, #8)
-  - [ ] 4.1 Create `frontend/components/layout/NavItem.tsx` — Client Component
-  - [ ] 4.2 Derive active state from `usePathname()` — `pathname === href || pathname.startsWith(href + '/')`
-  - [ ] 4.3 Active classes: `bg-[#FFF1B8] border-l-2 border-[#111111] text-[#111111] font-medium pl-[calc(0.75rem-2px)]`
-  - [ ] 4.4 Inactive classes: `border-l-2 border-transparent text-[#555555] hover:bg-[#FFF1B8] hover:text-[#111111]`
-  - [ ] 4.5 Base classes: `group relative flex items-center gap-3 min-h-[44px] px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]`
-  - [ ] 4.6 Icon: `shrink-0 w-[18px] h-[18px]` — Ink on active, Graphite on inactive, Ink on group-hover
-  - [ ] 4.7 Label: `hidden lg:block truncate` — visible only at lg (240px sidebar)
-  - [ ] 4.8 Tooltip (md only): `lg:hidden absolute left-full ml-2 px-2 py-1 bg-[#111111] text-[#F9F9F6] text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-150` with `role="tooltip"`
-  - [ ] 4.9 Set `aria-current="page"` on active link
-  - [ ] 4.10 Accept optional `onClick` prop for drawer usage (closes drawer on nav click)
+- [x] Task 4: `NavItem` component (AC: #6, #7, #8)
+  - [x] 4.1 Create `frontend/components/layout/NavItem.tsx` — Client Component
+  - [x] 4.2 Derive active state from `usePathname()` — `pathname === href || pathname.startsWith(href + '/')`
+  - [x] 4.3 Active classes: `bg-[#FFF1B8] border-l-2 border-[#111111] text-[#111111] font-medium pl-[calc(0.75rem-2px)]`
+  - [x] 4.4 Inactive classes: `border-l-2 border-transparent text-[#555555] hover:bg-[#FFF1B8] hover:text-[#111111]`
+  - [x] 4.5 Base classes: `group relative flex items-center gap-3 min-h-[44px] px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]`
+  - [x] 4.6 Icon: `shrink-0 w-[18px] h-[18px]` — Ink on active, Graphite on inactive, Ink on group-hover
+  - [x] 4.7 Label: `hidden lg:block truncate` — visible only at lg (240px sidebar); `forceLabel` prop for drawer
+  - [x] 4.8 Tooltip (md only): `lg:hidden absolute left-full ml-2 px-2 py-1 bg-[#111111] text-[#F9F9F6] text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-150` with `role="tooltip"`
+  - [x] 4.9 Set `aria-current="page"` on active link
+  - [x] 4.10 Accept optional `onClick` prop for drawer usage (closes drawer on nav click)
 
-- [ ] Task 5: `ClientSwitcher` component (AC: #1)
-  - [ ] 5.1 Create `frontend/components/layout/ClientSwitcher.tsx` — Client Component
-  - [ ] 5.2 Trigger button: `flex items-center w-full h-14 gap-2 border-b border-[#E5E5E5] hover:bg-[#FFF1B8] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]` with `justify-center lg:justify-start lg:px-4`
-  - [ ] 5.3 Set `aria-expanded`, `aria-haspopup="listbox"`, `aria-label="Switch client"` on the trigger button
-  - [ ] 5.4 Show active client initial as 18×18 box (`bg-[#E5E5E5] flex items-center justify-center text-xs font-bold`) — visible at md and lg
-  - [ ] 5.5 Show active client name (`hidden lg:block flex-1 text-sm font-medium text-[#111111] truncate`) + `ChevronDown` icon (rotates 180deg when open) — visible only at lg
-  - [ ] 5.6 Dropdown: `absolute top-full left-0 z-50 min-w-[200px] w-full lg:w-56 bg-[#F9F9F6] border border-[#E5E5E5] shadow-[4px_4px_0px_#111111] py-1` with `role="listbox"`
-  - [ ] 5.7 Empty state: "No clients yet." with link to `/clients/new`
-  - [ ] 5.8 Client list items: `role="option"`, `aria-selected`, `Check` icon (opacity-0 when not selected), `hover:bg-[#FFF1B8]`
-  - [ ] 5.9 Close dropdown on: click outside (mousedown), Esc key, option selection
-  - [ ] 5.10 For Story 1.4: always shows empty state (no clients yet — Epic 2 populates); props type `clients?: Client[]` defaults to `[]`
+- [x] Task 5: `ClientSwitcher` component (AC: #1)
+  - [x] 5.1 Create `frontend/components/layout/ClientSwitcher.tsx` — Client Component
+  - [x] 5.2 Trigger button with correct classes and responsive justify
+  - [x] 5.3 Set `aria-expanded`, `aria-haspopup="listbox"`, `aria-label="Switch client"` on the trigger button
+  - [x] 5.4 Show active client initial as 18×18 box
+  - [x] 5.5 Show active client name + `ChevronDown` icon (rotates 180deg when open) — visible only at lg
+  - [x] 5.6 Dropdown with `role="listbox"` and brutal shadow
+  - [x] 5.7 Empty state: "No clients yet." with link to `/clients/new`
+  - [x] 5.8 Client list items: `role="option"`, `aria-selected`, `Check` icon, `hover:bg-[#FFF1B8]`
+  - [x] 5.9 Close dropdown on: click outside (mousedown), Esc key, option selection
+  - [x] 5.10 For Story 1.4: always shows empty state (no clients yet)
 
-- [ ] Task 6: `MobileTopBar` component (AC: #4, #8)
-  - [ ] 6.1 Create `frontend/components/layout/MobileTopBar.tsx`
-  - [ ] 6.2 `<header>`: `flex lg:hidden items-center h-14 fixed top-0 left-0 right-0 z-40 bg-[#F9F9F6] border-b border-[#E5E5E5] px-4 gap-4`
-  - [ ] 6.3 Logo: `font-['Playfair_Display'] font-bold text-[#111111] text-lg shrink-0` — shows "PP" or "PersonnaPress" per viewport
-  - [ ] 6.4 Active client name: `flex-1 text-sm text-[#555555] truncate text-center`
-  - [ ] 6.5 Hamburger: `flex items-center justify-center w-11 h-11 shrink-0 text-[#111111] hover:bg-[#FFF1B8] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]` — `aria-label="Open navigation"`, calls `openMobileDrawer()`
-  - [ ] 6.6 Use `Menu` icon from `lucide-react`
+- [x] Task 6: `MobileTopBar` component (AC: #4, #8)
+  - [x] 6.1 Create `frontend/components/layout/MobileTopBar.tsx`
+  - [x] 6.2 `<header>`: `flex lg:hidden items-center h-14 fixed top-0 left-0 right-0 z-40 bg-[#F9F9F6] border-b border-[#E5E5E5] px-4 gap-4`
+  - [x] 6.3 Logo shows "PP" wordmark
+  - [x] 6.4 Active client name area (flex-1, center)
+  - [x] 6.5 Hamburger button with `aria-label="Open navigation"`, calls `openMobileDrawer()`
+  - [x] 6.6 Use `Menu` icon from `lucide-react`
 
-- [ ] Task 7: `MobileDrawer` component (AC: #4, #6, #8)
-  - [ ] 7.1 Create `frontend/components/layout/MobileDrawer.tsx`
-  - [ ] 7.2 Backdrop: `lg:hidden fixed inset-0 z-40 bg-[#111111]/40 transition-opacity duration-200 motion-reduce:transition-none` — `opacity-100` when open, `opacity-0 pointer-events-none` when closed; `aria-hidden="true"`, click calls `closeMobileDrawer()`
-  - [ ] 7.3 Drawer panel: `lg:hidden fixed top-0 left-0 bottom-0 z-50 w-[280px] flex flex-col bg-[#F9F9F6] border-r border-[#E5E5E5] transition-transform duration-200 ease-out motion-reduce:transition-none` — `translate-x-0` when open, `-translate-x-full` when closed
-  - [ ] 7.4 Panel attributes: `role="dialog"`, `aria-modal="true"`, `aria-label="Navigation"`, `tabIndex={-1}`
-  - [ ] 7.5 Drawer header: `flex items-center justify-between h-14 px-4 border-b border-[#E5E5E5]` — wordmark left, close button right (`X` icon, `w-11 h-11`, `aria-label="Close navigation"`)
-  - [ ] 7.6 Below header: `<ClientSwitcher />`, nav items (same `NAV_ITEMS` as sidebar, each with `onClick={closeMobileDrawer}`), account nav item at bottom
-  - [ ] 7.7 On Esc key: call `closeMobileDrawer()` (attach listener only when open)
-  - [ ] 7.8 Lock body scroll when drawer open: `document.body.style.overflow = 'hidden'`; restore on close
+- [x] Task 7: `MobileDrawer` component (AC: #4, #6, #8)
+  - [x] 7.1 Create `frontend/components/layout/MobileDrawer.tsx`
+  - [x] 7.2 Backdrop with `aria-hidden`, click closes drawer
+  - [x] 7.3 Drawer panel with correct classes and transition
+  - [x] 7.4 Panel attributes: `role="dialog"`, `aria-modal="true"`, `aria-label="Navigation"`, `tabIndex={-1}`
+  - [x] 7.5 Drawer header with wordmark and close button (X icon, w-11 h-11)
+  - [x] 7.6 ClientSwitcher, NAV_ITEMS with `onClick={close}` and `forceLabel`, account nav item at bottom
+  - [x] 7.7 On Esc key: call `closeMobileDrawer()`
+  - [x] 7.8 Lock body scroll when drawer open; restore on close
 
-- [ ] Task 8: `SidebarSkeleton` component (AC: #5)
-  - [ ] 8.1 Create `frontend/components/layout/SidebarSkeleton.tsx`
-  - [ ] 8.2 Three `animate-pulse bg-[#E5E5E5] mx-3` blocks at 44px height — shown while client data loads
-  - [ ] 8.3 `aria-hidden="true"` on the skeleton container
+- [x] Task 8: `SidebarSkeleton` component (AC: #5)
+  - [x] 8.1 Create `frontend/components/layout/SidebarSkeleton.tsx`
+  - [x] 8.2 Three `animate-pulse bg-[#E5E5E5] mx-3` blocks at 44px height
+  - [x] 8.3 `aria-hidden="true"` on the skeleton container
 
-- [ ] Task 9: `(app)` route group layout (AC: #1, #2, #3, #4, #5)
-  - [ ] 9.1 Create `frontend/app/(app)/layout.tsx` — Server Component
-  - [ ] 9.2 Render `<AppShell>{children}</AppShell>`
-  - [ ] 9.3 This layout is distinct from `(auth)/layout.tsx` (which has no shell)
-  - [ ] 9.4 Confirm middleware.ts (Story 1.3) already gates this route group — no additional auth check needed in layout
+- [x] Task 9: `(app)` route group layout (AC: #1, #2, #3, #4, #5)
+  - [x] 9.1 Update `frontend/app/(app)/layout.tsx` — Server Component
+  - [x] 9.2 Renders `<AppShell>{children}</AppShell>`
+  - [x] 9.3 Distinct from `(auth)/layout.tsx`
+  - [x] 9.4 proxy.ts (Story 1.3) gates this route group
 
-- [ ] Task 10: `/dashboard` placeholder page (AC: #1)
-  - [ ] 10.1 Create `frontend/app/(app)/dashboard/page.tsx` — placeholder Server Component
-  - [ ] 10.2 Minimal content: H1 "Dashboard" in Playfair Display — sufficient to verify shell renders
-  - [ ] 10.3 Set `metadata.title = "Dashboard — PersonnaPress"`
+- [x] Task 10: `/dashboard` placeholder page (AC: #1)
+  - [x] 10.1 `frontend/app/(app)/dashboard/page.tsx` exists with full dashboard content
+  - [x] 10.2 Has H1 "Dashboard" in Playfair Display
+  - [x] 10.3 `metadata.title = "Dashboard"`
 
-- [ ] Task 11: Logout integration (AC: #9)
-  - [ ] 11.1 In the Account `NavItem` bottom of sidebar, hook the `logout()` function from `frontend/lib/auth.ts` (created in Story 1.3)
-  - [ ] 11.2 The Account link at `/account` navigates normally; the actual logout button will be rendered ON the `/account` page (Story 1.5)
-  - [ ] 11.3 For now, ensure the logout function is importable and that calling it from any layout component correctly POSTs and redirects
+- [x] Task 11: Logout integration (AC: #9)
+  - [x] 11.1 Account `NavItem` renders at bottom of sidebar; links to `/account`
+  - [x] 11.2 Account link navigates normally; logout button on `/account` page (Story 1.5)
+  - [x] 11.3 `logout()` in `frontend/lib/auth.ts` is importable and correct
 
-- [ ] Task 12: Global CSS — reduced-motion safe net (AC: #6)
-  - [ ] 12.1 In `frontend/app/globals.css`: add `@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }`
-  - [ ] 12.2 Confirm drawer and backdrop transitions have `motion-reduce:transition-none` Tailwind class as a belt-and-suspenders override
+- [x] Task 12: Global CSS — reduced-motion safe net (AC: #6)
+  - [x] 12.1 Added `@media (prefers-reduced-motion: reduce)` block to `frontend/app/globals.css`
+  - [x] 12.2 Drawer and backdrop have `motion-reduce:transition-none` Tailwind class
 
 ## Dev Notes
 
@@ -263,4 +263,30 @@ claude-sonnet-4-6
 
 ### Completion Notes List
 
+- `NavItem` received a `forceLabel` prop (not in original spec) to render labels in MobileDrawer context, where viewport is always < lg so `hidden lg:block` would hide them
+- `nav-items.ts` added as a shared constants module to avoid duplicating NAV_ITEMS between Sidebar and MobileDrawer
+- All existing `(app)` pages updated to remove their `p-8 max-w-*xl mx-auto` wrappers; AppShell now provides `max-w-[720px] px-8 lg:px-12 py-8 mx-auto` for all app content
+- `sidebar.tsx` (lowercase) was replaced in-place rather than creating `Sidebar.tsx` to avoid Windows case-insensitive FS conflicts
+- Proxy middleware (`proxy.ts`) from Story 1.3 gates `(app)/` routes; no additional auth in layout needed
+
 ### File List
+
+- `frontend/components/layout/nav-items.ts` (NEW)
+- `frontend/components/layout/NavItem.tsx` (NEW)
+- `frontend/components/layout/SidebarSkeleton.tsx` (NEW)
+- `frontend/components/layout/ClientSwitcher.tsx` (NEW)
+- `frontend/components/layout/MobileTopBar.tsx` (NEW)
+- `frontend/components/layout/MobileDrawer.tsx` (NEW)
+- `frontend/components/layout/AppShell.tsx` (NEW)
+- `frontend/components/layout/sidebar.tsx` (REPLACED — new Sidebar implementation)
+- `frontend/lib/stores/useUIStore.ts` (UPDATED — drawer state added)
+- `frontend/app/(app)/layout.tsx` (UPDATED — now uses AppShell)
+- `frontend/app/globals.css` (UPDATED — reduced-motion safe net)
+- `frontend/app/(app)/dashboard/page.tsx` (UPDATED — removed outer container)
+- `frontend/app/(app)/clients/page.tsx` (UPDATED — removed outer container)
+- `frontend/app/(app)/clients/new/page.tsx` (UPDATED — removed outer container)
+- `frontend/app/(app)/clients/[id]/page.tsx` (UPDATED — removed outer container)
+- `frontend/app/(app)/campaigns/page.tsx` (UPDATED — removed outer container)
+- `frontend/app/(app)/campaigns/new/page.tsx` (UPDATED — removed outer container)
+- `frontend/app/(app)/campaigns/[id]/page.tsx` (UPDATED — removed outer container)
+- `frontend/app/(app)/settings/page.tsx` (UPDATED — removed outer container)

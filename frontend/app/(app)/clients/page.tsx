@@ -24,7 +24,7 @@ export default async function ClientsPage() {
   const clients = await getClients();
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <>
       {/* Header */}
       <header className="flex items-center justify-between mb-10">
         <div>
@@ -101,6 +101,6 @@ export default async function ClientsPage() {
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }

@@ -77,7 +77,7 @@ export default async function CampaignDetailPage({ params }: Props) {
   const rawBlogHtml = campaign.blog_html ?? null;
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <>
       {/* Back */}
       <Link
         href="/campaigns"
@@ -208,7 +208,7 @@ export default async function CampaignDetailPage({ params }: Props) {
           </div>
         </aside>
       </div>
-    </div>
+    </>
   );
 }
 
