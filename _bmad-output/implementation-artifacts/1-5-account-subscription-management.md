@@ -1,6 +1,6 @@
 # Story 1.5: Account & Subscription Management
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -28,13 +28,13 @@ So that I understand what I have access to and can upgrade, downgrade, or cancel
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Backend — `GET /api/v1/subscriptions/me` (AC: #1, #5)
-  - [ ] 1.1 Add `GET /api/v1/subscriptions/me` route to `app/routers/subscriptions.py` (create file if it doesn't exist); register router under `/api/v1/subscriptions` in `main.py`
-  - [ ] 1.2 Require authentication: extract `user_id` from JWT cookie via a `get_current_user` dependency in `app/core/dependencies.py`
-  - [ ] 1.3 In `app/services/subscription_service.py`, create `get_subscription(user_id)`: fetch `subscriptions` row for the user
-  - [ ] 1.4 Return response schema `SubscriptionResponse`: `plan_tier`, `status`, `campaigns_used`, `clients_count`, `image_gen_used`, `billing_cycle_start`, `billing_cycle_end`
-  - [ ] 1.5 Include computed `plan_limits` in response: lookup from `PLAN_LIMITS` dict keyed by `plan_tier`
-  - [ ] 1.6 Define `PLAN_LIMITS` constant in `app/core/constants.py`:
+- [x] Task 1: Backend — `GET /api/v1/subscriptions/me` (AC: #1, #5)
+  - [x] 1.1 Add `GET /api/v1/subscriptions/me` route to `app/routers/subscriptions.py` (create file if it doesn't exist); register router under `/api/v1/subscriptions` in `main.py`
+  - [x] 1.2 Require authentication: extract `user_id` from JWT cookie via a `get_current_user` dependency in `app/core/dependencies.py`
+  - [x] 1.3 In `app/services/subscription_service.py`, create `get_subscription(user_id)`: fetch `subscriptions` row for the user
+  - [x] 1.4 Return response schema `SubscriptionResponse`: `plan_tier`, `status`, `campaigns_used`, `clients_count`, `image_gen_used`, `billing_cycle_start`, `billing_cycle_end`
+  - [x] 1.5 Include computed `plan_limits` in response: lookup from `PLAN_LIMITS` dict keyed by `plan_tier`
+  - [x] 1.6 Define `PLAN_LIMITS` constant in `app/core/constants.py`:
     ```python
     PLAN_LIMITS = {
         "starter": {"clients": 3, "campaigns": 10, "image_gens": 10},
@@ -43,24 +43,24 @@ So that I understand what I have access to and can upgrade, downgrade, or cancel
     }
     ```
 
-- [ ] Task 2: Backend — `POST /api/v1/subscriptions/portal` (AC: #2)
-  - [ ] 2.1 Add `POST /api/v1/subscriptions/portal` route to `app/routers/subscriptions.py`; require auth
-  - [ ] 2.2 In `app/services/subscription_service.py`, add `create_billing_portal_session(user_id)`: fetch `subscriptions.stripe_customer_id` → call Stripe `billing_portal.Session.create(customer=stripe_customer_id, return_url=APP_URL + '/account')` → return session URL
-  - [ ] 2.3 If `stripe_customer_id` is null (trialing user who hasn't added payment): return HTTP 400 with `{"error": {"code": "NO_STRIPE_CUSTOMER", "message": "No billing account found. Please contact support.", "detail": {}}}`
-  - [ ] 2.4 Add `stripe` SDK to `requirements.txt` if not already present (it was listed in Story 1.1 delta)
-  - [ ] 2.5 Read `STRIPE_SECRET_KEY` from settings; initialize `stripe.api_key = settings.STRIPE_SECRET_KEY` at module level in `app/integrations/stripe_client.py`
+- [x] Task 2: Backend — `POST /api/v1/subscriptions/portal` (AC: #2)
+  - [x] 2.1 Add `POST /api/v1/subscriptions/portal` route to `app/routers/subscriptions.py`; require auth
+  - [x] 2.2 In `app/services/subscription_service.py`, add `create_billing_portal_session(user_id)`: fetch `subscriptions.stripe_customer_id` → call Stripe `billing_portal.Session.create(customer=stripe_customer_id, return_url=APP_URL + '/account')` → return session URL
+  - [x] 2.3 If `stripe_customer_id` is null (trialing user who hasn't added payment): return HTTP 400 with `{"error": {"code": "NO_STRIPE_CUSTOMER", "message": "No billing account found. Please contact support.", "detail": {}}}`
+  - [x] 2.4 Add `stripe` SDK to `requirements.txt` if not already present (it was listed in Story 1.1 delta)
+  - [x] 2.5 Read `STRIPE_SECRET_KEY` from settings; initialize `stripe.api_key = settings.STRIPE_SECRET_KEY` at module level in `app/integrations/stripe_client.py`
 
-- [ ] Task 3: Backend — `POST /api/v1/webhooks/stripe` (AC: #3, #4, #6)
-  - [ ] 3.1 Create `app/routers/webhooks.py`; add `POST /api/v1/webhooks/stripe`; register under `/api/v1/webhooks` in `main.py`
-  - [ ] 3.2 This route is **public** (no auth dependency) — Stripe calls it directly
-  - [ ] 3.3 Read raw request body bytes for signature verification; do NOT parse as JSON before verifying
-  - [ ] 3.4 Verify Stripe signature: `stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)` — on failure return HTTP 400
-  - [ ] 3.5 In `app/services/subscription_service.py`, add `handle_stripe_webhook(event)`:
+- [x] Task 3: Backend — `POST /api/v1/webhooks/stripe` (AC: #3, #4, #6)
+  - [x] 3.1 Create `app/routers/webhooks.py`; add `POST /api/v1/webhooks/stripe`; register under `/api/v1/webhooks` in `main.py`
+  - [x] 3.2 This route is **public** (no auth dependency) — Stripe calls it directly
+  - [x] 3.3 Read raw request body bytes for signature verification; do NOT parse as JSON before verifying
+  - [x] 3.4 Verify Stripe signature: `stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)` — on failure return HTTP 400
+  - [x] 3.5 In `app/services/subscription_service.py`, add `handle_stripe_webhook(event)`:
     - On `customer.subscription.updated`: update `plan_tier`, `status`, `billing_cycle_start` (`current_period_start`), `billing_cycle_end` (`current_period_end`); map Stripe `price.lookup_key` or `product.metadata.plan_tier` to internal tier name
     - On `customer.subscription.deleted`: set `status='canceled'`
     - All other event types: return early without error (log at INFO level)
-  - [ ] 3.6 Return HTTP 200 `{"received": true}` to Stripe for all handled events
-  - [ ] 3.7 Stripe plan tier mapping: define in `app/core/constants.py`:
+  - [x] 3.6 Return HTTP 200 `{"received": true}` to Stripe for all handled events
+  - [x] 3.7 Stripe plan tier mapping: define in `app/core/constants.py`:
     ```python
     STRIPE_PRICE_TO_TIER = {
         "price_starter_monthly": "starter",
@@ -70,46 +70,46 @@ So that I understand what I have access to and can upgrade, downgrade, or cancel
     ```
     These price IDs must match real Stripe price IDs in env config; use `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_GROWTH`, `STRIPE_PRICE_AGENCY` env vars
 
-- [ ] Task 4: Frontend — Next.js webhook relay route (AC: #3, #4)
-  - [ ] 4.1 Create `frontend/app/api/webhooks/stripe/route.ts` — Next.js Route Handler (server-side)
-  - [ ] 4.2 Read `STRIPE_WEBHOOK_SECRET` from `process.env.STRIPE_WEBHOOK_SECRET` (server-side only, no `NEXT_PUBLIC_`)
-  - [ ] 4.3 Validate Stripe webhook signature on the Next.js side using the `stripe` npm package: `stripe.webhooks.constructEvent(body, sig, secret)` — return 400 on failure
-  - [ ] 4.4 On valid signature, forward raw body + all headers to FastAPI `POST /api/v1/webhooks/stripe` via server-to-server fetch (use internal `INTERNAL_API_URL` env var for Droplet-to-Droplet, or `NEXT_PUBLIC_API_URL` for same network)
-  - [ ] 4.5 Return FastAPI's response status to Stripe; Stripe retries on non-2xx
-  - [ ] 4.6 Add `stripe` to `frontend/package.json` dependencies if not already present
-  - [ ] 4.7 The webhook route must be excluded from middleware auth checking — confirm it is already in the `matcher` exclusion list from Story 1.3 (`/api/webhooks/`)
+- [x] Task 4: Frontend — Next.js webhook relay route (AC: #3, #4)
+  - [x] 4.1 Create `frontend/app/api/webhooks/stripe/route.ts` — Next.js Route Handler (server-side)
+  - [x] 4.2 Read `STRIPE_WEBHOOK_SECRET` from `process.env.STRIPE_WEBHOOK_SECRET` (server-side only, no `NEXT_PUBLIC_`)
+  - [x] 4.3 Validate Stripe webhook signature on the Next.js side using the `stripe` npm package: `stripe.webhooks.constructEvent(body, sig, secret)` — return 400 on failure
+  - [x] 4.4 On valid signature, forward raw body + all headers to FastAPI `POST /api/v1/webhooks/stripe` via server-to-server fetch (use internal `INTERNAL_API_URL` env var for Droplet-to-Droplet, or `NEXT_PUBLIC_API_URL` for same network)
+  - [x] 4.5 Return FastAPI's response status to Stripe; Stripe retries on non-2xx
+  - [x] 4.6 Add `stripe` to `frontend/package.json` dependencies if not already present
+  - [x] 4.7 The webhook route must be excluded from middleware auth checking — confirm it is already in the `matcher` exclusion list from Story 1.3 (`/api/webhooks/`)
 
-- [ ] Task 5: Backend — `get_current_user` dependency (AC: #1, #2)
-  - [ ] 5.1 Create `app/core/dependencies.py` with `get_current_user(request: Request)` FastAPI dependency
-  - [ ] 5.2 Read `session` cookie from request → decode JWT with `python-jose` → return `{"user_id": ..., "email": ..., "plan_tier": ..., "verified": ...}`
-  - [ ] 5.3 On missing/invalid cookie: raise `HTTPException(401, detail={"error": {"code": "UNAUTHENTICATED", "message": "Authentication required.", "detail": {}}})`
-  - [ ] 5.4 This dependency will be reused across all authenticated routes in subsequent epics
+- [x] Task 5: Backend — `get_current_user` dependency (AC: #1, #2)
+  - [x] 5.1 Create `app/core/dependencies.py` with `get_current_user(request: Request)` FastAPI dependency
+  - [x] 5.2 Read `session` cookie from request → decode JWT with `python-jose` → return `{"user_id": ..., "email": ..., "plan_tier": ..., "verified": ...}`
+  - [x] 5.3 On missing/invalid cookie: raise `HTTPException(401, detail={"error": {"code": "UNAUTHENTICATED", "message": "Authentication required.", "detail": {}}})`
+  - [x] 5.4 This dependency will be reused across all authenticated routes in subsequent epics
 
-- [ ] Task 6: Frontend — `/account` page (AC: #1, #5, #7, #8)
-  - [ ] 6.1 Create `frontend/app/(app)/account/page.tsx` — Server Component with metadata (`title: "Account — PersonnaPress"`)
-  - [ ] 6.2 Fetch subscription data server-side: call `GET /api/v1/subscriptions/me` using the session cookie forwarded from the request (read cookie in Server Component via `cookies()` from `next/headers`)
-  - [ ] 6.3 Create `frontend/app/(app)/account/AccountClient.tsx` — Client Component for interactive elements (portal button, logout button)
-  - [ ] 6.4 Server Component renders: plan tier name section, usage section (3 stats), renewal date, passes data to `AccountClient`
+- [x] Task 6: Frontend — `/account` page (AC: #1, #5, #7, #8)
+  - [x] 6.1 Create `frontend/app/(app)/account/page.tsx` — Server Component with metadata (`title: "Account — PersonnaPress"`)
+  - [x] 6.2 Fetch subscription data server-side: call `GET /api/v1/subscriptions/me` using the session cookie forwarded from the request (read cookie in Server Component via `cookies()` from `next/headers`)
+  - [x] 6.3 Create `frontend/app/(app)/account/AccountClient.tsx` — Client Component for interactive elements (portal button, logout button)
+  - [x] 6.4 Server Component renders: plan tier name section, usage section (3 stats), renewal date, passes data to `AccountClient`
 
-- [ ] Task 7: Frontend — Account page layout (Paper Style) (AC: #1, #7)
-  - [ ] 7.1 Page heading: `<h1>` in Playfair Display — "Account"
-  - [ ] 7.2 Plan section: `<section>` with heading "Current plan" (Inter, 12px, uppercase, tracked), plan tier name (Inter, medium, Ink), subscription status badge (2px radius only rounded element, uppercase, Per-status color)
-  - [ ] 7.3 Usage section: `<section>` with heading "This billing cycle" — 3 stat rows:
+- [x] Task 7: Frontend — Account page layout (Paper Style) (AC: #1, #7)
+  - [x] 7.1 Page heading: `<h1>` in Playfair Display — "Account"
+  - [x] 7.2 Plan section: `<section>` with heading "Current plan" (Inter, 12px, uppercase, tracked), plan tier name (Inter, medium, Ink), subscription status badge (2px radius only rounded element, uppercase, Per-status color)
+  - [x] 7.3 Usage section: `<section>` with heading "This billing cycle" — 3 stat rows:
     - "Campaigns: {campaigns_used} / {plan_limits.campaigns}"
     - "Clients: {clients_count} / {plan_limits.clients}"
     - "Image generations: {image_gen_used} / {plan_limits.image_gens}"
     - All in Inter, Graphite color
-  - [ ] 7.4 Renewal date: "Renews {date}" formatted using `Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(billing_cycle_end))`
-  - [ ] 7.5 "Manage subscription" Primary Button — onClick calls `POST /api/v1/subscriptions/portal` via `fetchAPI`, then `window.location.href = portal_url`
-  - [ ] 7.6 "Log out" Secondary Button (or text link) — onClick calls `logout()` from `frontend/lib/auth.ts`
-  - [ ] 7.7 Section separator: `<hr className="border-[#E5E5E5] my-6" />`
-  - [ ] 7.8 No progress bars, no percentage rings, no gamification — plain text only per Paper Style
+  - [x] 7.4 Renewal date: "Renews {date}" formatted using `Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(billing_cycle_end))`
+  - [x] 7.5 "Manage subscription" Primary Button — onClick calls `POST /api/v1/subscriptions/portal` via `fetchAPI`, then `window.location.href = portal_url`
+  - [x] 7.6 "Log out" Secondary Button (or text link) — onClick calls `logout()` from `frontend/lib/auth.ts`
+  - [x] 7.7 Section separator: `<hr className="border-[#E5E5E5] my-6" />`
+  - [x] 7.8 No progress bars, no percentage rings, no gamification — plain text only per Paper Style
 
-- [ ] Task 8: Frontend — Status badge component (AC: #7)
-  - [ ] 8.1 Create `frontend/components/ui/StatusBadge.tsx` if it doesn't already exist from Story 1.1
-  - [ ] 8.2 Props: `status: 'trialing' | 'active' | 'canceled' | 'past_due'`
-  - [ ] 8.3 Style: `rounded-[2px] px-2 py-0.5 text-xs font-medium uppercase tracking-wide` — the ONLY element in the UI with any border radius
-  - [ ] 8.4 Status color map:
+- [x] Task 8: Frontend — Status badge component (AC: #7)
+  - [x] 8.1 Create `frontend/components/ui/StatusBadge.tsx` if it doesn't already exist from Story 1.1
+  - [x] 8.2 Props: `status: 'trialing' | 'active' | 'canceled' | 'past_due'`
+  - [x] 8.3 Style: `rounded-[2px] px-2 py-0.5 text-xs font-medium uppercase tracking-wide` — the ONLY element in the UI with any border radius
+  - [x] 8.4 Status color map:
     - `trialing`: `bg-[#FFF1B8] text-[#111111]` (Highlighter)
     - `active`: `bg-[#2E4F2E]/10 text-[#2E4F2E]` (Success tint)
     - `canceled`: `bg-[#8B0000]/10 text-[#8B0000]` (Danger tint)
@@ -360,6 +360,37 @@ claude-sonnet-4-6
 
 ### Debug Log References
 
+None.
+
 ### Completion Notes List
 
+- `stripe_customer_id` lives on the `users` table (not `subscriptions`); `create_billing_portal_session` fetches from `User` model accordingly.
+- `StatusBadge.tsx` already existed for campaign statuses; created `SubscriptionStatusBadge.tsx` separately to avoid breaking existing component.
+- No `middleware.ts` exists in the frontend, so webhook route exclusion from auth middleware is a non-issue.
+- `cookies()` is async in Next.js 16 — used `await cookies()` in the Server Component.
+- Stripe SDK initialized via `app/integrations/stripe_client.py` side-effect import in service/router files.
+- `STRIPE_PRICE_TO_TIER` mapping built lazily via `get_stripe_price_to_tier()` function referencing settings, rather than as a module-level constant, to allow env vars to be set at runtime.
+
 ### File List
+
+**Backend — new files:**
+- `backend/app/core/constants.py`
+- `backend/app/core/dependencies.py`
+- `backend/app/integrations/stripe_client.py`
+- `backend/app/schemas/subscription.py`
+- `backend/app/services/subscription_service.py`
+
+**Backend — updated files:**
+- `backend/app/core/config.py` — added `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_GROWTH`, `STRIPE_PRICE_AGENCY`, `INTERNAL_API_URL`
+- `backend/app/routers/subscriptions.py` — filled in `GET /me` and `POST /portal` routes
+- `backend/app/routers/webhooks.py` — filled in `POST /stripe` webhook route
+
+**Frontend — new files:**
+- `frontend/app/(app)/account/page.tsx`
+- `frontend/app/(app)/account/AccountClient.tsx`
+- `frontend/app/api/webhooks/stripe/route.ts`
+- `frontend/components/ui/SubscriptionStatusBadge.tsx`
+
+**Frontend — updated files:**
+- `frontend/lib/types.ts` — added `PlanLimits`, `SubscriptionResponse`
+- `frontend/package.json` — added `stripe ^17.7.0`

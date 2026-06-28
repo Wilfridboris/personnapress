@@ -13,6 +13,11 @@ class Settings(BaseSettings):
 
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_PRICE_STARTER: str = ""
+    STRIPE_PRICE_GROWTH: str = ""
+    STRIPE_PRICE_AGENCY: str = ""
+
+    INTERNAL_API_URL: str = "http://localhost:8000"
 
     GEMINI_API_KEY: str = ""
     REPLICATE_API_TOKEN: str = ""

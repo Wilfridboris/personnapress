@@ -79,6 +79,23 @@ export interface DashboardStats {
   total_clients: number;
 }
 
+export interface PlanLimits {
+  clients: number;
+  campaigns: number;
+  image_gens: number;
+}
+
+export interface SubscriptionResponse {
+  plan_tier: PlanTier;
+  status: string;
+  campaigns_used: number;
+  clients_count: number;
+  image_gen_used: number;
+  billing_cycle_start: string;
+  billing_cycle_end: string;
+  plan_limits: PlanLimits;
+}
+
 export interface Subscription {
   id: string;
   user_id: string;
