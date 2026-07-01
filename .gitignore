@@ -59,3 +59,4 @@ personapress.db
 .idea/
 .vscode/
 *.log
+.claude\.story-automator-active

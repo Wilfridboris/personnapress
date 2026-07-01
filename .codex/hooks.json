@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env 'PROJECT_ROOT=C:\\code\\PersonnaPress' 'C:\\code\\PersonnaPress\\.agents\\skills\\bmad-story-automator\\scripts\\story-automator' /c/code/PersonnaPress/.agents/skills/bmad-story-automator/scripts/story-automator stop-hook",
+            "timeout": 10,
+            "statusMessage": "Checking story automator state"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -34,7 +34,25 @@ export interface ClientResponse {
   website_url: string | null;
   brand_voice_profile: BrandVoiceProfile | null;
   job_id: string | null;
+  campaign_count: number;
   created_at: string;
+}
+
+export type BrandVoiceProfileStatus = "ready" | "analyzing" | "incomplete";
+
+export interface ClientListItem {
+  id: string;
+  name: string;
+  website_url: string | null;
+  brand_voice_profile_status: BrandVoiceProfileStatus;
+  campaign_count: number;
+}
+
+export interface ClientListResponse {
+  clients: ClientListItem[];
+  plan_at_limit: boolean;
+  plan_tier: string;
+  client_limit: number;
 }
 
 export interface BrandVoiceProfile {
@@ -80,6 +98,33 @@ export interface Job {
   attempt_count: number;
   error_details: string | null;
   created_at: string;
+}
+
+export interface FileItem {
+  filename: string;
+  size: number;
+}
+
+export interface FileUploadedItem {
+  filename: string;
+  size: number;
+  path: string;
+}
+
+export interface FileUploadError {
+  filename: string;
+  error: string;
+}
+
+export interface FileUploadResponse {
+  uploaded: FileUploadedItem[];
+  errors: FileUploadError[];
+}
+
+export interface FileListResponse {
+  files: FileItem[];
+  count: number;
+  limit: number;
 }
 
 export interface DashboardStats {

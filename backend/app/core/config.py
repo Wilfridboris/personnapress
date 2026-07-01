@@ -29,5 +29,9 @@ class Settings(BaseSettings):
 
     TRIAL_DAYS: int = 14
 
+    # Supabase Storage (for brand content files)
+    SUPABASE_URL: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+
 
 settings = Settings()

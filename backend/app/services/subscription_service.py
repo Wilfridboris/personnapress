@@ -81,6 +81,19 @@ async def check_client_limit(user_id: uuid.UUID, db: AsyncSession) -> None:
         )
 
 
+async def get_user_plan_info(user_id: uuid.UUID, db: AsyncSession) -> tuple[str, int]:
+    result = await db.execute(select(Subscription).where(Subscription.user_id == user_id))
+    sub = result.scalar_one_or_none()
+
+    if sub and sub.status in ("canceled", "expired", "past_due"):
+        plan_tier = "starter"
+    else:
+        plan_tier = sub.plan_tier if sub else "starter"
+
+    client_limit = PLAN_LIMITS.get(plan_tier, PLAN_LIMITS["starter"])["clients"]
+    return plan_tier, client_limit
+
+
 async def get_subscription(user_id: str, db: AsyncSession) -> SubscriptionResponse:
     result = await db.execute(select(Subscription).where(Subscription.user_id == uuid.UUID(user_id)))
     sub = result.scalar_one_or_none()

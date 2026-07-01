@@ -1,23 +1,21 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useClientStore } from "@/lib/stores/useClientStore";
 
-interface Client {
-  id: string;
-  name: string;
-}
-
-interface ClientSwitcherProps {
-  clients?: Client[];
-  activeClientId?: string;
-}
-
-export function ClientSwitcher({ clients = [], activeClientId }: ClientSwitcherProps) {
+export function ClientSwitcher() {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  const clients = useClientStore((s) => s.clients);
+  const activeClientId = useClientStore((s) => s.activeClientId);
+  const setActiveClientId = useClientStore((s) => s.setActiveClientId);
 
   const activeClient = clients.find((c) => c.id === activeClientId);
   const initial = activeClient ? activeClient.name[0].toUpperCase() : "C";
@@ -31,7 +29,10 @@ export function ClientSwitcher({ clients = [], activeClientId }: ClientSwitcherP
       }
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setIsOpen(false);
+      if (e.key === "Escape") {
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
     }
 
     document.addEventListener("mousedown", handleMouseDown);
@@ -42,9 +43,16 @@ export function ClientSwitcher({ clients = [], activeClientId }: ClientSwitcherP
     };
   }, [isOpen]);
 
+  function selectClient(id: string) {
+    setActiveClientId(id);
+    setIsOpen(false);
+    router.push("/dashboard");
+  }
+
   return (
     <div ref={containerRef} className="relative shrink-0">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setIsOpen((v) => !v)}
         aria-expanded={isOpen}
@@ -60,7 +68,7 @@ export function ClientSwitcher({ clients = [], activeClientId }: ClientSwitcherP
         <span className="w-[18px] h-[18px] bg-[#E5E5E5] flex items-center justify-center text-xs font-bold shrink-0">
           {initial}
         </span>
-        <span className="hidden lg:block flex-1 text-sm font-medium text-[#111111] truncate text-left">
+        <span className="hidden lg:block flex-1 text-sm font-medium text-[#111111] truncate text-left max-w-[160px]">
           {activeClient ? activeClient.name : "No client"}
         </span>
         <ChevronDown
@@ -75,36 +83,39 @@ export function ClientSwitcher({ clients = [], activeClientId }: ClientSwitcherP
       {isOpen && (
         <div
           role="listbox"
-          className="absolute top-full left-0 z-50 min-w-[200px] w-full lg:w-56 bg-[#F9F9F6] border border-[#E5E5E5] shadow-[4px_4px_0px_#111111] py-1"
+          aria-label="Client list"
+          className="absolute top-full left-0 z-50 w-60 bg-[#F9F9F6] border border-[#111111] shadow-[4px_4px_0px_#111111] py-1"
         >
           {clients.length === 0 ? (
-            <div className="px-4 py-3 text-sm font-mono text-[#555555]">
+            <div className="px-3 py-2 text-sm text-[#555555]">
               No clients yet.{" "}
               <Link
                 href="/clients/new"
                 className="text-[#111111] underline hover:no-underline"
                 onClick={() => setIsOpen(false)}
               >
-                Add one
+                Create client
               </Link>
             </div>
           ) : (
             clients.map((client) => {
-              const isSelected = client.id === activeClientId;
+              const isActive = client.id === activeClientId;
               return (
                 <button
                   key={client.id}
                   role="option"
-                  aria-selected={isSelected}
+                  aria-selected={isActive}
                   type="button"
-                  onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-left hover:bg-[#FFF1B8] transition-colors"
+                  onClick={() => selectClient(client.id)}
+                  className={cn(
+                    "flex items-center gap-2 w-full py-2 px-3 text-[0.9375rem] text-left transition-colors",
+                    isActive
+                      ? "bg-[#FFF1B8] text-[#111111] border-l-2 border-[#111111]"
+                      : "text-[#555555] hover:bg-[#FFF1B8]"
+                  )}
                 >
                   <Check
-                    className={cn(
-                      "w-4 h-4 shrink-0",
-                      isSelected ? "opacity-100" : "opacity-0"
-                    )}
+                    className={cn("w-4 h-4 shrink-0", isActive ? "opacity-100" : "opacity-0")}
                     aria-hidden="true"
                   />
                   <span className="truncate">{client.name}</span>

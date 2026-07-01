@@ -41,6 +41,7 @@ apscheduler==3.11.0
 beautifulsoup4==4.13.4
 lxml==6.1.1
 python-multipart
+python-docx
 
 # Observability
 sentry-sdk

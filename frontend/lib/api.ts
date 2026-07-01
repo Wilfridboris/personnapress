@@ -1,4 +1,4 @@
-import type { Client, ClientResponse, Campaign, DashboardStats, Job } from "./types";
+import type { ClientListResponse, ClientResponse, Campaign, DashboardStats, FileListResponse, Job } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -21,6 +21,10 @@ export async function fetchAPI<T>(path: string, init?: RequestInit): Promise<T> 
       ...init?.headers,
     },
   });
+
+  if (res.status === 204) {
+    return undefined as T;
+  }
 
   let data: Record<string, unknown>;
   try {
@@ -47,20 +51,31 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const clientsApi = {
-  list: () => apiFetch<Client[]>("/clients"),
+  list: () => apiFetch<ClientListResponse>("/clients"),
   get: (id: string) => apiFetch<ClientResponse>(`/clients/${id}`),
   create: (data: { name: string; website_url?: string }) =>
     apiFetch<ClientResponse>("/clients", { method: "POST", body: JSON.stringify(data) }),
-  update: (id: string, data: Partial<Client>) =>
-    apiFetch<Client>(`/clients/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  delete: (id: string) =>
-    apiFetch<{ ok: boolean }>(`/clients/${id}`, { method: "DELETE" }),
+  patch: (id: string, data: { name?: string; website_url?: string; confirm_url_change?: boolean }) =>
+    apiFetch<ClientResponse | { requires_confirmation: boolean; domain: string }>(
+      `/clients/${id}`,
+      { method: "PATCH", body: JSON.stringify(data) }
+    ),
+  delete: (id: string) => apiFetch<void>(`/clients/${id}`, { method: "DELETE" }),
   ingest: (id: string) =>
     apiFetch<{ job_id: string }>(`/clients/${id}/ingest`, { method: "POST" }),
 };
 
 export const jobsApi = {
   get: (id: string) => apiFetch<Job>(`/jobs/${id}`),
+};
+
+export const filesApi = {
+  list: (clientId: string) =>
+    apiFetch<FileListResponse>(`/clients/${clientId}/files`),
+  delete: (clientId: string, filename: string) =>
+    apiFetch<void>(`/clients/${clientId}/files/${encodeURIComponent(filename)}`, {
+      method: "DELETE",
+    }),
 };
 
 export const campaignsApi = {

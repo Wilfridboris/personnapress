@@ -16,6 +16,12 @@
 - **`Client.name` has no DB-level length constraint** — `backend/app/db/repositories/models.py`. The 255-char cap is enforced only in `ClientCreate`'s `field_validator`. Direct repository calls bypass it. Pre-existing schema issue; add `sa.String(255)` in a future migration.
 - **No guard against duplicate active ingestion jobs per client** — `backend/app/routers/clients.py`. Two concurrent POSTs or a future "re-ingest" path can create two `pending` jobs for the same `client_id`. Needs a unique partial index on `(client_id, job_type)` where `status IN ('pending','in_progress')`. Address in Story 2.4 when full ingestion is implemented.
 
+## Deferred from: code review of 2-2-edit-delete-client (2026-07-01)
+
+- **Double DB fetch on every PATCH** — `update_client_detail` in `backend/app/routers/clients.py` calls `get_client` for ownership check, then `update_client` calls it again internally. Two sequential SELECT round-trips per mutation. Performance optimization; not a correctness issue.
+- **No mechanism to clear website_url via PATCH** — `ClientUpdate` validator converts empty/blank URL to `None` but `url_changed` only fires when `body.website_url is not None`. There is no supported path to remove a client's website URL. Out of Story 2.2 spec scope.
+- **PATCH 403 vs GET 404 for non-owned clients** — `get_client_detail` returns 404 when `not client or client.user_id != user_id`; `update_client_detail` returns distinct 403. Minor client-enumeration surface. Deliberate per AC#6; consider harmonizing in a later auth-hardening story.
+
 ## Deferred from: code review of 1-3-user-login-session-management (2026-06-28)
 
 - **No rate limiting on `POST /api/v1/auth/login`** — `/login` has no throttling, lockout, or CAPTCHA. Combined with brute-force tooling this is a full credential-stuffing surface. Out of v1 scope; address before production launch with a rate-limiting middleware or infrastructure-level rule.

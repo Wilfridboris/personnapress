@@ -12,7 +12,7 @@ from starlette.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.rate_limit import limiter
-from app.routers import auth, campaigns, clients, health, jobs, publishing, subscriptions, webhooks
+from app.routers import auth, campaigns, clients, files, health, jobs, publishing, subscriptions, webhooks
 
 logging.basicConfig(
     level=logging.INFO,
@@ -62,6 +62,7 @@ API_PREFIX = "/api/v1"
 app.include_router(health.router, prefix=API_PREFIX)
 app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(clients.router, prefix=API_PREFIX)
+app.include_router(files.router, prefix=API_PREFIX)
 app.include_router(jobs.router, prefix=API_PREFIX)
 app.include_router(campaigns.router, prefix=API_PREFIX)
 app.include_router(subscriptions.router, prefix=API_PREFIX)

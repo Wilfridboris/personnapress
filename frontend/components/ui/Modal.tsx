@@ -10,6 +10,7 @@ interface ModalProps {
   titleId?: string;
   descriptionId?: string;
   triggerRef?: RefObject<HTMLElement | null>;
+  initialFocusRef?: RefObject<HTMLElement | null>;
   children: ReactNode;
   className?: string;
 }
@@ -23,6 +24,7 @@ export function Modal({
   titleId = "modal-title",
   descriptionId,
   triggerRef,
+  initialFocusRef,
   children,
   className,
 }: ModalProps) {
@@ -40,7 +42,11 @@ export function Modal({
     const el = panelRef.current;
     if (!el) return;
 
-    el.querySelectorAll<HTMLElement>(FOCUSABLE)[0]?.focus();
+    if (initialFocusRef?.current) {
+      initialFocusRef.current.focus();
+    } else {
+      el.querySelectorAll<HTMLElement>(FOCUSABLE)[0]?.focus();
+    }
 
     const trap = (e: KeyboardEvent) => {
       const focusable = el.querySelectorAll<HTMLElement>(FOCUSABLE);
@@ -69,7 +75,7 @@ export function Modal({
 
     document.addEventListener("keydown", trap);
     return () => document.removeEventListener("keydown", trap);
-  }, [isOpen]);
+  }, [isOpen, initialFocusRef]);
 
   // Return focus to trigger only when closing (not on initial mount)
   useEffect(() => {

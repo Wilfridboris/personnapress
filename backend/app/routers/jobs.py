@@ -6,7 +6,7 @@ from sqlmodel import select
 
 from app.core.dependencies import get_current_user
 from app.db.connection import get_session
-from app.db.repositories.models import Client, Job
+from app.db.repositories.models import Campaign, Client, Job
 from app.schemas.job import JobResponse
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -25,16 +25,34 @@ async def get_job(
     except (ValueError, KeyError):
         raise HTTPException(status_code=401, detail=_INVALID_SESSION)
 
+    _not_found = HTTPException(
+        status_code=404,
+        detail={"error": {"code": "JOB_NOT_FOUND", "message": "Job not found.", "detail": {}}},
+    )
+
     result = await db.execute(select(Job).where(Job.id == job_id))
     job = result.scalar_one_or_none()
     if not job:
-        raise HTTPException(status_code=404, detail={"error": {"code": "JOB_NOT_FOUND", "message": "Job not found.", "detail": {}}})
+        raise _not_found
 
     if job.client_id:
         client_result = await db.execute(select(Client).where(Client.id == job.client_id))
         client = client_result.scalar_one_or_none()
         if not client or client.user_id != user_id:
-            raise HTTPException(status_code=404, detail={"error": {"code": "JOB_NOT_FOUND", "message": "Job not found.", "detail": {}}})
+            raise _not_found
+    elif job.campaign_id:
+        # Campaign-level jobs: verify ownership via campaign → client → user
+        campaign_result = await db.execute(
+            select(Campaign).where(Campaign.id == job.campaign_id)
+        )
+        campaign = campaign_result.scalar_one_or_none()
+        if campaign:
+            client_result = await db.execute(
+                select(Client).where(Client.id == campaign.client_id)
+            )
+            client = client_result.scalar_one_or_none()
+            if not client or client.user_id != user_id:
+                raise _not_found
 
     return JobResponse(
         id=job.id,

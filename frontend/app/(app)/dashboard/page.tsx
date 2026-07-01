@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Clock, CheckCircle2, Globe, Users } from "lucide-react";
+import { DashboardEmptyState } from "./DashboardEmptyState";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -81,6 +82,8 @@ export default async function DashboardPage() {
 
   return (
     <>
+      <DashboardEmptyState />
+
       {/* Header */}
       <header className="mb-10">
         <h1 className="font-display text-3xl font-bold text-ink mb-1">
