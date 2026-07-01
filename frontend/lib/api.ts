@@ -1,4 +1,4 @@
-import type { Client, Campaign, DashboardStats } from "./types";
+import type { Client, ClientResponse, Campaign, DashboardStats, Job } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -48,15 +48,19 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const clientsApi = {
   list: () => apiFetch<Client[]>("/clients"),
-  get: (id: string) => apiFetch<Client>(`/clients/${id}`),
+  get: (id: string) => apiFetch<ClientResponse>(`/clients/${id}`),
   create: (data: { name: string; website_url?: string }) =>
-    apiFetch<Client>("/clients", { method: "POST", body: JSON.stringify(data) }),
+    apiFetch<ClientResponse>("/clients", { method: "POST", body: JSON.stringify(data) }),
   update: (id: string, data: Partial<Client>) =>
     apiFetch<Client>(`/clients/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiFetch<{ ok: boolean }>(`/clients/${id}`, { method: "DELETE" }),
   ingest: (id: string) =>
     apiFetch<{ job_id: string }>(`/clients/${id}/ingest`, { method: "POST" }),
+};
+
+export const jobsApi = {
+  get: (id: string) => apiFetch<Job>(`/jobs/${id}`),
 };
 
 export const campaignsApi = {

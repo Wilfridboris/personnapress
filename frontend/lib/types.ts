@@ -28,6 +28,15 @@ export interface Client {
   updated_at: string;
 }
 
+export interface ClientResponse {
+  id: string;
+  name: string;
+  website_url: string | null;
+  brand_voice_profile: BrandVoiceProfile | null;
+  job_id: string | null;
+  created_at: string;
+}
+
 export interface BrandVoiceProfile {
   tone: string;
   cadence: string;
@@ -62,6 +71,7 @@ export interface VoiceScore {
 export interface Job {
   id: string;
   campaign_id: string | null;
+  client_id: string | null;
   job_type: string;
   status: string;
   scheduled_at: string | null;

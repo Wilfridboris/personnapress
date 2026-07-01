@@ -119,6 +119,7 @@ class Job(SQLModel, table=True):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     campaign_id: Optional[uuid.UUID] = Field(default=None, foreign_key="campaigns.id", index=True)
+    client_id: Optional[uuid.UUID] = Field(default=None, foreign_key="clients.id", index=True)
     job_type: str
     status: str
     scheduled_at: Optional[datetime] = None

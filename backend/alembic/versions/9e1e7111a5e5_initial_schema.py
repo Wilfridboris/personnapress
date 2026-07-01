@@ -59,10 +59,14 @@ def upgrade() -> None:
     )
     op.create_index("ix_clients_user_id", "clients", ["user_id"])
 
+    # Create enum type first, then reuse the same object in create_table.
+    # Using create_type=False on the object means _on_table_create won't
+    # attempt a second CREATE TYPE. checkfirst=True on .create() handles
+    # idempotency (no-ops if the type already exists).
     platform_enum = postgresql.ENUM(
         "wordpress", "webflow", "x", "linkedin",
         name="platform_enum",
-        create_type=True,
+        create_type=False,
     )
     platform_enum.create(op.get_bind(), checkfirst=True)
 
@@ -70,7 +74,7 @@ def upgrade() -> None:
         "platform_connections",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("client_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("clients.id"), nullable=False),
-        sa.Column("platform", sa.Enum("wordpress", "webflow", "x", "linkedin", name="platform_enum", create_type=False), nullable=False),
+        sa.Column("platform", platform_enum, nullable=False),
         sa.Column("encrypted_credentials", sa.Text(), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()),
@@ -80,7 +84,7 @@ def upgrade() -> None:
     campaign_status_enum = postgresql.ENUM(
         "pending_approval", "approved", "published", "rejected", "failed",
         name="campaign_status_enum",
-        create_type=True,
+        create_type=False,
     )
     campaign_status_enum.create(op.get_bind(), checkfirst=True)
 
@@ -95,7 +99,7 @@ def upgrade() -> None:
         sa.Column("image_url", sa.String(), nullable=True),
         sa.Column(
             "status",
-            sa.Enum("pending_approval", "approved", "published", "rejected", "failed", name="campaign_status_enum", create_type=False),
+            campaign_status_enum,
             nullable=False,
             server_default="pending_approval",
         ),

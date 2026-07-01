@@ -5,17 +5,80 @@ from datetime import datetime, timezone
 import stripe as stripe_sdk
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func
 from sqlmodel import select
 
 from app.core.config import settings
 from app.core.constants import PLAN_LIMITS, get_stripe_price_to_tier
-from app.db.repositories.models import Subscription, User
+from app.db.repositories.models import Client, Subscription, User
 from app.schemas.subscription import PlanLimits, SubscriptionResponse
 
 logger = logging.getLogger(__name__)
 
 # Ensure stripe_client initializes the SDK key
 import app.integrations.stripe_client  # noqa: F401
+
+
+async def check_client_limit(user_id: uuid.UUID, db: AsyncSession) -> None:
+    # Lock subscription row to serialize concurrent create-client requests (TOCTOU guard).
+    # If no subscription row exists, fall back to locking the user row.
+    sub_result = await db.execute(
+        select(Subscription).where(Subscription.user_id == user_id).with_for_update()
+    )
+    sub = sub_result.scalars().first()
+
+    if sub is None:
+        await db.execute(select(User).where(User.id == user_id).with_for_update())
+
+    if sub and sub.status in ("canceled", "expired", "past_due"):
+        plan_tier = "starter"
+    else:
+        plan_tier = sub.plan_tier if sub else "starter"
+
+    limit = PLAN_LIMITS.get(plan_tier, PLAN_LIMITS["starter"])["clients"]
+
+    count_result = await db.execute(
+        select(func.count()).select_from(Client).where(Client.user_id == user_id)
+    )
+    current: int = count_result.scalar() or 0
+
+    if current >= limit:
+        if plan_tier == "agency":
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": {
+                        "code": "CLIENT_LIMIT_REACHED",
+                        "message": (
+                            f"You've reached your {limit}-client limit on the Agency plan. "
+                            "Contact us to increase your limit."
+                        ),
+                        "detail": {"current": current, "limit": limit, "plan": plan_tier},
+                    }
+                },
+            )
+        next_tier_map = {"starter": "growth", "growth": "agency"}
+        next_tier = next_tier_map.get(plan_tier, "agency")
+        next_limit = PLAN_LIMITS.get(next_tier, PLAN_LIMITS["agency"])["clients"]
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": "CLIENT_LIMIT_REACHED",
+                    "message": (
+                        f"You've reached your {limit}-client limit on the {plan_tier.capitalize()} plan. "
+                        f"Upgrade to {next_tier.capitalize()} for up to {next_limit} clients."
+                    ),
+                    "detail": {
+                        "current": current,
+                        "limit": limit,
+                        "plan": plan_tier,
+                        "next_tier": next_tier,
+                        "next_limit": next_limit,
+                    },
+                }
+            },
+        )
 
 
 async def get_subscription(user_id: str, db: AsyncSession) -> SubscriptionResponse:

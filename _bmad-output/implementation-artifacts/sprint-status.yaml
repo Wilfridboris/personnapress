@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-14
-last_updated: 2026-06-28T00:00:00Z
+last_updated: 2026-07-01T00:00:00Z
 project: PersonnaPress
 project_key: NOKEY
 tracking_system: file-system
@@ -52,8 +52,8 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Client Management & Brand Voice Ingestion
-  epic-2: backlog
-  2-1-create-client: backlog
+  epic-2: in-progress
+  2-1-create-client: done
   2-2-edit-delete-client: backlog
   2-3-client-list-active-context-switching: backlog
   2-4-brand-voice-ingestion-website-scraping-content-upload: backlog
