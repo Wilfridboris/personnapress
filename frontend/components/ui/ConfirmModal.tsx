@@ -14,6 +14,7 @@ interface ConfirmModalProps {
   confirmVariant?: "primary" | "danger";
   isLoading?: boolean;
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
+  error?: string | null;
 }
 
 export function ConfirmModal({
@@ -26,6 +27,7 @@ export function ConfirmModal({
   confirmVariant = "primary",
   isLoading = false,
   triggerRef,
+  error,
 }: ConfirmModalProps) {
   const uid = useId();
   const titleId = `confirm-title-${uid}`;
@@ -48,6 +50,11 @@ export function ConfirmModal({
       >
         {description}
       </p>
+      {error && (
+        <p role="alert" className="text-sm text-[#8B0000] mb-4">
+          {error}
+        </p>
+      )}
       <div className="flex gap-3 justify-end">
         <Button
           ref={confirmBtnRef}

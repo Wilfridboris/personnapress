@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { clientsApi } from "@/lib/api";
 import { useJobStatus } from "@/hooks/useJobStatus";
 import { Button } from "@/components/ui/Button";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Input } from "@/components/ui/Input";
 import { TagChip } from "@/components/ui/TagChip";
 import { VoiceQuestionnaire } from "@/components/clients/VoiceQuestionnaire";
@@ -31,9 +32,12 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 interface ProfileReviewProps {
   bvp: BrandVoiceProfile;
   clientId: string;
+  onRefresh?: () => void;
+  refreshDisabled?: boolean;
+  refreshBtnRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
-function ProfileReview({ bvp, clientId }: ProfileReviewProps) {
+function ProfileReview({ bvp, clientId, onRefresh, refreshDisabled, refreshBtnRef }: ProfileReviewProps) {
   const [editMode, setEditMode] = useState(false);
   const [tone, setTone] = useState<string[]>(bvp.tone ?? []);
   const [cadence, setCadence] = useState<BrandVoiceCadence>(
@@ -252,6 +256,20 @@ function ProfileReview({ bvp, clientId }: ProfileReviewProps) {
           </>
         )}
       </div>
+
+      {onRefresh && (
+        <div className="mt-6">
+          <Button
+            ref={refreshBtnRef}
+            variant="secondary"
+            onClick={onRefresh}
+            disabled={refreshDisabled}
+            type="button"
+          >
+            Refresh voice profile
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -298,23 +316,63 @@ export function VoiceSetupPage({ client }: Props) {
 
   const [view, setView] = useState<View>(initialView);
   const [activeJobId, setActiveJobId] = useState<string | null>(client.job_id ?? null);
+  const [showRefreshModal, setShowRefreshModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  // Track BVP in state so the review shows updated values after a completed refresh
+  const [bvp, setBvp] = useState(client.brand_voice_profile);
+  const refreshBtnRef = useRef<HTMLButtonElement>(null);
 
   const { data: job } = useJobStatus(activeJobId);
+
+  // P6: true when activeJobId is set and job is either not yet loaded or in a non-terminal state
+  const jobIsActive =
+    !!activeJobId && (!job || !["completed", "complete", "failed"].includes(job.status));
 
   useEffect(() => {
     if (!job) return;
     if (job.status === "completed" || job.status === "complete") {
-      // Refresh the server component to get the newly extracted BVP
+      setActiveJobId(null); // P1: stop polling before refreshing
       router.refresh();
     } else if (job.status === "failed") {
-      setView("failed");
+      // AC#4 / AC#6: check error_details to choose next state
+      if (job.error_details === "no_content") {
+        setView("questionnaire");
+      } else {
+        setView("failed");
+      }
       setActiveJobId(null);
     }
   }, [job, router]);
 
+  // Sync bvp when client prop changes (after router.refresh() resolves)
+  useEffect(() => {
+    if (client.brand_voice_profile) {
+      setBvp(client.brand_voice_profile);
+      setView("review");
+    }
+  }, [client.brand_voice_profile]);
+
   const handleJobStarted = (jobId: string) => {
     setActiveJobId(jobId);
     setView("in-progress");
+  };
+
+  const handleRefreshConfirm = async () => {
+    setRefreshing(true);
+    setRefreshError(null);
+    setBvp(null); // P7: null BVP immediately so old profile isn't visible during the call
+    try {
+      const { job_id } = await clientsApi.ingest(client.id);
+      setShowRefreshModal(false);
+      setActiveJobId(job_id);
+      setView("in-progress");
+    } catch {
+      setBvp(client.brand_voice_profile); // restore if the call failed
+      setRefreshError("Failed to start re-analysis. Please try again.");
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   return (
@@ -339,8 +397,14 @@ export function VoiceSetupPage({ client }: Props) {
       <hr className="border-[#E5E5E5] mb-10" />
 
       {/* Content area */}
-      {view === "review" && client.brand_voice_profile && (
-        <ProfileReview bvp={client.brand_voice_profile} clientId={client.id} />
+      {view === "review" && bvp && (
+        <ProfileReview
+          bvp={bvp}
+          clientId={client.id}
+          onRefresh={() => setShowRefreshModal(true)}
+          refreshDisabled={!!jobIsActive}
+          refreshBtnRef={refreshBtnRef}
+        />
       )}
 
       {view === "in-progress" && <InProgressState />}
@@ -355,6 +419,20 @@ export function VoiceSetupPage({ client }: Props) {
       {view === "questionnaire" && (
         <VoiceQuestionnaire clientId={client.id} onJobStarted={handleJobStarted} />
       )}
+
+      {/* Refresh confirmation modal (AC#2, AC#3) */}
+      <ConfirmModal
+        isOpen={showRefreshModal}
+        onClose={() => { setShowRefreshModal(false); setRefreshError(null); }}
+        onConfirm={handleRefreshConfirm}
+        title="Re-analyze voice profile?"
+        description={`Re-analyzing ${client.name}'s voice profile will overwrite the current profile. This cannot be undone. Continue?`}
+        confirmLabel="Re-analyze"
+        confirmVariant="primary"
+        isLoading={refreshing}
+        triggerRef={refreshBtnRef}
+        error={refreshError}
+      />
     </>
   );
 }

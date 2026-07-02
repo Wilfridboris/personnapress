@@ -267,6 +267,54 @@ async def delete_client_detail(
     return Response(status_code=204)
 
 
+@router.post("/{client_id}/ingest", status_code=202)
+async def trigger_voice_ingest(
+    client_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Trigger (or re-trigger) voice profile ingestion for a client.
+
+    Nulls the existing BVP, creates a pending ingestion job, and dispatches
+    the ingest worker.  Returns ``{job_id}`` immediately (HTTP 202).
+    """
+    try:
+        user_id = uuid.UUID(current_user["user_id"])
+    except (ValueError, KeyError):
+        raise HTTPException(status_code=401, detail=_INVALID_SESSION)
+
+    client = await get_client(db, client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+    if client.user_id != user_id:
+        raise HTTPException(status_code=403, detail=_FORBIDDEN)
+
+    # P2: Return existing job if one is already running to prevent concurrent workers
+    active_job = await get_active_ingestion_job_for_client(db, client_id)
+    if active_job:
+        return {"job_id": str(active_job.id)}
+
+    # P3: Check update_client return to guard against client deleted between auth and write
+    updated = await update_client(db, client_id, brand_voice_profile=None)
+    if not updated:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+
+    # P5: Wrap job creation in try/except to roll back if commit fails
+    try:
+        job = await create_job(db, job_type="ingestion", status="pending", client_id=client_id)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create ingestion job.")
+
+    # Dispatch worker regardless of whether a URL is set; the worker handles the
+    # no-content case by setting error_details='no_content' (AC#5)
+    background_tasks.add_task(ingest_worker, job_id=job.id, client_id=client_id)
+
+    return {"job_id": str(job.id)}
+
+
 @router.post("/{client_id}/questionnaire", status_code=202)
 async def submit_voice_questionnaire(
     client_id: uuid.UUID,
