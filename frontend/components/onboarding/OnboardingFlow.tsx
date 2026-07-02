@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { authApi, clientsApi } from "@/lib/api";
+import { authApi, clientsApi, campaignsApi } from "@/lib/api";
+import { useClientStore } from "@/lib/stores/useClientStore";
 import { useJobStatus } from "@/hooks/useJobStatus";
 import { Button } from "@/components/ui/Button";
 import { Input, BrainDumpInput } from "@/components/ui/Input";
@@ -225,6 +226,17 @@ function Step2Content({ view, jobId, clientId, websiteUrl, onStep2Complete, onJo
   return null;
 }
 
+// ── Card wrapper ───────────────────────────────────────────────────────────────
+// Defined outside OnboardingFlow so React doesn't treat it as a new component
+// type on every parent re-render (which would remount children and lose focus).
+function Card({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="bg-white border border-[#E5E5E5] p-8 w-full max-w-lg">
+      {children}
+    </div>
+  );
+}
+
 // ── Main OnboardingFlow ────────────────────────────────────────────────────────
 export function OnboardingFlow() {
   const router = useRouter();
@@ -245,9 +257,12 @@ export function OnboardingFlow() {
   // Step 3 state
   const [brainDump, setBrainDump] = useState("");
   const [step3Loading, setStep3Loading] = useState(false);
+  const [step3Error, setStep3Error] = useState<string | null>(null);
 
   // Global complete-onboarding error
   const [completeError, setCompleteError] = useState<string | null>(null);
+
+  const activeClientId = useClientStore((s) => s.activeClientId);
 
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -312,13 +327,27 @@ export function OnboardingFlow() {
   // ── Step 3 submit ──────────────────────────────────────────────────────────
   const handleStep3Submit = async () => {
     setStep3Loading(true);
-    setCompleteError(null);
+    setStep3Error(null);
+
     try {
+      // Complete onboarding FIRST so JWT has onboarding_completed=true before navigation
       await authApi.completeOnboarding();
-      const encoded = encodeURIComponent(brainDump);
-      router.push(`/dashboard/new?prefill=${encoded}`);
-    } catch {
-      setCompleteError("Could not save progress. Please try again.");
+
+      const clientId = createdClientId ?? activeClientId;
+      if (!clientId) {
+        setStep3Error("Create a client first — go back to Step 1.");
+        return;
+      }
+
+      const { campaign_id, job_id } = await campaignsApi.create({
+        client_id: clientId,
+        brain_dump: brainDump,
+      });
+
+      router.push(`/campaigns/${campaign_id}?job_id=${job_id}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Something went wrong.";
+      setStep3Error(`Could not start generation — ${message}`);
     } finally {
       setStep3Loading(false);
     }
@@ -338,20 +367,13 @@ export function OnboardingFlow() {
   // ── Keyboard handlers ──────────────────────────────────────────────────────
   const handleBrainDumpKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Escape") {
-      e.preventDefault(); // prevents accidental textarea clear
+      e.preventDefault(); // prevents blur/form reset on some browsers
     }
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
       if (brainDump.length >= MIN_BRAIN_DUMP) handleStep3Submit();
     }
   };
-
-  // ── Card wrapper ───────────────────────────────────────────────────────────
-  const Card = ({ children }: { children: React.ReactNode }) => (
-    <div className="bg-white border border-[#E5E5E5] p-8 w-full max-w-lg">
-      {children}
-    </div>
-  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // STEP 1
@@ -510,21 +532,41 @@ export function OnboardingFlow() {
           </p>
         </div>
 
+        {step3Error && (
+          <div
+            role="alert"
+            className="border border-danger/30 bg-danger/5 p-4 mt-4"
+          >
+            <p className="text-sm font-mono text-danger">{step3Error}</p>
+            <button
+              type="button"
+              className="text-sm font-mono text-danger underline hover:no-underline mt-1"
+              onClick={() => setStep3Error(null)}
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {createdClientId === null && activeClientId === null && (
+          <p className="text-sm text-[#555555] mt-3 text-center">
+            Create a client first.
+          </p>
+        )}
+
         <Button
           type="button"
           onClick={handleStep3Submit}
-          disabled={brainDump.length < MIN_BRAIN_DUMP || step3Loading}
+          disabled={
+            brainDump.length < MIN_BRAIN_DUMP ||
+            step3Loading ||
+            (createdClientId === null && activeClientId === null)
+          }
           aria-busy={step3Loading}
           className="w-full justify-center mt-4"
         >
-          {step3Loading ? "Saving..." : "Generate my first campaign"}
+          {step3Loading ? "Generating..." : "Generate my first campaign"}
         </Button>
-
-        {completeError && (
-          <p role="alert" className="text-sm text-[#8B0000] mt-2 text-center">
-            {completeError}
-          </p>
-        )}
         <SkipLink onClick={handleSkipStep3}>
           I&apos;ll write my first draft later.
         </SkipLink>
