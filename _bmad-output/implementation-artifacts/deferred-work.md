@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 3-1-brain-dump-input-campaign-creation (2026-07-02)
+
+- **D1 (Critical)**: `campaigns_used` is never reset to 0 when a billing cycle renews — pre-existing issue in the Stripe webhook handler (`_handle_subscription_updated`). Users who exhaust their monthly quota are permanently blocked after cycle renewal. Fix: set `sub.campaigns_used = 0` in the renewal handler. [backend/app/services/subscription_service.py]
+- **D2 (Medium)**: `GET /campaigns` returns all campaigns for the user with no `limit`/`offset` — will become a performance issue for agency-tier users. Needs pagination. [backend/app/routers/campaigns.py:list_campaigns]
+- **D3 (Planned)**: `run_generation` is a stub (`pass`) — intentional for Story 3.1. Story 3.3 fills in the Gemini generation logic. [backend/app/workers/generate.py]
+
 ## Deferred from: code review of 2-7-onboarding-flow (2026-07-02)
 
 - **D1 (Medium)**: Old JWT token remains valid until expiry in multi-tab scenario — completing onboarding in one tab issues a new cookie but tabs holding the old token still see `onboarding_completed=false` until expiry. Requires a server-side session store (e.g., Redis) to invalidate old tokens. [backend/app/services/auth_service.py]

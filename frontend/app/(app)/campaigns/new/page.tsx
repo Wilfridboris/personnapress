@@ -1,213 +1,198 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
-import { ArrowLeft, Loader2, Cpu } from "lucide-react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/Button";
+import { useClientStore } from "@/lib/stores/useClientStore";
+import { campaignsApi, APIError } from "@/lib/api";
 
-type FormState = { error?: string; campaignId?: string } | null;
-
-async function submitBrainDump(
-  _prev: FormState,
-  formData: FormData
-): Promise<FormState> {
-  const client_id = formData.get("client_id") as string;
-  const brain_dump = formData.get("brain_dump") as string;
-
-  if (!client_id) return { error: "Please select a client." };
-  if (!brain_dump.trim() || brain_dump.trim().length < 20) {
-    return { error: "Brain dump is too short. Give the agent something to work with." };
-  }
-
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/campaigns`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client_id,
-          brain_dump: brain_dump.trim(),
-        }),
-      }
-    );
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      return { error: err.error?.message || err.detail || "Failed to start campaign generation." };
-    }
-    const data = await res.json();
-    return { campaignId: data.campaign_id };
-  } catch {
-    return { error: "Could not reach the server. Is the backend running?" };
-  }
-}
+const MAX_CHARS = 10000;
+const MIN_CHARS = 20;
 
 export default function NewCampaignPage() {
-  const [state, action, isPending] = useActionState(submitBrainDump, null);
-  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
-  const [clientsError, setClientsError] = useState(false);
-  const [charCount, setCharCount] = useState(0);
+  const router = useRouter();
+  const { clients, activeClientId } = useClientStore();
+  const activeClient = clients.find((c) => c.id === activeClientId) ?? null;
 
-  useEffect(() => {
-    fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/clients`
-    )
-      .then((r) => {
-        if (!r.ok) throw new Error();
-        return r.json();
-      })
-      .then(setClients)
-      .catch(() => setClientsError(true));
-  }, []);
+  const [brainDump, setBrainDump] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [limitExceeded, setLimitExceeded] = useState<{ message: string; nextTier: string } | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    if (state?.campaignId) {
-      window.location.href = `/campaigns/${state.campaignId}`;
+  const charCount = brainDump.length;
+  const hasActiveClient = activeClient !== null;
+  const hasBvp = activeClient?.brand_voice_profile_status === "ready";
+  const isDisabled = charCount < MIN_CHARS || !hasActiveClient || isSubmitting;
+
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const val = e.target.value;
+    if (val.length <= MAX_CHARS) {
+      setBrainDump(val);
     }
-  }, [state]);
+    // Auto-expand
+    const ta = e.target;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }
 
-  const inputClass = cn(
-    "w-full bg-transparent border-0 border-b border-ink/20 font-mono text-sm text-ink",
-    "py-3 focus:outline-none focus:border-ink transition-colors placeholder:text-graphite/50"
-  );
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      return;
+    }
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      if (!isDisabled) handleSubmit();
+    }
+  }
+
+  async function handleSubmit() {
+    if (!activeClient) return;
+    setIsSubmitting(true);
+    setError(null);
+    setLimitExceeded(null);
+    try {
+      const data = await campaignsApi.create({
+        client_id: activeClient.id,
+        brain_dump: brainDump.trim(),
+      });
+      setIsSubmitting(false);
+      router.push(`/campaigns/${data.campaign_id}?job_id=${data.job_id}`);
+    } catch (err: unknown) {
+      if (err instanceof APIError && err.code === "CAMPAIGN_LIMIT_EXCEEDED") {
+        setLimitExceeded({ message: err.message, nextTier: "" });
+      } else {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : "Something went wrong. Please try again.";
+        setError(msg);
+      }
+      setIsSubmitting(false);
+    }
+  }
 
   return (
-    <>
-      {/* Back */}
+    <div className="max-w-2xl mx-auto">
       <Link
         href="/campaigns"
         className="inline-flex items-center gap-2 text-sm text-graphite hover:text-ink transition-colors font-mono mb-10"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
-        Back to Campaigns
+        Back to campaigns
       </Link>
 
-      <header className="mb-10">
-        <div className="flex items-center gap-3 mb-3">
-          <Cpu className="size-5 text-graphite" aria-hidden="true" />
-          <p className="font-mono text-xs text-graphite uppercase tracking-widest">
-            New Campaign
-          </p>
-        </div>
-        <h1 className="font-display text-3xl font-bold text-ink mb-2">
-          Brain Dump
-        </h1>
-        <p className="text-sm text-graphite font-mono">
-          Drop your raw idea. No structure needed. The agent handles the rest.
+      <header className="mb-8">
+        <p className="font-mono text-xs text-graphite uppercase tracking-widest mb-1">
+          New Campaign
         </p>
+        <h1 className="font-display text-3xl font-bold text-ink">Brain Dump</h1>
       </header>
 
-      <form action={action} className="space-y-8">
-        {state?.error && (
-          <p className="text-sm font-mono text-danger border border-danger/20 bg-danger/5 px-4 py-3">
-            {state.error}
+      {hasActiveClient ? (
+        <p className="text-xs font-mono text-graphite mb-6">
+          Writing for:{" "}
+          <span className="text-ink font-medium">{activeClient.name}</span>
+        </p>
+      ) : null}
+
+      {!hasActiveClient && (
+        <div className="mb-6 border border-danger/20 bg-danger/5 px-4 py-3">
+          <p className="text-sm font-mono text-danger">
+            Select a client first — use the switcher in the sidebar.
           </p>
-        )}
-
-        {/* Client selector */}
-        <div>
-          <label
-            htmlFor="client_id"
-            className="block text-xs font-mono text-graphite uppercase tracking-wider mb-2"
+          <Link
+            href="/clients"
+            className="text-xs font-mono text-danger underline mt-1 inline-block"
           >
-            Client *
-          </label>
-          <select
-            id="client_id"
-            name="client_id"
-            required
-            disabled={isPending}
-            className={cn(
-              inputClass,
-              "cursor-pointer appearance-none"
-            )}
-          >
-            <option value="">Select a client...</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          {clientsError ? (
-            <p className="text-xs text-danger font-mono mt-2">
-              Could not load clients. Is the backend running?
-            </p>
-          ) : clients.length === 0 ? (
-            <p className="text-xs text-graphite font-mono mt-2">
-              No clients yet.{" "}
-              <Link href="/clients/new" className="underline hover:text-ink">
-                Create one first.
-              </Link>
-            </p>
-          ) : null}
+            Go to Clients
+          </Link>
         </div>
+      )}
 
-        {/* Brain dump textarea */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label
-              htmlFor="brain_dump"
-              className="block text-xs font-mono text-graphite uppercase tracking-wider"
+      {hasActiveClient && !hasBvp && (
+        <div className="mb-6 border border-ink/10 bg-paper px-4 py-3">
+          <p className="text-sm font-mono text-graphite">
+            This client has no voice profile yet. Content will be generated
+            without brand alignment.{" "}
+            <Link
+              href={`/clients/${activeClient!.id}/voice`}
+              className="underline hover:text-ink"
             >
-              Your Brain Dump *
-            </label>
-            <span className="text-xs font-mono text-graphite">
-              {charCount} chars
-            </span>
-          </div>
-          <textarea
-            id="brain_dump"
-            name="brain_dump"
-            required
-            disabled={isPending}
-            rows={16}
-            onChange={(e) => setCharCount(e.target.value.length)}
-            placeholder={`Paste anything here:
-- Voice note transcript
-- Rough bullet points
-- A few sentences of a raw idea
-- A half-finished tweet thread
-
-No structure needed. The agent reads your brand voice profile and writes the full SEO blog post + social posts from whatever you give it.`}
-            className={cn(
-              "w-full bg-transparent border border-ink/10 font-mono text-sm text-ink",
-              "p-4 focus:outline-none focus:border-ink transition-colors resize-none",
-              "placeholder:text-graphite/40 leading-relaxed"
-            )}
-          />
+              Set up a voice profile first.
+            </Link>
+          </p>
         </div>
+      )}
 
-        {/* Submit */}
-        <div className="flex items-center gap-4 pt-2 border-t border-border">
-          <button
-            type="submit"
-            disabled={isPending || clients.length === 0}
-            className={cn(
-              "inline-flex items-center gap-2 bg-ink text-paper text-sm font-medium px-8 py-3",
-              "hover:bg-graphite transition-colors",
-              "disabled:opacity-50 disabled:cursor-not-allowed"
-            )}
+      {limitExceeded && (
+        <div className="mb-6 border border-danger/20 bg-danger/5 px-4 py-3 space-y-2">
+          <p className="text-sm font-mono text-danger">{limitExceeded.message}</p>
+          <Link
+            href="/account"
+            className="text-xs font-mono text-danger underline inline-block"
           >
-            {isPending ? (
-              <>
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                Generating draft...
-              </>
-            ) : (
-              <>
-                <Cpu className="size-4" aria-hidden="true" />
-                Generate Campaign
-              </>
-            )}
-          </button>
-          {isPending && (
-            <p className="text-xs text-graphite font-mono">
-              Writing blog post, social posts, and featured image. This takes 30-90 seconds.
-            </p>
-          )}
+            Upgrade your plan
+          </Link>
         </div>
-      </form>
-    </>
+      )}
+
+      {error && (
+        <div className="mb-6 border border-danger/20 bg-danger/5 px-4 py-3">
+          <p className="text-sm font-mono text-danger">{error}</p>
+        </div>
+      )}
+
+      <div className="space-y-2 mb-4">
+        <textarea
+          ref={textareaRef}
+          value={brainDump}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          placeholder="Paste your raw idea here — voice note transcript, rough bullets, half-finished thoughts. No structure needed."
+          className={cn(
+            "w-full bg-transparent resize-none font-mono text-sm text-ink leading-[1.7]",
+            "border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink",
+            "py-3 focus:outline-none transition-all min-h-[200px]",
+            "placeholder:text-graphite/40"
+          )}
+          rows={8}
+          aria-label="Brain dump"
+        />
+        <p
+          className={cn(
+            "text-xs font-mono",
+            charCount > 0 && charCount < MIN_CHARS ? "text-danger" : "text-graphite"
+          )}
+        >
+          {charCount} / {MAX_CHARS.toLocaleString()} characters
+        </p>
+      </div>
+
+      <Button
+        variant="primary"
+        disabled={isDisabled}
+        onClick={handleSubmit}
+        className="w-full sm:w-auto"
+      >
+        {isSubmitting ? (
+          <>
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            Starting generation...
+          </>
+        ) : (
+          "Generate campaign"
+        )}
+      </Button>
+      {hasActiveClient && !isSubmitting && (
+        <p className="text-xs font-mono text-graphite mt-2">
+          Tip: Cmd+Enter submits
+        </p>
+      )}
+    </div>
   );
 }

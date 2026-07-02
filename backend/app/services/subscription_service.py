@@ -10,7 +10,7 @@ from sqlmodel import select
 
 from app.core.config import settings
 from app.core.constants import PLAN_LIMITS, get_stripe_price_to_tier
-from app.db.repositories.models import Client, Subscription, User
+from app.db.repositories.models import Campaign, Client, Subscription, User
 from app.schemas.subscription import PlanLimits, SubscriptionResponse
 
 logger = logging.getLogger(__name__)
@@ -79,6 +79,56 @@ async def check_client_limit(user_id: uuid.UUID, db: AsyncSession) -> None:
                 }
             },
         )
+
+
+async def check_campaign_limit(db: AsyncSession, user_id: uuid.UUID) -> None:
+    sub_result = await db.execute(
+        select(Subscription).where(Subscription.user_id == user_id).with_for_update()
+    )
+    sub = sub_result.scalars().first()
+
+    if sub and sub.status in ("canceled", "expired", "past_due"):
+        plan_tier = "starter"
+    else:
+        plan_tier = sub.plan_tier if sub else "starter"
+
+    limit = PLAN_LIMITS.get(plan_tier, PLAN_LIMITS["starter"])["campaigns"]
+
+    if sub:
+        current: int = sub.campaigns_used
+    else:
+        count_result = await db.execute(
+            select(func.count()).select_from(Campaign)
+            .join(Client, Campaign.client_id == Client.id)
+            .where(Client.user_id == user_id)
+        )
+        current = count_result.scalar() or 0
+
+    if current >= limit:
+        next_tier_map = {"starter": "growth", "growth": "agency"}
+        next_tier = next_tier_map.get(plan_tier, "agency")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": "CAMPAIGN_LIMIT_EXCEEDED",
+                    "message": (
+                        f"You've reached your {limit}-campaign limit for this billing cycle. "
+                        f"Upgrade to {next_tier.capitalize()} for more campaigns."
+                    ),
+                    "detail": {
+                        "current": current,
+                        "limit": limit,
+                        "plan": plan_tier,
+                        "next_tier": next_tier,
+                    },
+                }
+            },
+        )
+
+    if sub:
+        sub.campaigns_used = current + 1
+        await db.flush()
 
 
 async def get_user_plan_info(user_id: uuid.UUID, db: AsyncSession) -> tuple[str, int]:
