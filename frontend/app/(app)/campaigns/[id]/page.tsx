@@ -168,9 +168,9 @@ export default async function CampaignDetailPage({ params, searchParams }: Props
       )}
 
       {/* Content grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
         {/* Blog post - main column */}
-        <section className="lg:col-span-2 space-y-6">
+        <section className="lg:col-span-3 space-y-6">
           <div className="border border-border">
             <div className="px-6 py-4 border-b border-border">
               <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
@@ -191,7 +191,7 @@ export default async function CampaignDetailPage({ params, searchParams }: Props
         </section>
 
         {/* Sidebar: social + image */}
-        <aside className="space-y-6">
+        <aside className="lg:col-span-2 space-y-8">
           {/* Featured image */}
           <ImagePanel
             campaignId={campaign.id}
@@ -202,12 +202,12 @@ export default async function CampaignDetailPage({ params, searchParams }: Props
 
           {/* X Post */}
           <div className="border border-border">
-            <div className="px-4 py-3 border-b border-border">
+            <div className="px-6 py-4 border-b border-border">
               <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
                 X (Twitter)
               </h2>
             </div>
-            <div className="p-4">
+            <div className="p-6">
               {campaign.x_post ? (
                 <p className="font-mono text-sm text-ink leading-relaxed whitespace-pre-wrap">
                   {campaign.x_post}
@@ -220,12 +220,12 @@ export default async function CampaignDetailPage({ params, searchParams }: Props
 
           {/* LinkedIn Post */}
           <div className="border border-border">
-            <div className="px-4 py-3 border-b border-border">
+            <div className="px-6 py-4 border-b border-border">
               <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
                 LinkedIn
               </h2>
             </div>
-            <div className="p-4">
+            <div className="p-6">
               {campaign.linkedin_post ? (
                 <p className="font-mono text-sm text-ink leading-relaxed whitespace-pre-wrap">
                   {campaign.linkedin_post}

@@ -8,9 +8,13 @@ from typing import Any
 
 import replicate
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 _FLUX_MODEL = "black-forest-labs/flux-pro"
+
+_client = replicate.Client(api_token=settings.REPLICATE_API_TOKEN)
 
 
 async def generate_image(prompt: str, width: int = 1200, height: int = 630) -> str:
@@ -28,7 +32,7 @@ async def generate_image(prompt: str, width: int = 1200, height: int = 630) -> s
         Exception: Re-raises any Replicate SDK error for the caller to handle.
     """
     logger.info("replicate.generate_image: calling %s (prompt len=%d)", _FLUX_MODEL, len(prompt))
-    output: Any = await replicate.async_run(
+    output: Any = await _client.async_run(
         _FLUX_MODEL,
         input={
             "prompt": prompt,
@@ -37,7 +41,7 @@ async def generate_image(prompt: str, width: int = 1200, height: int = 630) -> s
             "output_format": "png",
         },
     )
-    # output is a list of FileOutput objects or URL strings
-    image_url = str(output[0])
+    # output is a FileOutput object or a list — normalise either case
+    image_url = str(output[0] if isinstance(output, (list, tuple)) else output)
     logger.info("replicate.generate_image: received URL %s", image_url[:60])
     return image_url

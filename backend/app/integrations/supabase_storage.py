@@ -85,11 +85,17 @@ async def upload_image_from_url(replicate_url: str, storage_path: str) -> str:
         storage_path: Supabase Storage path (e.g. generated-images/{id}/featured.png).
 
     Returns:
-        Public CDN URL of the uploaded image.
+        Public CDN URL of the uploaded image, or the Replicate URL if Supabase is not configured.
 
     Raises:
         httpx.HTTPStatusError: On download or upload failure.
     """
+    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
+        logger.warning(
+            "Supabase storage not configured — storing Replicate URL directly (temporary URL, will expire)"
+        )
+        return replicate_url
+
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.get(replicate_url)
         response.raise_for_status()

@@ -51,7 +51,7 @@ export function AppShell({ children }: AppShellProps) {
       <MobileTopBar />
       <MobileDrawer />
       <main className="md:ml-14 lg:ml-60 pt-14 lg:pt-0 min-h-screen">
-        <div className="max-w-[720px] px-8 lg:px-12 py-8 mx-auto">
+        <div className="max-w-5xl px-8 lg:px-12 py-8 mx-auto">
           {children}
         </div>
       </main>

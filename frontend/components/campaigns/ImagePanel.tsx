@@ -48,13 +48,13 @@ export function ImagePanel({
   if (!currentImageUrl) {
     return (
       <div className="border border-border">
-        <div className="px-4 py-3 border-b border-border">
+        <div className="px-6 py-4 border-b border-border">
           <h2 className="font-mono text-xs text-graphite uppercase tracking-widest">
             Featured Image
           </h2>
         </div>
-        <div className="p-4">
-          <p className="font-mono text-sm text-graphite mb-3">
+        <div className="p-6 space-y-4">
+          <p className="font-mono text-sm text-graphite">
             {jobErrorDetails?.includes("Image generation failed")
               ? "Image generation failed — blog and social posts are complete."
               : "No featured image generated."}
@@ -62,7 +62,7 @@ export function ImagePanel({
           <button
             onClick={handleRegenerate}
             disabled={isRegenerating}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-ink text-paper font-mono text-sm hover:bg-graphite transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-ink text-paper font-mono text-sm hover:bg-graphite transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isRegenerating ? (
               <Loader2 className="size-4 animate-spin" />
@@ -71,7 +71,7 @@ export function ImagePanel({
             )}
           </button>
           {error && (
-            <p className="mt-2 font-mono text-xs text-danger">{error}</p>
+            <p className="font-mono text-xs text-danger">{error}</p>
           )}
         </div>
       </div>
@@ -81,25 +81,25 @@ export function ImagePanel({
   // Image present state
   return (
     <div className="border border-border">
-      <div className="px-4 py-3 border-b border-border">
+      <div className="px-6 py-4 border-b border-border">
         <h2 className="font-mono text-xs text-graphite uppercase tracking-widest">
           Featured Image
         </h2>
       </div>
-      <div className="p-4 space-y-3">
+      <div className="p-6 space-y-4">
         <div className="relative w-full" style={{ aspectRatio: "1200/630" }}>
           <Image
             src={currentImageUrl}
             alt="Featured image"
             fill
             className="object-cover"
-            sizes="(max-width: 768px) 100vw, 33vw"
+            sizes="(max-width: 768px) 100vw, 40vw"
           />
         </div>
         <button
           onClick={handleRegenerate}
           disabled={isAtLimit || isRegenerating}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-transparent border border-ink text-ink font-mono text-sm hover:bg-ink hover:text-paper transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-transparent border border-ink text-ink font-mono text-sm hover:bg-ink hover:text-paper transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isRegenerating ? (
             <Loader2 className="size-4 animate-spin" />

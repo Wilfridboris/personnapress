@@ -52,7 +52,7 @@ def _build_image_prompt(blog_title: str, brand_voice_profile: dict | None) -> st
 
 
 async def _replicate_with_retry(prompt: str, max_retries: int = 3) -> str:
-    """Call Replicate with exponential backoff (1s, 2s between attempts). Returns image URL."""
+    """Call Replicate with exponential backoff (8s, 16s between attempts). Returns image URL."""
     last_exc: Exception | None = None
     for attempt in range(max_retries):
         try:
@@ -66,7 +66,7 @@ async def _replicate_with_retry(prompt: str, max_retries: int = 3) -> str:
                 exc,
             )
             if attempt < max_retries - 1:
-                await asyncio.sleep(2 ** attempt)  # 1s, 2s, 4s
+                await asyncio.sleep(8 * (2 ** attempt))  # 8s, 16s
     raise last_exc  # type: ignore[misc]
 
 
