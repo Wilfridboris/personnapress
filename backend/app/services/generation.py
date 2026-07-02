@@ -94,7 +94,7 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
         return
 
     job.status = "in_progress"
-    job.started_at = datetime.now(timezone.utc)
+    job.started_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
     await db.refresh(job)
 
@@ -199,7 +199,7 @@ async def _fail_job(db: AsyncSession, job: Job, error_details: str) -> None:
         logger.warning("_fail_job: rollback failed for job %s", job.id, exc_info=True)
     try:
         job.status = "failed"
-        job.completed_at = datetime.now(timezone.utc)
+        job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         job.error_details = error_details
         await db.commit()
         logger.error("run_generation_pipeline: job %s failed: %s", job.id, error_details)

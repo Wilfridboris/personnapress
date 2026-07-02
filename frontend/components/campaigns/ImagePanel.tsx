@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { campaignsApi, APIError } from "@/lib/api";
 
@@ -43,31 +42,9 @@ export function ImagePanel({
     }
   }
 
-  // Limit reached state (no image, no error about failure)
-  if (!currentImageUrl && !jobErrorDetails?.includes("Image generation failed")) {
-    return (
-      <div className="border border-border">
-        <div className="px-4 py-3 border-b border-border">
-          <h2 className="font-mono text-xs text-graphite uppercase tracking-widest">
-            Featured Image
-          </h2>
-        </div>
-        <div className="p-4">
-          <p className="font-mono text-sm text-graphite mb-3">
-            Image generation limit reached for this billing cycle.
-          </p>
-          <Link
-            href="/account"
-            className="font-mono text-sm text-ink underline underline-offset-2 hover:text-graphite transition-colors"
-          >
-            Upgrade plan →
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  // Failed state (no image, explicit failure error)
+  // No image state — covers failed generation, limit reached, and no-context cases.
+  // The regenerate endpoint enforces the subscription limit and will surface a proper
+  // error message if the quota is genuinely exhausted.
   if (!currentImageUrl) {
     return (
       <div className="border border-border">
@@ -77,7 +54,11 @@ export function ImagePanel({
           </h2>
         </div>
         <div className="p-4">
-          <p className="font-mono text-sm text-graphite mb-3">Image generation failed.</p>
+          <p className="font-mono text-sm text-graphite mb-3">
+            {jobErrorDetails?.includes("Image generation failed")
+              ? "Image generation failed — blog and social posts are complete."
+              : "No featured image generated."}
+          </p>
           <button
             onClick={handleRegenerate}
             disabled={isRegenerating}

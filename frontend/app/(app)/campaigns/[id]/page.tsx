@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { ArrowLeft } from "lucide-react";
 import { BlogHtmlRenderer } from "@/components/ui/BlogHtmlRenderer";
 import { ApprovalPanel } from "./approval-panel";
@@ -8,17 +9,25 @@ import { GenerationGate } from "./GenerationGate";
 import { ImagePanel } from "@/components/campaigns/ImagePanel";
 import type { Campaign, Job } from "@/lib/types";
 
+const BACKEND = process.env.BACKEND_URL || "http://localhost:8000";
+
 type Props = {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ job_id?: string | string[] }>;
 };
 
+async function authHeaders(): Promise<HeadersInit> {
+  const store = await cookies();
+  const session = store.get("session");
+  return session ? { Cookie: `session=${session.value}` } : {};
+}
+
 async function getCampaign(id: string): Promise<Campaign | null> {
   try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/campaigns/${id}`,
-      { cache: "no-store" }
-    );
+    const res = await fetch(`${BACKEND}/api/v1/campaigns/${id}`, {
+      cache: "no-store",
+      headers: await authHeaders(),
+    });
     if (res.status === 404) return null;
     if (!res.ok) return null;
     return res.json();
@@ -29,10 +38,10 @@ async function getCampaign(id: string): Promise<Campaign | null> {
 
 async function getJob(id: string): Promise<Job | null> {
   try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/jobs/${id}`,
-      { cache: "no-store" }
-    );
+    const res = await fetch(`${BACKEND}/api/v1/jobs/${id}`, {
+      cache: "no-store",
+      headers: await authHeaders(),
+    });
     if (!res.ok) return null;
     return res.json();
   } catch {

@@ -249,7 +249,7 @@ async def _handle_subscription_updated(sub_obj: dict, db: AsyncSession) -> None:
     sub.status = sub_obj.get("status", sub.status)
     sub.billing_cycle_start = datetime.fromtimestamp(sub_obj["current_period_start"], tz=timezone.utc)
     sub.billing_cycle_end = datetime.fromtimestamp(sub_obj["current_period_end"], tz=timezone.utc)
-    sub.updated_at = datetime.now(timezone.utc)
+    sub.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
 
 
@@ -262,5 +262,5 @@ async def _handle_subscription_deleted(sub_obj: dict, db: AsyncSession) -> None:
         return
 
     sub.status = "canceled"
-    sub.updated_at = datetime.now(timezone.utc)
+    sub.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()

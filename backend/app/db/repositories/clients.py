@@ -77,7 +77,7 @@ async def update_client(
         return None
     for key, value in fields.items():
         setattr(client, key, value)
-    client.updated_at = datetime.now(timezone.utc)
+    client.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(client)
     await session.flush()
     await session.refresh(client)

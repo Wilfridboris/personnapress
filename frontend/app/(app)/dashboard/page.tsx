@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { ArrowRight, Clock, CheckCircle2, Globe, Users } from "lucide-react";
 import { DashboardEmptyState } from "./DashboardEmptyState";
 import { NudgeCard } from "./NudgeCard";
@@ -9,28 +10,36 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
-// Server Component: fetch data directly (backend running on same network)
-async function getStats() {
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/dashboard/stats`,
-      { cache: "no-store" }
-    );
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
+const BACKEND = process.env.BACKEND_URL || "http://localhost:8000";
+
+async function authHeaders(): Promise<HeadersInit> {
+  const store = await cookies();
+  const session = store.get("session");
+  return session ? { Cookie: `session=${session.value}` } : {};
 }
 
 async function getRecentCampaigns() {
   try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/campaigns`,
-      { cache: "no-store" }
-    );
+    const res = await fetch(`${BACKEND}/api/v1/campaigns`, {
+      cache: "no-store",
+      headers: await authHeaders(),
+    });
     if (!res.ok) return [];
     return res.json();
+  } catch {
+    return [];
+  }
+}
+
+async function getClients() {
+  try {
+    const res = await fetch(`${BACKEND}/api/v1/clients`, {
+      cache: "no-store",
+      headers: await authHeaders(),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.clients ?? data ?? [];
   } catch {
     return [];
   }
@@ -57,34 +66,33 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ nudge?: string }>;
 }) {
-  const [stats, campaigns, params] = await Promise.all([
-    getStats(),
+  const [campaigns, clients, params] = await Promise.all([
     getRecentCampaigns(),
+    getClients(),
     searchParams,
   ]);
   const showNudge = params.nudge === "true";
 
+  const now = new Date();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+
+  const stats = {
+    total_campaigns: campaigns.length,
+    pending_approval: campaigns.filter((c: { status: string }) => c.status === "pending_approval").length,
+    published_this_month: campaigns.filter((c: { status: string; created_at: string }) => {
+      if (c.status !== "published") return false;
+      const d = new Date(c.created_at);
+      return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+    }).length,
+    total_clients: clients.length,
+  };
+
   const statCards = [
-    {
-      label: "Total Campaigns",
-      value: stats?.total_campaigns ?? 0,
-      icon: Globe,
-    },
-    {
-      label: "Pending Review",
-      value: stats?.pending_approval ?? 0,
-      icon: Clock,
-    },
-    {
-      label: "Published This Month",
-      value: stats?.published_this_month ?? 0,
-      icon: CheckCircle2,
-    },
-    {
-      label: "Active Clients",
-      value: stats?.total_clients ?? 0,
-      icon: Users,
-    },
+    { label: "Total Campaigns", value: stats.total_campaigns, icon: Globe },
+    { label: "Pending Review", value: stats.pending_approval, icon: Clock },
+    { label: "Published This Month", value: stats.published_this_month, icon: CheckCircle2 },
+    { label: "Active Clients", value: stats.total_clients, icon: Users },
   ];
 
   return (

@@ -112,7 +112,7 @@ async def run_image_generation(
                 "run_image_generation: image limit reached for user %s, skipping", user_id
             )
             job.status = "complete"
-            job.completed_at = datetime.now(timezone.utc)
+            job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
             await db.commit()
             return
 
@@ -135,7 +135,7 @@ async def run_image_generation(
         )
         sentry_sdk.capture_exception(exc)
         job.status = "complete"
-        job.completed_at = datetime.now(timezone.utc)
+        job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         job.error_details = "Image generation failed — blog and social posts are complete."
         await db.commit()
         return
@@ -152,7 +152,7 @@ async def run_image_generation(
         )
         sentry_sdk.capture_exception(exc)
         job.status = "complete"
-        job.completed_at = datetime.now(timezone.utc)
+        job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         job.error_details = "Image generation failed — blog and social posts are complete."
         await db.commit()
         return
@@ -160,7 +160,7 @@ async def run_image_generation(
     # ── Step 6: Update campaign + job + generation_log ───────────────────────
     campaign.image_url = public_url
     job.status = "complete"
-    job.completed_at = datetime.now(timezone.utc)
+    job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
 
     if user_id:

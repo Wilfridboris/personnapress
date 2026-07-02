@@ -27,6 +27,13 @@ export async function proxy(request: NextRequest) {
       if (!payload.verified) {
         return NextResponse.redirect(new URL("/verify-email", request.url));
       }
+      const onboardingCompleted = Boolean(payload.onboarding_completed);
+      if (onboardingCompleted && pathname.startsWith("/onboarding")) {
+        return NextResponse.redirect(new URL("/dashboard", request.url));
+      }
+      if (!onboardingCompleted && !pathname.startsWith("/onboarding")) {
+        return NextResponse.redirect(new URL("/onboarding", request.url));
+      }
       const requestHeaders = new Headers(request.headers);
       requestHeaders.set("x-user-id", payload.user_id as string);
       requestHeaders.set("x-plan-tier", payload.plan_tier as string);

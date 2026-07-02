@@ -49,7 +49,7 @@ async def _run_ingestion(db: AsyncSession, job_id: uuid.UUID, client_id: uuid.UU
         return
 
     job.status = "in_progress"
-    job.started_at = datetime.now(timezone.utc)
+    job.started_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
     await db.refresh(job)
 
@@ -149,7 +149,7 @@ async def _run_ingestion(db: AsyncSession, job_id: uuid.UUID, client_id: uuid.UU
     # 7. Persist voice profile and complete the job
     client.brand_voice_profile = voice_profile if voice_profile else None
     job.status = "complete"
-    job.completed_at = datetime.now(timezone.utc)
+    job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
     logger.info("ingest_worker: job %s completed for client %s", job_id, client_id)
 
@@ -247,7 +247,7 @@ async def _run_questionnaire(
         return
 
     job.status = "in_progress"
-    job.started_at = datetime.now(timezone.utc)
+    job.started_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
     await db.refresh(job)
 
@@ -300,7 +300,7 @@ async def _run_questionnaire(
 
     # 5. Mark job complete
     job.status = "complete"
-    job.completed_at = datetime.now(timezone.utc)
+    job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
     logger.info(
         "questionnaire_worker: job %s completed for client %s", job_id, client_id

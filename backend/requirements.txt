@@ -13,7 +13,7 @@ python-dotenv==1.1.0
 
 # Auth & security
 python-jose[cryptography]
-passlib[bcrypt]
+bcrypt
 cryptography
 
 # Rate limiting
@@ -23,7 +23,7 @@ slowapi
 httpx==0.28.1
 
 # LLM
-google-generativeai
+google-genai
 
 # Image generation
 replicate==1.0.7

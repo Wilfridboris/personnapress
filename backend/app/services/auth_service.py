@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from jose import JWTError
 from jose.exceptions import ExpiredSignatureError
-from passlib.context import CryptContext
+import bcrypt as _bcrypt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -23,7 +23,19 @@ from app.integrations.email import send_verification_email
 
 logger = logging.getLogger(__name__)
 
-_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_DUMMY_HASH = _bcrypt.hashpw(b"dummy", _bcrypt.gensalt())
+
+
+def _hash_password(password: str) -> str:
+    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+
+
+def _verify_password(password: str, hashed: str) -> bool:
+    return _bcrypt.checkpw(password.encode(), hashed.encode())
+
+
+def _dummy_verify() -> None:
+    _bcrypt.checkpw(b"dummy", _DUMMY_HASH)
 
 
 def _err(code: str, message: str) -> dict:
@@ -37,7 +49,7 @@ def logout_user() -> JSONResponse:
 
 
 async def _new_subscription(user_id: uuid.UUID, db: AsyncSession) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     sub = Subscription(
         user_id=user_id,
         plan_tier="growth",
@@ -76,7 +88,7 @@ async def register_user(email: str, password: str, db: AsyncSession) -> JSONResp
             detail=_err("EMAIL_ALREADY_EXISTS", "An account with this email already exists."),
         )
 
-    hashed = _pwd_ctx.hash(password)
+    hashed = _hash_password(password)
     new_user = User(email=email, hashed_password=hashed, verified=False)
     db.add(new_user)
     await db.flush()
@@ -142,9 +154,9 @@ async def login_user(email: str, password: str, db: AsyncSession) -> JSONRespons
 
     # Always run bcrypt to prevent timing-based email enumeration
     if user and user.hashed_password:
-        password_ok = _pwd_ctx.verify(password, user.hashed_password)
+        password_ok = _verify_password(password, user.hashed_password)
     else:
-        _pwd_ctx.dummy_verify()
+        _dummy_verify()
         password_ok = False
 
     if not password_ok:

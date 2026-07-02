@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { Plus, ArrowRight, FileText } from "lucide-react";
 import type { Campaign } from "@/lib/types";
 
@@ -8,12 +9,16 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
+const BACKEND = process.env.BACKEND_URL || "http://localhost:8000";
+
 async function getCampaigns(): Promise<Campaign[]> {
   try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/campaigns`,
-      { cache: "no-store" }
-    );
+    const store = await cookies();
+    const session = store.get("session");
+    const res = await fetch(`${BACKEND}/api/v1/campaigns`, {
+      cache: "no-store",
+      headers: session ? { Cookie: `session=${session.value}` } : {},
+    });
     if (!res.ok) return [];
     return res.json();
   } catch {
