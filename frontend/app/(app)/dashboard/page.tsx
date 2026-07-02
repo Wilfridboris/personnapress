@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Clock, CheckCircle2, Globe, Users } from "lucide-react";
 import { DashboardEmptyState } from "./DashboardEmptyState";
+import { NudgeCard } from "./NudgeCard";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -51,11 +52,17 @@ const STATUS_STYLES: Record<string, string> = {
   failed: "bg-danger/10 text-danger border-danger/20",
 };
 
-export default async function DashboardPage() {
-  const [stats, campaigns] = await Promise.all([
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ nudge?: string }>;
+}) {
+  const [stats, campaigns, params] = await Promise.all([
     getStats(),
     getRecentCampaigns(),
+    searchParams,
   ]);
+  const showNudge = params.nudge === "true";
 
   const statCards = [
     {
@@ -83,6 +90,7 @@ export default async function DashboardPage() {
   return (
     <>
       <DashboardEmptyState />
+      {showNudge && campaigns.length === 0 && <NudgeCard />}
 
       {/* Header */}
       <header className="mb-10">

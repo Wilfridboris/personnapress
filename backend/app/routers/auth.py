@@ -1,11 +1,15 @@
+import uuid
+
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.dependencies import get_current_user
 from app.db.connection import get_session
 from app.schemas.auth import GoogleCallbackRequest, LoginRequest, RegisterRequest, ResendVerificationRequest
 from app.services.auth_service import (
     auth_google,
+    complete_onboarding,
     login_user,
     logout_user,
     register_user,
@@ -46,3 +50,12 @@ async def logout() -> JSONResponse:
 @router.post("/google", response_model=None)
 async def google_auth(body: GoogleCallbackRequest, db: AsyncSession = Depends(get_session)) -> JSONResponse:
     return await auth_google(body.google_sub, body.email, body.email_verified, db)
+
+
+@router.post("/complete-onboarding", response_model=None)
+async def complete_onboarding_endpoint(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> JSONResponse:
+    user_id = uuid.UUID(current_user["user_id"])
+    return await complete_onboarding(user_id, db)

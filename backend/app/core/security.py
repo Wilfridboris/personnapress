@@ -16,12 +16,19 @@ SESSION_EXPIRY_DAYS = 7
 VERIFICATION_EXPIRY_HOURS = 24
 
 
-def create_session_token(user_id: uuid.UUID, email: str, plan_tier: str, verified: bool) -> str:
+def create_session_token(
+    user_id: uuid.UUID,
+    email: str,
+    plan_tier: str,
+    verified: bool,
+    onboarding_completed: bool = False,
+) -> str:
     payload = {
         "user_id": str(user_id),
         "email": email,
         "plan_tier": plan_tier,
         "verified": verified,
+        "onboarding_completed": onboarding_completed,
         "exp": datetime.now(timezone.utc) + timedelta(days=SESSION_EXPIRY_DAYS),
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=ALGORITHM)

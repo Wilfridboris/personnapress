@@ -55,8 +55,15 @@ async def _issue_session(user: User, db: AsyncSession) -> JSONResponse:
     result_sub = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
     sub = result_sub.scalar_one_or_none()
     plan_tier = sub.plan_tier if sub else "growth"
-    token = create_session_token(user.id, user.email, plan_tier, verified=bool(user.verified))
-    response = JSONResponse({"redirect_url": "/onboarding"})
+    token = create_session_token(
+        user.id,
+        user.email,
+        plan_tier,
+        verified=bool(user.verified),
+        onboarding_completed=bool(user.onboarding_completed),
+    )
+    redirect = "/dashboard" if user.onboarding_completed else "/onboarding"
+    response = JSONResponse({"redirect_url": redirect})
     set_session_cookie(response, token)
     return response
 
@@ -155,7 +162,13 @@ async def login_user(email: str, password: str, db: AsyncSession) -> JSONRespons
     result_sub = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
     sub = result_sub.scalar_one_or_none()
     plan_tier = sub.plan_tier if sub else "growth"
-    token = create_session_token(user.id, user.email, plan_tier, verified=bool(user.verified))
+    token = create_session_token(
+        user.id,
+        user.email,
+        plan_tier,
+        verified=bool(user.verified),
+        onboarding_completed=bool(user.onboarding_completed),
+    )
     response = JSONResponse({"success": True})
     set_session_cookie(response, token)
     return response
@@ -191,3 +204,27 @@ async def auth_google(google_sub: str, email: str, email_verified: bool, db: Asy
         await db.refresh(user)
 
     return await _issue_session(user, db)
+
+
+async def complete_onboarding(user_id: uuid.UUID, db: AsyncSession) -> JSONResponse:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail=_err("NOT_FOUND", "User not found."))
+
+    user.onboarding_completed = True
+    await db.commit()
+
+    result_sub = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
+    sub = result_sub.scalar_one_or_none()
+    plan_tier = sub.plan_tier if sub else "growth"
+    token = create_session_token(
+        user.id,
+        user.email,
+        plan_tier,
+        verified=bool(user.verified),
+        onboarding_completed=True,
+    )
+    response = JSONResponse({"status": "ok"})
+    set_session_cookie(response, token)
+    return response

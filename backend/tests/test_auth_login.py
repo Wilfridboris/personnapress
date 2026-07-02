@@ -14,6 +14,7 @@ class _User:
         self.email = email
         self.hashed_password = hashed_password
         self.verified = verified
+        self.onboarding_completed = False
         self.google_sub = None
 
 

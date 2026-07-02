@@ -113,3 +113,8 @@ export const campaignsApi = {
 export const dashboardApi = {
   stats: () => apiFetch<DashboardStats>("/dashboard/stats"),
 };
+
+export const authApi = {
+  completeOnboarding: () =>
+    apiFetch<{ status: string }>("/auth/complete-onboarding", { method: "POST" }),
+};

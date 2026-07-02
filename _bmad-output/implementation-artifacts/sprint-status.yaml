@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-14
-last_updated: 2026-07-01  # story 2-6 review → done
+last_updated: 2026-07-02  # story 2-7 code review fixes applied
 project: PersonnaPress
 project_key: NOKEY
 tracking_system: file-system
@@ -59,7 +59,7 @@ development_status:
   2-4-brand-voice-ingestion-website-scraping-content-upload: done
   2-5-voice-profile-extraction-review-manual-questionnaire: done
   2-6-voice-profile-refresh: done
-  2-7-3-step-onboarding-flow: backlog
+  2-7-3-step-onboarding-flow: done
   epic-2-retrospective: optional
 
   # Epic 3: Brain Dump & Content Generation

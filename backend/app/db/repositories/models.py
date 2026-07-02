@@ -36,6 +36,7 @@ class User(SQLModel, table=True):
     google_sub: Optional[str] = None
     stripe_customer_id: Optional[str] = None
     verified: bool = Field(default=False)
+    onboarding_completed: bool = Field(default=False)
     created_at: datetime = Field(default_factory=utcnow)
 
 
