@@ -147,7 +147,7 @@ interface Step2ContentProps {
 }
 
 function Step2Content({ view, jobId, clientId, websiteUrl, onStep2Complete, onJobStarted }: Step2ContentProps) {
-  const { data: job } = useJobStatus(jobId);
+  const { job } = useJobStatus(jobId);
   const [currentView, setCurrentView] = useState<Step2View>(view);
   const [bvp, setBvp] = useState<BrandVoiceProfile | null>(null);
   const [statusText, setStatusText] = useState(`Scraping ${websiteUrl}...`);

@@ -5,9 +5,13 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { BlogHtmlRenderer } from "@/components/ui/BlogHtmlRenderer";
 import { ApprovalPanel } from "./approval-panel";
+import { GenerationGate } from "./GenerationGate";
 import type { Campaign } from "@/lib/types";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ job_id?: string | string[] }>;
+};
 
 async function getCampaign(id: string): Promise<Campaign | null> {
   try {
@@ -31,6 +35,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     robots: { index: false },
   };
 }
+
+const CAMPAIGN_TERMINAL_STATUSES = new Set(["complete", "completed", "failed", "published", "rejected", "pending_approval", "approved"]);
 
 const STATUS_CONFIG: Record<
   string,
@@ -58,8 +64,10 @@ const STATUS_CONFIG: Record<
   },
 };
 
-export default async function CampaignDetailPage({ params }: Props) {
+export default async function CampaignDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const rawJobId = (await searchParams).job_id;
+  const jobId = Array.isArray(rawJobId) ? (rawJobId[0] ?? null) : (rawJobId ?? null);
   const campaign = await getCampaign(id);
 
   if (!campaign) notFound();
@@ -76,8 +84,15 @@ export default async function CampaignDetailPage({ params }: Props) {
 
   const rawBlogHtml = campaign.blog_html ?? null;
 
+  // AC #8: if job_id is present but campaign is already in a terminal state, don't show overlay
+  const effectiveJobId =
+    jobId && !CAMPAIGN_TERMINAL_STATUSES.has(campaign.status) ? jobId : null;
+
   return (
     <>
+      {/* Generation overlay — shown only while job is active (AC #9, #8) */}
+      <GenerationGate campaign={campaign} jobId={effectiveJobId} />
+
       {/* Back */}
       <Link
         href="/campaigns"

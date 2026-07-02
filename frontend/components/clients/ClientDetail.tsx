@@ -73,7 +73,7 @@ export function ClientDetail({ client }: Props) {
   const [jobId, setJobId] = useState<string | null>(client.job_id);
 
   // ── React Query polling via useJobStatus ─────────────────────────────────
-  const { data: job } = useJobStatus(jobId);
+  const { job } = useJobStatus(jobId);
 
   // When job completes: refresh client data to reload voice profile
   useEffect(() => {

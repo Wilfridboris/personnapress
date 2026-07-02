@@ -1,5 +1,13 @@
 # Deferred Work
 
+## Deferred from: code review of 3-2-generation-job-polling-typewriter-animation (2026-07-02)
+
+- **D1 (Medium)**: State machine gap — job status values outside `["pending", "in_progress", "complete", "completed", "failed"]` cause undefined UI behavior (neither polling nor terminal). Backend contract should enumerate all possible values. [frontend/hooks/useJobStatus.ts, frontend/components/campaigns/CampaignGenerationOverlay.tsx]
+- **D2 (Low)**: Null data polling loop — if `jobsApi.get` returns null without throwing for a non-existent jobId, `refetchInterval` returns 2000ms indefinitely with no backoff. Needs error-state handling. [frontend/hooks/useJobStatus.ts]
+- **D3 (Low)**: Hydration mismatch on `prefersReducedMotion` — SSR renders animated version, client may switch to reduced-motion. Intentional progressive enhancement pattern; suppress with `suppressHydrationWarning` if needed. [frontend/components/campaigns/TypewriterAnimation.tsx]
+- **D4 (Low)**: `router.refresh()` fired 1500ms after `invalidateQueries` without awaiting completion — under slow networks, server component may render with stale cache data. [frontend/components/campaigns/CampaignGenerationOverlay.tsx]
+- **D5 (Medium)**: AC 7 in-app navigation modal not implemented — `beforeunload` guard covers tab close/reload but not in-app link clicks. Deferred per Dev Notes as complex. Implement via NavigationGuard context or Next.js route interceptors in a future story.
+
 ## Deferred from: code review of 3-1-brain-dump-input-campaign-creation (2026-07-02)
 
 - **D1 (Critical)**: `campaigns_used` is never reset to 0 when a billing cycle renews — pre-existing issue in the Stripe webhook handler (`_handle_subscription_updated`). Users who exhaust their monthly quota are permanently blocked after cycle renewal. Fix: set `sub.campaigns_used = 0` in the renewal handler. [backend/app/services/subscription_service.py]

@@ -323,7 +323,7 @@ export function VoiceSetupPage({ client }: Props) {
   const [bvp, setBvp] = useState(client.brand_voice_profile);
   const refreshBtnRef = useRef<HTMLButtonElement>(null);
 
-  const { data: job } = useJobStatus(activeJobId);
+  const { job } = useJobStatus(activeJobId);
 
   // P6: true when activeJobId is set and job is either not yet loaded or in a non-terminal state
   const jobIsActive =
