@@ -98,9 +98,9 @@ export interface Campaign {
 }
 
 export interface VoiceScore {
-  score: number;
-  rationale: string;
-  flags: string[];
+  tone_score: number;
+  cadence_score: number;
+  jargon_violations: number;
 }
 
 export interface Job {

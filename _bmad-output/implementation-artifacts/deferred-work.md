@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 3-3-blog-social-content-generation-pipeline (2026-07-02)
+
+- **D1 (Low)**: `update_campaign_content`/`update_job_status` defined in repositories but unused — `services/generation.py` does direct ORM mutations instead. Design inconsistency; refactor in a future cleanup story. [backend/app/db/repositories/campaigns.py, jobs.py]
+- **D2 (Low)**: `_strip_fences` helper not refactored into `extract_brand_voice` — pre-existing duplicate logic in gemini.py. Consolidate in a future cleanup. [backend/app/integrations/gemini.py:extract_brand_voice]
+- **D3 (Medium)**: Prompt injection risk via user-supplied `brain_dump` interpolated directly into Gemini prompts — systemic security concern affecting all generation functions. Requires input sanitization strategy at the service boundary. [backend/app/integrations/gemini.py:generate_blog, generate_social]
+
 ## Deferred from: code review of 3-2-generation-job-polling-typewriter-animation (2026-07-02)
 
 - **D1 (Medium)**: State machine gap — job status values outside `["pending", "in_progress", "complete", "completed", "failed"]` cause undefined UI behavior (neither polling nor terminal). Backend contract should enumerate all possible values. [frontend/hooks/useJobStatus.ts, frontend/components/campaigns/CampaignGenerationOverlay.tsx]

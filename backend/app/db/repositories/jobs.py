@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,34 @@ async def create_job(
 ) -> Job:
     job = Job(job_type=job_type, status=status, campaign_id=campaign_id, client_id=client_id)
     session.add(job)
+    await session.flush()
+    await session.refresh(job)
+    return job
+
+
+async def get_job(session: AsyncSession, job_id: uuid.UUID) -> Optional[Job]:
+    result = await session.execute(select(Job).where(Job.id == job_id))
+    return result.scalar_one_or_none()
+
+
+async def update_job_status(
+    session: AsyncSession,
+    job_id: uuid.UUID,
+    status: str,
+    started_at: Optional[datetime] = None,
+    completed_at: Optional[datetime] = None,
+    error_details: Optional[str] = None,
+) -> Optional[Job]:
+    job = await get_job(session, job_id)
+    if not job:
+        return None
+    job.status = status
+    if started_at is not None:
+        job.started_at = started_at
+    if completed_at is not None:
+        job.completed_at = completed_at
+    if error_details is not None:
+        job.error_details = error_details
     await session.flush()
     await session.refresh(job)
     return job

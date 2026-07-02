@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-14
-last_updated: 2026-07-02  # story 3-2 code review fixes applied, status: done
+last_updated: 2026-07-02  # story 3-3 code review fixes applied, status: done
 project: PersonnaPress
 project_key: NOKEY
 tracking_system: file-system
@@ -66,7 +66,7 @@ development_status:
   epic-3: in-progress
   3-1-brain-dump-input-campaign-creation: done
   3-2-generation-job-polling-typewriter-animation: done
-  3-3-blog-social-content-generation-pipeline: ready-for-dev
+  3-3-blog-social-content-generation-pipeline: done
   3-4-featured-image-generation-regeneration: ready-for-dev
   3-5-onboarding-step-3-completion-generation-integration: ready-for-dev
   epic-3-retrospective: optional

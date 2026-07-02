@@ -25,3 +25,24 @@ async def get_campaign(
 ) -> Optional[Campaign]:
     result = await session.execute(select(Campaign).where(Campaign.id == campaign_id))
     return result.scalar_one_or_none()
+
+
+async def update_campaign_content(
+    session: AsyncSession,
+    campaign_id: uuid.UUID,
+    blog_html: str,
+    voice_score: dict,
+    x_post: str,
+    linkedin_post: str,
+) -> Optional[Campaign]:
+    """Atomically update all text generation fields on a campaign."""
+    campaign = await get_campaign(session, campaign_id)
+    if not campaign:
+        return None
+    campaign.blog_html = blog_html
+    campaign.voice_score = voice_score
+    campaign.x_post = x_post
+    campaign.linkedin_post = linkedin_post
+    await session.flush()
+    await session.refresh(campaign)
+    return campaign
