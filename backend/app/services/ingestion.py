@@ -4,7 +4,7 @@ Provides:
 - scrape_website(url) — fetches and extracts clean text from a website
 - extract_clean_text(html) — strips nav/footer/ads from HTML, returns text
 - extract_file_text(file_bytes, filename) — extracts text from .txt/.md/.docx
-- extract_voice_profile(combined_text, client_id) — STUB (implemented in Story 2.5)
+- extract_voice_profile(combined_text, client_id, session) — calls Gemini with retry
 """
 
 import asyncio
@@ -12,10 +12,16 @@ import io
 import logging
 import re
 import uuid
+from typing import Optional
 from urllib.parse import urljoin, urlparse
 
 import httpx
+import sentry_sdk
 from bs4 import BeautifulSoup
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.repositories.clients import update_client
+from app.integrations import gemini  # AR-19: only called from ingestion.py / generation.py
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +46,10 @@ _STRIP_CLASS_PATTERNS = re.compile(
 
 class ScrapingError(Exception):
     """Raised when website scraping fails in a way that should be reported."""
+
+
+class VoiceExtractionError(Exception):
+    """Raised when Gemini voice extraction fails after all retries."""
 
 
 def extract_clean_text(html_content: str) -> str:
@@ -216,15 +226,70 @@ def extract_file_text(file_bytes: bytes, filename: str) -> str:
     return ""
 
 
-async def extract_voice_profile(combined_text: str, client_id: uuid.UUID) -> dict:
+async def extract_voice_profile(
+    combined_text: str,
+    client_id: uuid.UUID,
+    session: Optional[AsyncSession] = None,
+) -> dict:
     """Extract a brand voice profile from combined text using Gemini.
 
-    STUB — full implementation in Story 2.5.
-    Returns an empty dict placeholder until 2.5 is implemented.
+    Calls integrations/gemini.py → extract_brand_voice() with up to 3 attempts.
+    Exponential backoff: 1 s after attempt 1, 2 s after attempt 2.
+
+    On success:
+      - Updates clients.brand_voice_profile via the repository (if session provided).
+      - Returns the BVP dict.
+
+    On 3 consecutive failures:
+      - Logs to Sentry.
+      - Raises VoiceExtractionError.
+
+    Args:
+        combined_text: Content to analyse (caller is responsible for capping length).
+        client_id: UUID of the client whose BVP is being extracted.
+        session: Optional async DB session; if provided, updates client record on success.
+
+    Raises:
+        VoiceExtractionError: When all 3 Gemini call attempts fail.
     """
     logger.info(
-        "extract_voice_profile: stub called for client %s (%d chars)",
+        "extract_voice_profile: starting extraction for client %s (%d chars)",
         client_id,
         len(combined_text),
     )
-    return {}
+
+    last_error: Optional[Exception] = None
+    for attempt in range(3):
+        try:
+            bvp = await gemini.extract_brand_voice(combined_text, thinking_tokens=1024)
+
+            if session is not None:
+                await update_client(session, client_id, brand_voice_profile=bvp)
+                logger.info(
+                    "extract_voice_profile: client %s BVP updated in DB",
+                    client_id,
+                )
+
+            logger.info(
+                "extract_voice_profile: success for client %s on attempt %d",
+                client_id,
+                attempt + 1,
+            )
+            return bvp
+
+        except ValueError:
+            # Non-transient: Gemini returned unparseable JSON — no point retrying
+            raise
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                "extract_voice_profile: attempt %d failed for client %s: %s",
+                attempt + 1,
+                client_id,
+                exc,
+            )
+            if attempt < 2:
+                await asyncio.sleep(2**attempt)  # 1 s, 2 s
+
+    sentry_sdk.capture_exception(last_error)
+    raise VoiceExtractionError(str(last_error))

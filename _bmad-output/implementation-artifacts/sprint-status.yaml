@@ -1,5 +1,5 @@
 # generated: 2026-06-14
-# last_updated: 2026-06-14
+# last_updated: 2026-07-01
 # project: PersonnaPress
 # project_key: NOKEY
 # tracking_system: file-system
@@ -57,7 +57,7 @@ development_status:
   2-2-edit-delete-client: done
   2-3-client-list-active-context-switching: done
   2-4-brand-voice-ingestion-website-scraping-content-upload: done
-  2-5-voice-profile-extraction-review-manual-questionnaire: backlog
+  2-5-voice-profile-extraction-review-manual-questionnaire: done
   2-6-voice-profile-refresh: backlog
   2-7-3-step-onboarding-flow: backlog
   epic-2-retrospective: optional

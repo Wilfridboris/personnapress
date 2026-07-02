@@ -15,7 +15,14 @@ from sqlmodel import select
 from app.db.connection import AsyncSessionLocal
 from app.db.repositories.models import Client, Job
 from app.integrations import supabase_storage
-from app.services.ingestion import ScrapingError, extract_file_text, extract_voice_profile, scrape_website
+from app.schemas.client import QuestionnaireRequest, ToneSliders
+from app.services.ingestion import (
+    ScrapingError,
+    VoiceExtractionError,
+    extract_file_text,
+    extract_voice_profile,
+    scrape_website,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -108,23 +115,31 @@ async def _run_ingestion(db: AsyncSession, job_id: uuid.UUID, client_id: uuid.UU
     # 5. Assemble combined text
     all_text_parts = list(filter(None, [scraped_text] + file_texts))
     if not all_text_parts:
+        # No content collected — questionnaire shown directly (AC5), not an extraction error
         job.status = "failed"
-        job.error_details = (
-            f"No text could be extracted from {client.website_url or 'uploaded files'}. "
-            "Please complete the voice questionnaire."
-        )
+        job.error_details = "no_content"
         await db.commit()
         return
 
     combined_text = "\n\n---\n\n".join(all_text_parts)
     combined_text = combined_text[:MAX_TEXT_CHARS]
 
-    # 6. Extract voice profile (Story 2.5 — stub returns {} until implemented)
+    # 6. Extract voice profile — calls Gemini with 3-retry logic (Story 2.5)
     try:
-        voice_profile = await extract_voice_profile(combined_text, client.id)
-    except Exception as exc:
+        voice_profile = await extract_voice_profile(combined_text, client.id, session=db)
+    except VoiceExtractionError as exc:
         logger.exception(
             "ingest_worker: voice extraction failed for job %s: %s", job_id, exc
+        )
+        job.status = "failed"
+        job.error_details = (
+            "Voice profile extraction failed. Complete the questionnaire to set up your profile manually."
+        )
+        await db.commit()
+        return
+    except Exception as exc:
+        logger.exception(
+            "ingest_worker: unexpected voice extraction error for job %s: %s", job_id, exc
         )
         job.status = "failed"
         job.error_details = f"Voice extraction failed: {exc}"
@@ -133,7 +148,7 @@ async def _run_ingestion(db: AsyncSession, job_id: uuid.UUID, client_id: uuid.UU
 
     # 7. Persist voice profile and complete the job
     client.brand_voice_profile = voice_profile if voice_profile else None
-    job.status = "completed"
+    job.status = "complete"
     job.completed_at = datetime.now(timezone.utc)
     await db.commit()
     logger.info("ingest_worker: job %s completed for client %s", job_id, client_id)
@@ -152,3 +167,141 @@ async def _mark_failed(db: AsyncSession, job_id: uuid.UUID, error: str) -> None:
                 await fresh_db.commit()
     except Exception:
         logger.exception("ingest_worker: could not mark job %s as failed", job_id)
+
+
+# ── Questionnaire tone slider → descriptor mapping ────────────────────────────
+
+_SLIDER_TONE_MAP: dict[str, dict[int, str]] = {
+    "formal_casual": {
+        1: "formal",
+        2: "somewhat formal",
+        3: "balanced",
+        4: "conversational",
+        5: "casual",
+    },
+    "professional_friendly": {
+        1: "professional",
+        2: "business-like",
+        3: "approachable",
+        4: "friendly",
+        5: "warm",
+    },
+    "concise_elaborate": {
+        1: "concise",
+        2: "direct",
+        3: "balanced",
+        4: "detailed",
+        5: "thorough",
+    },
+}
+
+
+def _sliders_to_tone_descriptors(tone_sliders: ToneSliders) -> list[str]:
+    """Convert ToneSliders values to human-readable tone descriptor strings."""
+    slider_dict = tone_sliders.model_dump()
+    descriptors: list[str] = []
+    for slider_key, mapping in _SLIDER_TONE_MAP.items():
+        value = slider_dict.get(slider_key)
+        if value is None:
+            continue
+        descriptor = mapping.get(max(1, min(5, int(value))))
+        if descriptor:
+            descriptors.append(descriptor)
+    return descriptors
+
+
+async def questionnaire_worker(
+    job_id: uuid.UUID,
+    client_id: uuid.UUID,
+    questionnaire_data: "QuestionnaireRequest",
+) -> None:
+    """Process a voice questionnaire submission and extract a Brand Voice Profile.
+
+    Converts slider values to tone descriptors, combines sample texts,
+    then delegates to extract_voice_profile() for the Gemini call.
+    """
+    async with AsyncSessionLocal() as db:
+        try:
+            await _run_questionnaire(db, job_id, client_id, questionnaire_data)
+        except Exception as exc:
+            logger.exception(
+                "questionnaire_worker: unhandled error for job %s", job_id
+            )
+            sentry_sdk.capture_exception(exc)
+            await _mark_failed(db, job_id, str(exc))
+
+
+async def _run_questionnaire(
+    db: AsyncSession,
+    job_id: uuid.UUID,
+    client_id: uuid.UUID,
+    data: "QuestionnaireRequest",
+) -> None:
+    # 1. Load and mark job in-progress
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        err = RuntimeError(f"questionnaire_worker: job {job_id} not found")
+        logger.error("%s", err)
+        sentry_sdk.capture_exception(err)
+        return
+
+    job.status = "in_progress"
+    job.started_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(job)
+
+    # 2. Convert slider values to tone descriptors
+    tone_descriptors = _sliders_to_tone_descriptors(data.tone_sliders)
+
+    # 3. Build combined text input
+    text_parts: list[str] = []
+
+    if tone_descriptors:
+        text_parts.append(
+            "TONE CONTEXT (from user preferences):\n"
+            + ", ".join(tone_descriptors)
+        )
+
+    if data.sample_texts:
+        non_empty = [t.strip() for t in data.sample_texts if t and t.strip()]
+        if non_empty:
+            text_parts.append("SAMPLE WRITING:\n" + "\n\n---\n\n".join(non_empty))
+
+    if data.reference_urls:
+        non_empty_urls = [u.strip() for u in data.reference_urls if u and u.strip()]
+        if non_empty_urls:
+            text_parts.append(
+                "REFERENCE WRITERS (style inspirations):\n"
+                + "\n".join(non_empty_urls)
+            )
+
+    if not text_parts:
+        job.status = "failed"
+        job.error_details = "No questionnaire data provided to analyze."
+        await db.commit()
+        return
+
+    combined_text = "\n\n".join(text_parts)[:MAX_TEXT_CHARS]
+
+    # 4. Extract voice profile via Gemini (3-retry, Sentry on failure)
+    try:
+        await extract_voice_profile(combined_text, client_id, session=db)
+    except VoiceExtractionError as exc:
+        logger.exception(
+            "questionnaire_worker: voice extraction failed for job %s: %s", job_id, exc
+        )
+        job.status = "failed"
+        job.error_details = (
+            "Voice profile extraction failed. Complete the questionnaire to set up your profile manually."
+        )
+        await db.commit()
+        return
+
+    # 5. Mark job complete
+    job.status = "complete"
+    job.completed_at = datetime.now(timezone.utc)
+    await db.commit()
+    logger.info(
+        "questionnaire_worker: job %s completed for client %s", job_id, client_id
+    )

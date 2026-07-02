@@ -1,4 +1,4 @@
-import type { ClientListResponse, ClientResponse, Campaign, DashboardStats, FileListResponse, Job } from "./types";
+import type { BrandVoiceProfile, ClientListResponse, ClientResponse, Campaign, DashboardStats, FileListResponse, Job, QuestionnairePayload } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -55,7 +55,15 @@ export const clientsApi = {
   get: (id: string) => apiFetch<ClientResponse>(`/clients/${id}`),
   create: (data: { name: string; website_url?: string }) =>
     apiFetch<ClientResponse>("/clients", { method: "POST", body: JSON.stringify(data) }),
-  patch: (id: string, data: { name?: string; website_url?: string; confirm_url_change?: boolean }) =>
+  patch: (
+    id: string,
+    data: {
+      name?: string;
+      website_url?: string;
+      confirm_url_change?: boolean;
+      brand_voice_profile?: BrandVoiceProfile | null;
+    },
+  ) =>
     apiFetch<ClientResponse | { requires_confirmation: boolean; domain: string }>(
       `/clients/${id}`,
       { method: "PATCH", body: JSON.stringify(data) }
@@ -63,6 +71,11 @@ export const clientsApi = {
   delete: (id: string) => apiFetch<void>(`/clients/${id}`, { method: "DELETE" }),
   ingest: (id: string) =>
     apiFetch<{ job_id: string }>(`/clients/${id}/ingest`, { method: "POST" }),
+  submitQuestionnaire: (id: string, data: QuestionnairePayload) =>
+    apiFetch<{ job_id: string }>(`/clients/${id}/questionnaire`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 export const jobsApi = {

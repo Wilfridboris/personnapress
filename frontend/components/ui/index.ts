@@ -6,3 +6,4 @@ export { Skeleton } from "./Skeleton";
 export { ToastContainer } from "./Toast";
 export { Modal } from "./Modal";
 export { BlogHtmlRenderer } from "./BlogHtmlRenderer";
+export { TagChip } from "./TagChip";

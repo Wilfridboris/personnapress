@@ -113,7 +113,7 @@ async def test_ingest_worker_scraping_failure_continues_with_files(
     await ingest_worker(job_id, client_id)
 
     # Job should complete (not fail) because file text was available
-    assert job.status == "completed"
+    assert job.status == "complete"
     mock_voice.assert_called_once()
 
 
@@ -183,7 +183,7 @@ async def test_ingest_worker_success_sets_completed(
 
     await ingest_worker(job_id, client_id)
 
-    assert job.status == "completed"
+    assert job.status == "complete"
     assert job.completed_at is not None
     assert client.brand_voice_profile == {"tone": "conversational"}
 
@@ -265,7 +265,7 @@ async def test_ingest_worker_single_file_download_failure_continues(
     await ingest_worker(job_id, client_id)
 
     # Job should complete using only the good file's text
-    assert job.status == "completed"
+    assert job.status == "complete"
     mock_voice.assert_called_once()
 
 
@@ -354,4 +354,4 @@ async def test_ingest_worker_no_url_skips_scraping(
     # scrape_website should NOT have been called
     mock_scrape.assert_not_called()
     # job still completes via file text
-    assert job.status == "completed"
+    assert job.status == "complete"

@@ -225,15 +225,26 @@ async def test_scrape_website_caps_at_50k_chars():
     assert len(result) <= MAX_TEXT_CHARS
 
 
-# ── extract_voice_profile stub ────────────────────────────────────────────────
+# ── extract_voice_profile: real implementation (session=None skips DB write) ──
 
 @pytest.mark.asyncio
-async def test_extract_voice_profile_stub_returns_dict():
+@patch("app.services.ingestion.update_client", new_callable=AsyncMock)
+@patch("app.services.ingestion.gemini")
+async def test_extract_voice_profile_returns_dict_from_gemini(mock_gemini, mock_update_client):
     import uuid
     from app.services.ingestion import extract_voice_profile
 
-    result = await extract_voice_profile("some text about the brand", uuid.uuid4())
+    bvp = {
+        "tone": ["professional"],
+        "cadence": {"avg_sentence_length": 12, "variation_pattern": "", "paragraph_structure": ""},
+        "banned_jargon": [],
+    }
+    mock_gemini.extract_brand_voice = AsyncMock(return_value=bvp)
+
+    result = await extract_voice_profile("some text about the brand", uuid.uuid4(), session=None)
     assert isinstance(result, dict)
+    assert result["tone"] == ["professional"]
+    mock_update_client.assert_not_called()  # session=None → no DB write
 
 
 # ── extract_clean_text: role attributes ──────────────────────────────────────

@@ -36,6 +36,9 @@ export interface ClientResponse {
   job_id: string | null;
   campaign_count: number;
   created_at: string;
+  ingestion_failed?: boolean;
+  ingestion_no_content?: boolean;
+  ingestion_error?: string | null;
 }
 
 export type BrandVoiceProfileStatus = "ready" | "analyzing" | "incomplete";
@@ -55,12 +58,26 @@ export interface ClientListResponse {
   client_limit: number;
 }
 
+export interface BrandVoiceCadence {
+  avg_sentence_length: number;
+  variation_pattern: string;
+  paragraph_structure: string;
+}
+
 export interface BrandVoiceProfile {
-  tone: string;
-  cadence: string;
+  tone: string[];
+  cadence: BrandVoiceCadence;
   banned_jargon: string[];
-  sample_phrases: string[];
-  voice_summary: string;
+}
+
+export interface QuestionnairePayload {
+  tone_sliders: {
+    formal_casual: number;
+    professional_friendly: number;
+    concise_elaborate: number;
+  };
+  sample_texts: string[];
+  reference_urls: string[];
 }
 
 export interface Campaign {

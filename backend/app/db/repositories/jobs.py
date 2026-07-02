@@ -28,8 +28,27 @@ async def get_active_ingestion_job_for_client(
     result = await session.execute(
         select(Job)
         .where(Job.client_id == client_id)
-        .where(Job.job_type == "ingestion")
+        .where(Job.job_type.in_(["ingestion", "questionnaire"]))
         .where(Job.status.in_(["pending", "in_progress"]))
+        .order_by(Job.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_latest_voice_job_for_client(
+    session: AsyncSession,
+    client_id: uuid.UUID,
+) -> Optional[Job]:
+    """Return the most recently created ingestion or questionnaire job for a client.
+
+    Unlike get_active_ingestion_job_for_client this includes all statuses so callers
+    can detect a previous failed extraction attempt.
+    """
+    result = await session.execute(
+        select(Job)
+        .where(Job.client_id == client_id)
+        .where(Job.job_type.in_(["ingestion", "questionnaire"]))
         .order_by(Job.created_at.desc())
         .limit(1)
     )

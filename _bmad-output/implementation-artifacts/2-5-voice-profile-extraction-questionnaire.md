@@ -1,6 +1,10 @@
 # Story 2.5: Voice Profile Extraction, Review & Manual Questionnaire
 
-Status: ready
+---
+baseline_commit: 6ca0c3d1034e40ab4269d4947d81f1b1b8ac433c
+---
+
+Status: done
 
 ## Story
 
@@ -27,16 +31,16 @@ I want the system to analyze my collected content and produce an editable Brand 
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Backend — `services/ingestion.py` — `extract_voice_profile()` (AC: #1, #4)
-  - [ ] 1.1 Add `async def extract_voice_profile(combined_text: str, client_id: uuid.UUID, session) -> dict` to `backend/app/services/ingestion.py`
-  - [ ] 1.2 Call `integrations/gemini.py → extract_brand_voice(text, thinking_tokens=1024)` — implement retry logic: up to 3 consecutive attempts on 5xx or 429 response (exponential backoff: 1s, 2s, 4s between retries)
-  - [ ] 1.3 On 3 consecutive failures: raise `VoiceExtractionError`; the worker catches this and sets `jobs.status='failed'`; log to Sentry
-  - [ ] 1.4 On success: update `clients.brand_voice_profile` with the returned JSON via `db/repositories/clients.py → update_client(session, client_id, brand_voice_profile=bvp_json)`
-  - [ ] 1.5 Define `class VoiceExtractionError(Exception): pass` in `services/ingestion.py`
+- [x] Task 1: Backend — `services/ingestion.py` — `extract_voice_profile()` (AC: #1, #4)
+  - [x] 1.1 Add `async def extract_voice_profile(combined_text: str, client_id: uuid.UUID, session) -> dict` to `backend/app/services/ingestion.py`
+  - [x] 1.2 Call `integrations/gemini.py → extract_brand_voice(text, thinking_tokens=1024)` — implement retry logic: up to 3 consecutive attempts on 5xx or 429 response (exponential backoff: 1s, 2s, 4s between retries)
+  - [x] 1.3 On 3 consecutive failures: raise `VoiceExtractionError`; the worker catches this and sets `jobs.status='failed'`; log to Sentry
+  - [x] 1.4 On success: update `clients.brand_voice_profile` with the returned JSON via `db/repositories/clients.py → update_client(session, client_id, brand_voice_profile=bvp_json)`
+  - [x] 1.5 Define `class VoiceExtractionError(Exception): pass` in `services/ingestion.py`
 
-- [ ] Task 2: Backend — `integrations/gemini.py` — `extract_brand_voice()` (AC: #1, #4)
-  - [ ] 2.1 Create `backend/app/integrations/gemini.py` if it does not exist
-  - [ ] 2.2 Add `async def extract_brand_voice(text: str, thinking_tokens: int = 1024) -> dict`:
+- [x] Task 2: Backend — `integrations/gemini.py` — `extract_brand_voice()` (AC: #1, #4)
+  - [x] 2.1 Create `backend/app/integrations/gemini.py` if it does not exist
+  - [x] 2.2 Add `async def extract_brand_voice(text: str, thinking_tokens: int = 1024) -> dict`:
     - Use `google.generativeai` SDK: `genai.GenerativeModel("gemini-2.5-flash")`
     - Prompt instructs the model to analyze the text and return ONLY a JSON object with this schema:
       ```json
@@ -53,84 +57,60 @@ I want the system to analyze my collected content and produce an editable Brand 
     - Set `generation_config={"thinking_budget": thinking_tokens}` per Gemini 2.5 Flash API
     - Parse the JSON response; validate it has `tone` (list), `cadence` (dict), `banned_jargon` (list)
     - If JSON parsing fails, raise `ValueError("Gemini returned invalid JSON")`
-  - [ ] 2.3 `integrations/gemini.py` is called ONLY from `services/ingestion.py` and `services/generation.py` — never directly from routers or workers (AR-19)
+  - [x] 2.3 `integrations/gemini.py` is called ONLY from `services/ingestion.py` and `services/generation.py` — never directly from routers or workers (AR-19)
 
-- [ ] Task 3: Backend — questionnaire submission API (AC: #6)
-  - [ ] 3.1 Add `POST /api/v1/clients/{client_id}/questionnaire` to `backend/app/routers/clients.py`; require auth; verify ownership
-  - [ ] 3.2 Define `QuestionnaireRequest` schema in `backend/app/schemas/client.py`:
+- [x] Task 3: Backend — questionnaire submission API (AC: #6)
+  - [x] 3.1 Add `POST /api/v1/clients/{client_id}/questionnaire` to `backend/app/routers/clients.py`; require auth; verify ownership
+  - [x] 3.2 Define `QuestionnaireRequest` schema in `backend/app/schemas/client.py`:
     ```python
     class QuestionnaireRequest(BaseModel):
         tone_sliders: dict  # {"formal_casual": 3, "professional_friendly": 4, "concise_elaborate": 2}
         sample_texts: List[str]  # 0–3 items
         reference_urls: List[str]  # 0–3 items (optional)
     ```
-  - [ ] 3.3 Create `jobs` record (`job_type='questionnaire'` or `'ingestion'`, `status='pending'`) before dispatching BackgroundTask
-  - [ ] 3.4 Dispatch `BackgroundTask(questionnaire_worker, job_id=job.id, client_id=client_id, questionnaire_data=request)`
-  - [ ] 3.5 Return `{job_id}` immediately with HTTP 202
+  - [x] 3.3 Create `jobs` record (`job_type='questionnaire'`, `status='pending'`) before dispatching BackgroundTask
+  - [x] 3.4 Dispatch `BackgroundTask(questionnaire_worker, job_id=job.id, client_id=client_id, questionnaire_data=request)`
+  - [x] 3.5 Return `{job_id}` immediately with HTTP 202
 
-- [ ] Task 4: Backend — questionnaire worker (AC: #6)
-  - [ ] 4.1 Add `async def questionnaire_worker(job_id, client_id, data: QuestionnaireRequest)` to `backend/app/workers/ingest.py`
-  - [ ] 4.2 Convert slider values to tone descriptors:
-    - formal_casual 1–2 → "formal", 3 → "balanced", 4–5 → "casual"
-    - professional_friendly 1–2 → "professional", 4–5 → "conversational"
-    - concise_elaborate 1–2 → "concise", 4–5 → "detailed"
-  - [ ] 4.3 Build combined text: join sample_texts with "\n\n---\n\n"; append reference URL notes if provided
-  - [ ] 4.4 Build prompt for Gemini with slider-derived tone descriptors as context + sample texts; call `extract_voice_profile()` with 1024 thinking tokens
-  - [ ] 4.5 On success: `clients.brand_voice_profile` updated; `jobs.status='complete'`
-  - [ ] 4.6 On failure (after 3 retries): `jobs.status='failed'`; log to Sentry
+- [x] Task 4: Backend — questionnaire worker (AC: #6)
+  - [x] 4.1 Add `async def questionnaire_worker(job_id, client_id, data: QuestionnaireRequest)` to `backend/app/workers/ingest.py`
+  - [x] 4.2 Convert slider values to tone descriptors using full 5-value mapping from Dev Notes
+  - [x] 4.3 Build combined text: join sample_texts; append reference URL notes if provided
+  - [x] 4.4 Build prompt for Gemini with slider-derived tone descriptors as context + sample texts; call `extract_voice_profile()` with 1024 thinking tokens
+  - [x] 4.5 On success: `clients.brand_voice_profile` updated; `jobs.status='complete'`
+  - [x] 4.6 On failure (after 3 retries): `jobs.status='failed'`; log to Sentry
 
-- [ ] Task 5: Frontend — `/clients/{id}/voice` page (AC: #2, #3, #4, #5, #8)
-  - [ ] 5.1 Create `frontend/app/(app)/clients/[id]/voice/page.tsx` — Server Component with metadata; fetch `GET /api/v1/clients/{id}` for current BVP and active job status
-  - [ ] 5.2 Create `frontend/components/clients/VoiceSetupPage.tsx` — `'use client'` for all interactive state
-  - [ ] 5.3 Page routing logic:
+- [x] Task 5: Frontend — `/clients/{id}/voice` page (AC: #2, #3, #4, #5, #8)
+  - [x] 5.1 Create `frontend/app/(app)/clients/[id]/voice/page.tsx` — Server Component with metadata; fetch `GET /api/v1/clients/{id}` for current BVP and active job status
+  - [x] 5.2 Create `frontend/components/clients/VoiceSetupPage.tsx` — `'use client'` for all interactive state
+  - [x] 5.3 Page routing logic:
     - If `brand_voice_profile` exists (non-null): show **Profile Review** (confirmed or edit mode, AC #8)
     - If active ingestion job (pending/in_progress): show **In-Progress State** (JetBrains Mono status)
     - If failed ingestion job: show **Extraction Failed** error + questionnaire CTA
     - If no BVP, no active job, no failed job: show **Questionnaire** directly (AC #5)
 
-- [ ] Task 6: Frontend — Profile Review UI (AC: #2, #3, #8)
-  - [ ] 6.1 Layout: Playfair Display H1 "Brand Voice" (or H2 within Client context); Paper background
-  - [ ] 6.2 **Tone descriptors** section ("TONE" — Inter 12px uppercase label):
-    - Display as editable tag chips: `<span className="inline-flex items-center gap-1 bg-[#E5E5E5] px-2 py-0.5 text-sm text-[#111111] rounded-none mr-2 mb-2">`
-    - Each tag has an `×` remove button (`<button aria-label="Remove tone: {tag}">`)
-    - Below tags: text input to add new descriptors + "Add" button (Secondary style); on submit append to tone array
-  - [ ] 6.3 **Cadence** section ("CADENCE" — Inter 12px uppercase label):
-    - `avg_sentence_length`: editable `<input type="number">` (Paper Style standard input)
-    - `variation_pattern`: editable `<textarea>` (2 rows, standard bottom-border)
-    - `paragraph_structure`: editable `<textarea>` (2 rows)
-  - [ ] 6.4 **Banned Jargon** section ("BANNED JARGON" — Inter 12px uppercase label):
-    - Same editable tag chip pattern as tone descriptors
-    - Each tag removable; add-new input below
-  - [ ] 6.5 "Confirm profile" Primary Button: calls `PATCH /api/v1/clients/{id}` with `{brand_voice_profile: editedBVP}`; on success shows `<p className="text-[#2E4F2E] text-sm mt-2">Voice profile confirmed.</p>`
-  - [ ] 6.6 "Edit profile" Secondary Button (shown in confirmed state): switches tags/inputs from read-only display to editable mode
+- [x] Task 6: Frontend — Profile Review UI (AC: #2, #3, #8)
+  - [x] 6.1 Layout: Playfair Display H1 "Brand Voice"; Paper background
+  - [x] 6.2 **Tone descriptors** section ("TONE" — Inter 12px uppercase label): editable tag chips with × remove and Add input
+  - [x] 6.3 **Cadence** section ("CADENCE" — Inter 12px uppercase label): avg_sentence_length number input, variation_pattern textarea, paragraph_structure textarea
+  - [x] 6.4 **Banned Jargon** section ("BANNED JARGON" — Inter 12px uppercase label): same editable tag chip pattern as tone
+  - [x] 6.5 "Confirm profile" Primary Button: calls `PATCH /api/v1/clients/{id}` with `{brand_voice_profile: editedBVP}`; success message "Voice profile confirmed."
+  - [x] 6.6 "Edit profile" Secondary Button (shown in confirmed/read-only state): switches to editable mode
 
-- [ ] Task 7: Frontend — Voice Questionnaire wizard (AC: #5, #6, #7)
-  - [ ] 7.1 Create `frontend/components/clients/VoiceQuestionnaire.tsx` — `'use client'`; multi-step wizard with `currentStep: 1 | 2 | 3` state
-  - [ ] 7.2 Progress indicator: `<p className="font-['Inter'] text-xs uppercase tracking-[0.06em] text-[#555555]">Step {step} of 3</p>` — top of wizard
-  - [ ] 7.3 **Step 1 — Tone Sliders:**
-    - Three slider pairs, each with label showing both ends and current numeric value
-    - Slider: `<input type="range" min="1" max="5" step="1">` with `className="w-full accent-[#111111]"`
-    - Labels: "Formal" (left) / "Casual" (right), current value announced via `aria-valuenow` and `aria-valuetext`
-    - Each slider: `aria-label="Formal to Casual tone — currently {value}"`
-  - [ ] 7.4 **Step 2 — Sample Texts:**
-    - Three `<textarea>` fields (Brain Dump style: JetBrains Mono, bottom-border-only, min-height 100px)
-    - Label: "Paste a piece of writing that sounds like you." (optional)
-    - All three are optional; user can leave blank
-  - [ ] 7.5 **Step 3 — Reference Writers (optional):**
-    - Three Paper Style standard `<input type="url">` fields
-    - Label: "A writer whose style you admire." per field
-    - "Skip this step" Secondary Button below all three — advances to submit without setting reference URLs
-  - [ ] 7.6 Navigation buttons:
-    - "Back" Secondary Button (not shown on Step 1): `setCurrentStep(step - 1)`
-    - "Next" Primary Button (Steps 1–2): `setCurrentStep(step + 1)`
-    - "Submit questionnaire" Primary Button (Step 3): calls `POST /api/v1/clients/{id}/questionnaire`
-  - [ ] 7.7 On submit: show in-progress state "Extracting your voice profile..." (JetBrains Mono, Graphite); poll `useJobStatus(jobId)` until complete
-  - [ ] 7.8 On job `complete`: refresh page to show Profile Review with extracted BVP pre-populated
+- [x] Task 7: Frontend — Voice Questionnaire wizard (AC: #5, #6, #7)
+  - [x] 7.1 Create `frontend/components/clients/VoiceQuestionnaire.tsx` — `'use client'`; multi-step wizard with `currentStep: 1 | 2 | 3` state
+  - [x] 7.2 Progress indicator: "Step {step} of 3" — Inter 12px uppercase tracked — top of wizard
+  - [x] 7.3 **Step 1 — Tone Sliders:** Three slider pairs with aria-label, aria-valuenow, aria-valuetext
+  - [x] 7.4 **Step 2 — Sample Texts:** Three BrainDump textarea fields, all optional
+  - [x] 7.5 **Step 3 — Reference Writers (optional):** Three URL inputs + "Skip this step" link
+  - [x] 7.6 Navigation buttons: Back/Next/Submit questionnaire
+  - [x] 7.7 On submit: show in-progress state via parent VoiceSetupPage; poll `useJobStatus(jobId)` until complete
+  - [x] 7.8 On job `complete`: refresh page (router.refresh()) to show Profile Review with extracted BVP
 
-- [ ] Task 8: Backend — update `PATCH /api/v1/clients/{id}` to accept BVP (AC: #3)
-  - [ ] 8.1 Extend `ClientUpdate` schema to include `brand_voice_profile: Optional[dict] = None`
-  - [ ] 8.2 In `update_client()` repository: if `brand_voice_profile` is provided, update `clients.brand_voice_profile`
-  - [ ] 8.3 No re-ingestion triggered by this PATCH — BVP update is a direct overwrite of the JSON field
+- [x] Task 8: Backend — update `PATCH /api/v1/clients/{id}` to accept BVP (AC: #3)
+  - [x] 8.1 Extend `ClientUpdate` schema to include `brand_voice_profile: Optional[dict] = None`
+  - [x] 8.2 In `update_client_detail()` router: if `brand_voice_profile` is provided, include in update_fields
+  - [x] 8.3 No re-ingestion triggered by this PATCH — BVP update is a direct overwrite of the JSON field
 
 ## Dev Notes
 
@@ -311,3 +291,66 @@ frontend/components/clients/VoiceSetupPage.tsx ← full implementation
 - Slider accessible label pattern: [Source: _bmad-output/planning-artifacts/epics.md#UX-DR16]
 - Paper Style tags, inputs, buttons: [Source: _bmad-output/planning-artifacts/ux-designs/ux-PersonnaPress-2026-06-14/DESIGN.md#Components]
 - Microcopy — "Voice profile confirmed." (no exclamation mark): [Source: _bmad-output/planning-artifacts/ux-designs/ux-PersonnaPress-2026-06-14/EXPERIENCE.md#Voice and Tone]
+
+## Dev Agent Record
+
+### Implementation Plan
+
+Implemented all 8 tasks (all ACs satisfied). Key decisions:
+
+1. **Gemini integration (AR-19)**: `integrations/gemini.py` imported at module level in `ingestion.py` only (not in routers/workers) to satisfy AR-19. The `gemini` module attribute is patchable by tests.
+2. **Session parameter**: `extract_voice_profile(text, client_id, session=None)` — optional session allows callers to skip DB write (useful in tests). When session provided, `update_client()` is called directly.
+3. **`get_active_ingestion_job_for_client` extended**: now covers both `ingestion` and `questionnaire` job types so frontend polling works for both paths.
+4. **`ingestion_failed` flag**: added to `ClientResponse` (computed in router, not stored in DB) to enable the voice page server component to route correctly without an extra API call.
+5. **Frontend BVP type**: updated `BrandVoiceProfile` in types.ts to the actual Gemini schema (tone: string[], cadence: dict, banned_jargon: string[]).
+6. **Profile Review default state**: loads in read-only mode when BVP exists (consistent with AC #8); "Edit profile" switches to edit mode.
+
+### Completion Notes
+
+- All 8 tasks implemented; 109 backend tests pass (4 pre-existing failures in test_client_limit.py unrelated to this story)
+- TypeScript compiles cleanly with no errors
+- New tests added: test_gemini_integration.py (6 tests), test_extract_voice_profile.py (7 tests), test_questionnaire_worker.py (8 tests)
+- Updated test: test_ingestion_service.py — extract_voice_profile stub test replaced with real implementation test
+
+## File List
+
+New files:
+- `backend/app/integrations/gemini.py`
+- `frontend/app/(app)/clients/[id]/voice/page.tsx`
+- `frontend/components/clients/VoiceSetupPage.tsx`
+- `frontend/components/clients/VoiceQuestionnaire.tsx`
+- `frontend/components/ui/TagChip.tsx`
+- `backend/tests/test_gemini_integration.py`
+- `backend/tests/test_extract_voice_profile.py`
+- `backend/tests/test_questionnaire_worker.py`
+
+Modified files:
+- `backend/app/services/ingestion.py` — added VoiceExtractionError, real extract_voice_profile() with retry
+- `backend/app/integrations/gemini.py` — new file (extract_brand_voice)
+- `backend/app/workers/ingest.py` — added questionnaire_worker, updated ingest_worker to pass session
+- `backend/app/routers/clients.py` — added POST /questionnaire, BVP in PATCH, ingestion_failed in GET
+- `backend/app/schemas/client.py` — QuestionnaireRequest, extend ClientUpdate + ClientResponse
+- `backend/app/db/repositories/jobs.py` — get_latest_voice_job_for_client, updated active job query
+- `backend/tests/conftest.py` — stub google.generativeai for test isolation
+- `backend/tests/test_ingestion_service.py` — updated extract_voice_profile test
+- `frontend/lib/types.ts` — updated BrandVoiceProfile, added QuestionnairePayload, ClientResponse fields
+- `frontend/lib/api.ts` — extended clientsApi.patch, added submitQuestionnaire
+- `frontend/components/ui/index.ts` — export TagChip
+
+## Change Log
+
+- 2026-07-01: Implemented Story 2.5 — Gemini voice extraction with retry, questionnaire wizard, BVP review UI, failed-state routing (Boris/Dev Agent)
+
+### Review Findings
+
+- [x] [Review][Patch] F1: job.status "completed" should be "complete" [backend/app/workers/ingest.py:153,305]
+- [x] [Review][Patch] F2: AC2 — "Confirm profile" CTA absent from initial read-only view [frontend/components/clients/VoiceSetupPage.tsx:229]
+- [x] [Review][Patch] F3: AC5 — no-content failure routes to error view instead of questionnaire [backend/app/workers/ingest.py, frontend/components/clients/VoiceSetupPage.tsx]
+- [x] [Review][Patch] F4: No concurrent questionnaire job guard [backend/app/routers/clients.py:submit_voice_questionnaire]
+- [x] [Review][Patch] F5: extract_voice_profile retries all exceptions, not just transient 5xx/429 [backend/app/services/ingestion.py:extract_voice_profile]
+- [x] [Review][Patch] F6: tone_sliders is untyped dict with no key/range validation [backend/app/schemas/client.py:QuestionnaireRequest]
+- [x] [Review][Patch] F7: reference_urls not validated as URLs on backend [backend/app/schemas/client.py:QuestionnaireRequest]
+- [x] [Review][Patch] F8: Dead ariaLabel prop on SliderPair component [frontend/components/clients/VoiceQuestionnaire.tsx:35]
+- [x] [Review][Patch] F9: job-not-found in _run_questionnaire missing Sentry capture [backend/app/workers/ingest.py:_run_questionnaire]
+- [x] [Review][Defer] F10: "Refresh voice profile" button missing [frontend/components/clients/VoiceSetupPage.tsx] — deferred, Story 2.6 scope per spec
+- [x] [Review][Defer] F11: brand_voice_profile Optional[dict] has no structural validation — deferred, intentional per spec (validation at service layer, raw JSON in DB)
