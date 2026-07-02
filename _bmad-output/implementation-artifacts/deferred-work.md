@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 4-1-approval-gate-campaign-preview-voice-fidelity-badge (2026-07-02)
+
+- **D1 (High)**: VoiceScore null safety — TypeScript types declare `number` but runtime API could return `null`. Add integration test or Zod validation at API boundary in a future story.
+- **D2 (High)**: `id="voice-detail"` collision — hardcoded ID would break if VoiceFidelityBadge is ever used more than once per page. Refactor to use `useId()` hook when component is reused beyond single-instance context.
+- **D3 (Medium)**: ApprovalPanel + sticky footer double-render for `isPending` — intentional stub; Story 4.4 dev agent must remove or hide `ApprovalPanel` when wiring the sticky footer.
+- **D4 (Low)**: `lg:left-[240px]` and `pb-24` are hardcoded — tie to a CSS custom property or Tailwind token if sidebar width or footer height changes.
+
 ## Deferred from: code review of 3-3-blog-social-content-generation-pipeline (2026-07-02)
 
 - **D1 (Low)**: `update_campaign_content`/`update_job_status` defined in repositories but unused — `services/generation.py` does direct ORM mutations instead. Design inconsistency; refactor in a future cleanup story. [backend/app/db/repositories/campaigns.py, jobs.py]

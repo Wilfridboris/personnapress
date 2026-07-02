@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-14
-last_updated: 2026-07-02  # story 3-5 code review fixes applied, status: done
+last_updated: 2026-07-02  # epic-4 stories 4.1–4.4 created; 4.1 code review complete, marked done
 project: PersonnaPress
 project_key: NOKEY
 tracking_system: file-system
@@ -72,11 +72,11 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: Approval Gate & Content Review
-  epic-4: backlog
-  4-1-approval-gate-campaign-preview-voice-fidelity-badge: backlog
-  4-2-blog-post-wysiwyg-editing: backlog
-  4-3-social-post-editing-with-character-counters: backlog
-  4-4-approve-reject-campaign: backlog
+  epic-4: in-progress
+  4-1-approval-gate-campaign-preview-voice-fidelity-badge: done
+  4-2-blog-post-wysiwyg-editing: ready-for-dev
+  4-3-social-post-editing-with-character-counters: ready-for-dev
+  4-4-approve-reject-campaign: ready-for-dev
   epic-4-retrospective: optional
 
   # Epic 5: Platform Connections & Publishing

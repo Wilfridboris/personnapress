@@ -7,6 +7,7 @@ import { BlogHtmlRenderer } from "@/components/ui/BlogHtmlRenderer";
 import { ApprovalPanel } from "./approval-panel";
 import { GenerationGate } from "./GenerationGate";
 import { ImagePanel } from "@/components/campaigns/ImagePanel";
+import { VoiceFidelityBadge } from "@/components/campaigns/VoiceFidelityBadge";
 import type { Campaign, Job } from "@/lib/types";
 
 const BACKEND = process.env.BACKEND_URL || "http://localhost:8000";
@@ -119,124 +120,155 @@ export default async function CampaignDetailPage({ params, searchParams }: Props
       {/* Generation overlay — shown only while job is active (AC #9, #8) */}
       <GenerationGate campaign={campaign} jobId={effectiveJobId} />
 
-      {/* Back */}
-      <Link
-        href="/campaigns"
-        className="inline-flex items-center gap-2 text-sm text-graphite hover:text-ink transition-colors font-mono mb-10"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        Back to Campaigns
-      </Link>
+      <section aria-label="Campaign Review - PersonnaPress">
+        {/* Back */}
+        <Link
+          href="/campaigns"
+          className="inline-flex items-center gap-2 text-sm text-graphite hover:text-ink transition-colors font-mono mb-10"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back to Campaigns
+        </Link>
 
-      {/* Header */}
-      <header className="mb-8">
-        <div className="flex items-start justify-between gap-4 mb-3">
-          <h1 className="font-display text-3xl font-bold text-ink text-balance leading-tight">
-            {campaign.blog_html ? "Campaign" : "Generating..."}
-          </h1>
-          <span
-            className={`text-xs font-mono border px-3 py-1 shrink-0 mt-1 ${statusConfig.className}`}
-          >
-            {statusConfig.label}
-          </span>
-        </div>
-        <p className="text-sm text-graphite font-mono">
-          Created{" "}
-          {new Date(campaign.created_at).toLocaleDateString("en-US", {
-            month: "long",
-            day: "numeric",
-            year: "numeric",
-          })}
-        </p>
-      </header>
-
-      {/* Approval panel - shown for pending campaigns */}
-      {isPending && (
-        <ApprovalPanel campaignId={campaign.id} />
-      )}
-
-      {isPublished && (
-        <div className="border border-success/30 bg-success/5 p-4 mb-8 font-mono text-sm text-success">
-          This campaign has been published.
-        </div>
-      )}
-
-      {isFailed && (
-        <div className="border border-danger/30 bg-danger/5 p-4 mb-8 font-mono text-sm text-danger">
-          Content generation failed. Delete this campaign and try again.
-        </div>
-      )}
-
-      {/* Content grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-        {/* Blog post - main column */}
-        <section className="lg:col-span-3 space-y-6">
-          <div className="border border-border">
-            <div className="px-6 py-4 border-b border-border">
-              <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
-                Blog Post (HTML)
-              </h2>
+        {/* Header */}
+        <header className="mb-8">
+          <div className="flex items-start justify-between gap-4 mb-3">
+            <h1 className="font-display text-3xl font-bold text-ink text-balance leading-tight">
+              {campaign.blog_html ? "Campaign" : "Generating..."}
+            </h1>
+            <span
+              className={`text-xs font-mono border px-3 py-1 shrink-0 mt-1 ${statusConfig.className}`}
+            >
+              {statusConfig.label}
+            </span>
+          </div>
+          <p className="text-sm text-graphite font-mono">
+            Created{" "}
+            {new Date(campaign.created_at).toLocaleDateString("en-US", {
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </p>
+          {/* Voice Fidelity Badge — advisory only, shown when voice_score fails thresholds */}
+          {campaign.voice_score && (
+            <div className="mt-3">
+              <VoiceFidelityBadge voiceScore={campaign.voice_score} />
             </div>
-            {rawBlogHtml ? (
-              <BlogHtmlRenderer
-                html={rawBlogHtml}
-                className="p-6 prose prose-sm max-w-none font-sans text-ink"
-              />
-            ) : (
-              <div className="p-6">
-                <GeneratingPlaceholder lines={8} />
+          )}
+        </header>
+
+        {/* Approval panel - shown for pending campaigns */}
+        {isPending && (
+          <ApprovalPanel campaignId={campaign.id} />
+        )}
+
+        {isPublished && (
+          <div className="border border-success/30 bg-success/5 p-4 mb-8 font-mono text-sm text-success">
+            This campaign has been published.
+          </div>
+        )}
+
+        {isFailed && (
+          <div className="border border-danger/30 bg-danger/5 p-4 mb-8 font-mono text-sm text-danger">
+            Content generation failed. Delete this campaign and try again.
+          </div>
+        )}
+
+        {/* Content grid — pb-24 ensures sticky footer doesn't overlap content on mobile */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 pb-24">
+          {/* Blog post - main column */}
+          <section className="lg:col-span-3 space-y-6">
+            <div className="border border-border">
+              <div className="px-6 py-4 border-b border-border">
+                <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
+                  Blog Post (HTML)
+                </h2>
               </div>
-            )}
-          </div>
-        </section>
-
-        {/* Sidebar: social + image */}
-        <aside className="lg:col-span-2 space-y-8">
-          {/* Featured image */}
-          <ImagePanel
-            campaignId={campaign.id}
-            imageUrl={campaign.image_url}
-            imageRegenCount={campaign.image_regen_count}
-            jobErrorDetails={jobErrorDetails}
-          />
-
-          {/* X Post */}
-          <div className="border border-border">
-            <div className="px-6 py-4 border-b border-border">
-              <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
-                X (Twitter)
-              </h2>
-            </div>
-            <div className="p-6">
-              {campaign.x_post ? (
-                <p className="font-mono text-sm text-ink leading-relaxed whitespace-pre-wrap">
-                  {campaign.x_post}
-                </p>
+              {rawBlogHtml ? (
+                <BlogHtmlRenderer
+                  html={rawBlogHtml}
+                  className="p-6 prose prose-sm max-w-none font-sans text-ink prose-headings:font-display prose-headings:text-ink prose-a:text-ink prose-a:underline"
+                />
               ) : (
-                <GeneratingPlaceholder lines={4} />
+                <div className="p-6">
+                  <GeneratingPlaceholder lines={8} />
+                </div>
               )}
             </div>
-          </div>
+          </section>
 
-          {/* LinkedIn Post */}
-          <div className="border border-border">
-            <div className="px-6 py-4 border-b border-border">
-              <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
-                LinkedIn
-              </h2>
+          {/* Sidebar: image → X post → LinkedIn post */}
+          <aside className="lg:col-span-2 space-y-8">
+            {/* Featured image */}
+            <ImagePanel
+              campaignId={campaign.id}
+              imageUrl={campaign.image_url}
+              imageRegenCount={campaign.image_regen_count}
+              jobErrorDetails={jobErrorDetails}
+            />
+
+            {/* X Post */}
+            <div className="border border-border">
+              <div className="px-6 py-4 border-b border-border">
+                <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
+                  X (Twitter)
+                </h2>
+              </div>
+              <div className="p-6">
+                {campaign.x_post ? (
+                  <p className="font-mono text-sm text-ink leading-relaxed whitespace-pre-wrap">
+                    {campaign.x_post}
+                  </p>
+                ) : (
+                  <GeneratingPlaceholder lines={4} />
+                )}
+              </div>
             </div>
-            <div className="p-6">
-              {campaign.linkedin_post ? (
-                <p className="font-mono text-sm text-ink leading-relaxed whitespace-pre-wrap">
-                  {campaign.linkedin_post}
-                </p>
-              ) : (
-                <GeneratingPlaceholder lines={6} />
-              )}
+
+            {/* LinkedIn Post */}
+            <div className="border border-border">
+              <div className="px-6 py-4 border-b border-border">
+                <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
+                  LinkedIn
+                </h2>
+              </div>
+              <div className="p-6">
+                {campaign.linkedin_post ? (
+                  <p className="font-mono text-sm text-ink leading-relaxed whitespace-pre-wrap">
+                    {campaign.linkedin_post}
+                  </p>
+                ) : (
+                  <GeneratingPlaceholder lines={6} />
+                )}
+              </div>
             </div>
+          </aside>
+        </div>
+
+        {/* Sticky footer — stub for Story 4.4 wiring; shown only for pending_approval */}
+        {isPending && (
+          <div className="fixed bottom-0 left-0 md:left-14 lg:left-[240px] right-0 z-10 bg-paper border-t border-border px-6 py-4 flex items-center justify-end gap-3">
+            {/* data-story="4.4-wiring" — Story 4.4 dev agent wires these buttons */}
+            <button
+              type="button"
+              aria-label="Reject campaign"
+              className="inline-flex items-center rounded-none px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+              data-story="4.4-wiring"
+            >
+              Reject
+            </button>
+            <button
+              type="button"
+              aria-label="Approve campaign"
+              className="inline-flex items-center rounded-none px-5 py-2.5 bg-ink text-white text-sm font-medium border border-transparent shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+              data-story="4.4-wiring"
+            >
+              Approve
+            </button>
           </div>
-        </aside>
-      </div>
+        )}
+      </section>
     </>
   );
 }
