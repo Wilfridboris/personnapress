@@ -77,6 +77,37 @@ async def download_file(bucket: str, path: str) -> bytes:
         return resp.content
 
 
+async def upload_image_from_url(replicate_url: str, storage_path: str) -> str:
+    """Download an image from a Replicate URL and upload it to Supabase Storage.
+
+    Args:
+        replicate_url: Temporary Replicate CDN URL to download from.
+        storage_path: Supabase Storage path (e.g. generated-images/{id}/featured.png).
+
+    Returns:
+        Public CDN URL of the uploaded image.
+
+    Raises:
+        httpx.HTTPStatusError: On download or upload failure.
+    """
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.get(replicate_url)
+        response.raise_for_status()
+        image_bytes = response.content
+
+    bucket = "generated-images"
+    prefix = f"{bucket}/"
+    if not storage_path.startswith(prefix):
+        raise ValueError(f"storage_path must start with '{prefix}', got: {storage_path!r}")
+    object_path = storage_path[len(prefix):]
+
+    await upload_file(bucket, object_path, image_bytes)
+
+    base = settings.SUPABASE_URL.rstrip("/")
+    public_url = f"{base}/storage/v1/object/public/{bucket}/{object_path}"
+    return public_url
+
+
 async def delete_file(bucket: str, path: str) -> None:
     """Delete a file from Supabase Storage."""
     url = _storage_url(f"/object/{bucket}/{path}")

@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { BlogHtmlRenderer } from "@/components/ui/BlogHtmlRenderer";
 import { ApprovalPanel } from "./approval-panel";
 import { GenerationGate } from "./GenerationGate";
-import type { Campaign } from "@/lib/types";
+import { ImagePanel } from "@/components/campaigns/ImagePanel";
+import type { Campaign, Job } from "@/lib/types";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -20,6 +20,19 @@ async function getCampaign(id: string): Promise<Campaign | null> {
       { cache: "no-store" }
     );
     if (res.status === 404) return null;
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function getJob(id: string): Promise<Job | null> {
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/jobs/${id}`,
+      { cache: "no-store" }
+    );
     if (!res.ok) return null;
     return res.json();
   } catch {
@@ -71,6 +84,10 @@ export default async function CampaignDetailPage({ params, searchParams }: Props
   const campaign = await getCampaign(id);
 
   if (!campaign) notFound();
+
+  // Fetch job to get error_details for ImagePanel empty-state determination
+  const job = jobId ? await getJob(jobId) : null;
+  const jobErrorDetails = job?.error_details ?? null;
 
   const statusConfig =
     STATUS_CONFIG[campaign.status] ?? {
@@ -167,24 +184,12 @@ export default async function CampaignDetailPage({ params, searchParams }: Props
         {/* Sidebar: social + image */}
         <aside className="space-y-6">
           {/* Featured image */}
-          {campaign.image_url && (
-            <div className="border border-border">
-              <div className="px-4 py-3 border-b border-border">
-                <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
-                  Featured Image
-                </h2>
-              </div>
-              <div className="p-4">
-                <Image
-                  src={campaign.image_url}
-                  alt="Featured image"
-                  width={600}
-                  height={400}
-                  className="w-full object-cover"
-                />
-              </div>
-            </div>
-          )}
+          <ImagePanel
+            campaignId={campaign.id}
+            imageUrl={campaign.image_url}
+            imageRegenCount={campaign.image_regen_count}
+            jobErrorDetails={jobErrorDetails}
+          />
 
           {/* X Post */}
           <div className="border border-border">

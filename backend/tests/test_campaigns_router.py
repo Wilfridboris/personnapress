@@ -257,6 +257,92 @@ async def test_get_campaign_raises_404_when_not_found():
     assert exc_info.value.status_code == 404
 
 
+# ── POST /campaigns/{id}/image/regenerate ─────────────────────────────────────
+
+async def test_regenerate_image_returns_200_on_success():
+    from app.routers.campaigns import regenerate_campaign_image
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch(
+            "app.routers.campaigns.image_service.regenerate_image",
+            AsyncMock(return_value=("https://supabase.co/new.png", 1)),
+        ),
+    ):
+        result = await regenerate_campaign_image(
+            campaign_id=campaign.id,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.image_url == "https://supabase.co/new.png"
+    assert result.image_regen_count == 1
+
+
+async def test_regenerate_image_raises_400_at_limit():
+    from app.routers.campaigns import regenerate_campaign_image
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+
+    db = AsyncMock()
+
+    limit_error = HTTPException(
+        status_code=400,
+        detail={"error": {"code": "IMAGE_REGEN_LIMIT_REACHED", "message": "0 regenerations remaining.", "detail": {}}},
+    )
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch(
+            "app.routers.campaigns.image_service.regenerate_image",
+            AsyncMock(side_effect=limit_error),
+        ),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await regenerate_campaign_image(
+                campaign_id=campaign.id,
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["error"]["code"] == "IMAGE_REGEN_LIMIT_REACHED"
+
+
+async def test_regenerate_image_raises_404_for_wrong_user():
+    from app.routers.campaigns import regenerate_campaign_image
+
+    owner_id = uuid.uuid4()
+    requester_id = uuid.uuid4()
+    client = _make_client(user_id=owner_id)
+    campaign = _make_campaign(client_id=client.id)
+
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await regenerate_campaign_image(
+                campaign_id=campaign.id,
+                current_user={"user_id": str(requester_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 404
+
+
 # ── POST /campaigns: 401 on invalid session ───────────────────────────────────
 
 async def test_create_campaign_raises_401_on_bad_session():

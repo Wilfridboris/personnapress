@@ -131,6 +131,47 @@ async def check_campaign_limit(db: AsyncSession, user_id: uuid.UUID) -> None:
         await db.flush()
 
 
+async def check_image_limit(db: AsyncSession, user_id: uuid.UUID) -> None:
+    sub_result = await db.execute(
+        select(Subscription).where(Subscription.user_id == user_id).with_for_update()
+    )
+    sub = sub_result.scalars().first()
+
+    if sub and sub.status in ("canceled", "expired", "past_due"):
+        plan_tier = "starter"
+    else:
+        plan_tier = sub.plan_tier if sub else "starter"
+
+    limit = PLAN_LIMITS.get(plan_tier, PLAN_LIMITS["starter"])["image_gens"]
+    current: int = sub.image_gen_used if sub else 0
+
+    if current >= limit:
+        next_tier_map = {"starter": "growth", "growth": "agency"}
+        next_tier = next_tier_map.get(plan_tier, "agency")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": "IMAGE_LIMIT_EXCEEDED",
+                    "message": (
+                        f"You've reached your {limit}-image limit for this billing cycle. "
+                        f"Upgrade to {next_tier.capitalize()} for more image generations."
+                    ),
+                    "detail": {
+                        "current": current,
+                        "limit": limit,
+                        "plan": plan_tier,
+                        "next_tier": next_tier,
+                    },
+                }
+            },
+        )
+
+    if sub:
+        sub.image_gen_used = current + 1
+        await db.flush()
+
+
 async def get_user_plan_info(user_id: uuid.UUID, db: AsyncSession) -> tuple[str, int]:
     result = await db.execute(select(Subscription).where(Subscription.user_id == user_id))
     sub = result.scalar_one_or_none()

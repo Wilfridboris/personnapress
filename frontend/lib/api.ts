@@ -108,6 +108,11 @@ export const campaignsApi = {
       `/campaigns/${id}/publish`,
       { method: "POST" }
     ),
+  regenerateImage: (id: string) =>
+    apiFetch<{ image_url: string; image_regen_count: number }>(
+      `/campaigns/${id}/image/regenerate`,
+      { method: "POST" }
+    ),
 };
 
 export const dashboardApi = {
