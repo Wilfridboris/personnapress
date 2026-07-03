@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useImperativeHandle, useState } from "react";
+import { forwardRef, useImperativeHandle, useState, useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -24,7 +24,10 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
   ({ initialHtml, campaignId, readOnly = false }, ref) => {
     const [isDirty, setIsDirty] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
     const addToast = useUIStore((s) => s.addToast);
+
+    useEffect(() => { setIsMounted(true); }, []);
 
     const editor = useEditor({
       extensions: [
@@ -175,7 +178,7 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
             <button
               type="button"
               onClick={handleSave}
-              disabled={isSaving || !isDirty}
+              disabled={!isMounted || isSaving || !isDirty}
               className="mt-4 px-4 py-2 border border-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 disabled:opacity-40 inline-flex items-center gap-2"
             >
               {isSaving && (
