@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { campaignsApi, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
 
@@ -30,6 +30,14 @@ export const SocialPostEditors = forwardRef<
   const [linkedinPost, setLinkedInPost] = useState(initialLinkedInPost ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+
+  // Sync state when props arrive post-generation (null → value transition only)
+  useEffect(() => {
+    if (initialXPost && xPost === "") setXPost(initialXPost);
+  }, [initialXPost]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (initialLinkedInPost && linkedinPost === "") setLinkedInPost(initialLinkedInPost);
+  }, [initialLinkedInPost]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addToast = useUIStore((s) => s.addToast);
 

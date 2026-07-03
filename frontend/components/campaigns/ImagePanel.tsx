@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
 import { campaignsApi, APIError } from "@/lib/api";
@@ -22,6 +22,11 @@ export function ImagePanel({
   const [currentRegenCount, setCurrentRegenCount] = useState(imageRegenCount);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Sync state when image arrives post-generation (null → value transition only)
+  useEffect(() => {
+    if (imageUrl && !currentImageUrl) setCurrentImageUrl(imageUrl);
+  }, [imageUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const remainingRegens = Math.max(0, 3 - currentRegenCount);
   const isAtLimit = currentRegenCount >= 3;
