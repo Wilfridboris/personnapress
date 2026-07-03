@@ -6,7 +6,9 @@ import { BlogHtmlRenderer } from "@/components/ui/BlogHtmlRenderer";
 import { ImagePanel } from "@/components/campaigns/ImagePanel";
 import { SocialPostEditors } from "@/components/campaigns/SocialPostEditors";
 import { VoiceFidelityBadge } from "@/components/campaigns/VoiceFidelityBadge";
+import { useRouter } from "next/navigation";
 import { ApprovalPanel } from "./approval-panel";
+import { RetryPanel } from "@/components/publishing/RetryPanel";
 import type { Campaign, CampaignStatus } from "@/lib/types";
 import type { BlogEditorHandle } from "@/components/campaigns/BlogEditor";
 import type { SocialPostEditorsHandle } from "@/components/campaigns/SocialPostEditors";
@@ -25,7 +27,17 @@ interface ApprovalGateClientProps {
   jobIsActive?: boolean;
 }
 
+function parseErrorDetails(raw: string | null | undefined): Record<string, string> | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as Record<string, string>;
+  } catch {
+    return null;
+  }
+}
+
 export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = false }: ApprovalGateClientProps) {
+  const router = useRouter();
   const blogEditorRef = useRef<BlogEditorHandle>(null);
   const socialEditorsRef = useRef<SocialPostEditorsHandle>(null);
 
@@ -113,6 +125,16 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
           </div>
         </aside>
       </div>
+
+      {displayStatus === "failed" && campaign.publish_job && (
+        <RetryPanel
+          campaign={campaign}
+          jobId={campaign.publish_job.id}
+          jobErrorDetails={parseErrorDetails(campaign.publish_job.error_details)}
+          attemptCount={campaign.publish_job.attempt_count}
+          onRetrySuccess={() => router.refresh()}
+        />
+      )}
 
       <ApprovalPanel
         campaign={{ ...campaign, status: displayStatus }}

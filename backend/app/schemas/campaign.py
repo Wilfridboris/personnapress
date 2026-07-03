@@ -5,6 +5,15 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
+class PublishJobInfo(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    attempt_count: int
+    error_details: Optional[str]
+    status: str
+
+
 _BLOG_HTML_MAX = 200_000
 _SOCIAL_POST_MAX = 5_000
 
@@ -42,6 +51,10 @@ class CampaignResponse(BaseModel):
     image_regen_count: int
     created_at: datetime
     updated_at: datetime
+
+
+class CampaignDetailResponse(CampaignResponse):
+    publish_job: Optional[PublishJobInfo] = None
 
 
 class CampaignCreateResponse(BaseModel):

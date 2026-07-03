@@ -84,6 +84,19 @@ async def get_scheduled_job(session: AsyncSession, campaign_id: uuid.UUID) -> Op
     return result.scalar_one_or_none()
 
 
+async def get_publish_job_for_campaign(
+    session: AsyncSession, campaign_id: uuid.UUID
+) -> Optional[Job]:
+    """Get the most recent publish or scheduled_publish job for a campaign."""
+    result = await session.execute(
+        select(Job)
+        .where(Job.campaign_id == campaign_id, Job.job_type.in_(["publish", "scheduled_publish"]))
+        .order_by(Job.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_active_ingestion_job_for_client(
     session: AsyncSession,
     client_id: uuid.UUID,

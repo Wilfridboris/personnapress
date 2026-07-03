@@ -11,9 +11,9 @@ from app.core.dependencies import get_current_user
 from app.db.connection import get_session
 from app.db.repositories.campaigns import create_campaign, get_campaign
 from app.db.repositories.clients import get_client
-from app.db.repositories.jobs import create_job
+from app.db.repositories.jobs import create_job, get_publish_job_for_campaign
 from app.db.repositories.models import Campaign, Client
-from app.schemas.campaign import CampaignCreate, CampaignCreateResponse, CampaignPatch, CampaignResponse
+from app.schemas.campaign import CampaignCreate, CampaignCreateResponse, CampaignDetailResponse, CampaignPatch, CampaignResponse
 from app.services import image as image_service
 from app.services.subscription_service import check_campaign_limit
 from app.workers.generate import run_generation
@@ -100,12 +100,12 @@ async def list_campaigns(
     return [CampaignResponse.model_validate(c) for c in campaigns]
 
 
-@router.get("/{campaign_id}", response_model=CampaignResponse)
+@router.get("/{campaign_id}", response_model=CampaignDetailResponse)
 async def get_campaign_by_id(
     campaign_id: uuid.UUID,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
-) -> CampaignResponse:
+) -> CampaignDetailResponse:
     try:
         user_id = uuid.UUID(current_user["user_id"])
     except (ValueError, KeyError):
@@ -119,7 +119,10 @@ async def get_campaign_by_id(
     if not client or client.user_id != user_id:
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
 
-    return CampaignResponse.model_validate(campaign)
+    publish_job = await get_publish_job_for_campaign(db, campaign_id)
+    return CampaignDetailResponse.model_validate(
+        {**campaign.__dict__, "publish_job": publish_job}
+    )
 
 
 @router.patch("/{campaign_id}", response_model=CampaignResponse)

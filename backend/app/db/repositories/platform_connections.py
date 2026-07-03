@@ -52,6 +52,12 @@ async def upsert_connection(
     return connection
 
 
+async def get_connection_for_platform(
+    db: AsyncSession, client_id: uuid.UUID, platform: str
+) -> PlatformConnection | None:
+    return await get_connection(db, client_id, platform)
+
+
 async def delete_connection(
     db: AsyncSession, client_id: uuid.UUID, platform: str
 ) -> bool:

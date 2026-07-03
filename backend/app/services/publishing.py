@@ -11,14 +11,67 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decrypt_credential
+from app.core.exceptions import PlatformError
 from app.db.repositories.campaigns import get_campaign
-from app.db.repositories.platform_connections import get_connections_for_client
+from app.db.repositories.platform_connections import get_connection_for_platform, get_connections_for_client
 from app.integrations import linkedin as linkedin_integration
 from app.integrations import twitter as twitter_integration
 from app.integrations import webflow as webflow_integration
 from app.integrations import wordpress as wordpress_integration
 
 logger = logging.getLogger(__name__)
+
+
+async def dispatch_publish_for_platform(
+    db: AsyncSession,
+    campaign_id: UUID,
+    platform: str,
+) -> dict:
+    """
+    Retry publishing for a single platform.
+    Returns per-platform result dict with "success" or a formatted error string.
+    ONLY this function (and dispatch_publish) may call decrypt_credential().
+    """
+    campaign = await get_campaign(db, campaign_id)
+    if campaign is None:
+        return {platform: f"campaign {campaign_id} not found"}
+    connection = await get_connection_for_platform(db, campaign.client_id, platform)
+    if not connection:
+        return {platform: "no platform connection found"}
+    try:
+        creds_json = decrypt_credential(connection.encrypted_credentials)
+        creds = json.loads(creds_json)
+        if platform == "wordpress":
+            await wordpress_integration.publish_post(creds, campaign)
+        elif platform == "webflow":
+            await webflow_integration.publish_post(creds, campaign)
+        elif platform == "x":
+            await twitter_integration.create_tweet(creds["access_token"], campaign.x_post or "")
+        elif platform == "linkedin":
+            await linkedin_integration.create_ugc_post(
+                creds["access_token"],
+                campaign.blog_html or "",
+                campaign.linkedin_post or "",
+            )
+        return {platform: "success"}
+    except PlatformError as pe:
+        error_msg = f"{pe.platform.capitalize()} returned {pe.status_code} — {pe.message}"
+        logger.error(
+            "Retry publish failed platform=%s campaign=%s: %s",
+            platform,
+            campaign_id,
+            error_msg,
+        )
+        return {platform: error_msg}
+    except Exception as exc:
+        logger.error(
+            "Retry publish failed platform=%s campaign=%s: %s",
+            platform,
+            campaign_id,
+            exc,
+            exc_info=True,
+        )
+        return {platform: f"Unexpected error — {str(exc)[:100]}"}
 
 
 async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID) -> dict:

@@ -80,6 +80,13 @@ export interface QuestionnairePayload {
   reference_urls: string[];
 }
 
+export interface PublishJobInfo {
+  id: string;
+  attempt_count: number;
+  error_details: string | null;
+  status: string;
+}
+
 export interface Campaign {
   id: string;
   client_id: string;
@@ -95,6 +102,7 @@ export interface Campaign {
   image_regen_count: number;
   created_at: string;
   updated_at: string;
+  publish_job?: PublishJobInfo | null;
 }
 
 export interface VoiceScore {

@@ -16,7 +16,7 @@ from app.core.security import decrypt_credential, encrypt_credential
 from app.db.connection import get_session
 from app.db.repositories.campaigns import get_campaign, update_campaign_scheduled_at
 from app.db.repositories.clients import get_client
-from app.db.repositories.jobs import create_job, get_scheduled_job
+from app.db.repositories.jobs import create_job, get_publish_job_for_campaign, get_scheduled_job
 from app.db.repositories.platform_connections import (
     delete_connection,
     get_connections_for_client,
@@ -28,6 +28,7 @@ from app.integrations import webflow as webflow_integration
 from app.integrations import wordpress as wordpress_integration
 from app.scheduler.scheduler import scheduler
 from app.workers.publish import run_publish
+from app.workers.publish_retry import run_publish_retry
 
 router = APIRouter(prefix="", tags=["publishing"])
 
@@ -448,6 +449,93 @@ async def cancel_scheduled_publish(
     await db.commit()
 
     return {"campaign_id": str(campaign_id), "status": "approved"}
+
+
+class RetryRequest(BaseModel):
+    platform: str  # "wordpress" | "webflow" | "x" | "linkedin"
+
+
+@router.post("/campaigns/{campaign_id}/publish/retry", status_code=202)
+async def retry_platform_publish(
+    campaign_id: uuid.UUID,
+    body: RetryRequest,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+
+    campaign = await get_campaign(db, campaign_id)
+    if not campaign:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
+        )
+
+    client = await get_client(db, campaign.client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
+        )
+
+    if campaign.status != "failed":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": "INVALID_STATUS_TRANSITION",
+                    "message": "Only failed campaigns can be retried.",
+                    "detail": {},
+                }
+            },
+        )
+
+    job = await get_publish_job_for_campaign(db, campaign_id)
+    if not job:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "No publish job found for this campaign.", "detail": {}}},
+        )
+
+    # Verify the platform is actually failed (not already published)
+    error_details = json.loads(job.error_details or "{}")
+    platform_result = error_details.get(body.platform)
+    if platform_result == "success":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": "PLATFORM_ALREADY_PUBLISHED",
+                    "message": f"{body.platform.capitalize()} has already published successfully.",
+                    "detail": {},
+                }
+            },
+        )
+
+    if job.attempt_count >= 3:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": "MAX_RETRIES_REACHED",
+                    "message": f"Maximum retries reached for {body.platform.capitalize()}. Reconnect the platform and try again.",
+                    "detail": {},
+                }
+            },
+        )
+
+    # Increment attempt count and mark platform as retrying
+    job.attempt_count = (job.attempt_count or 0) + 1
+    error_details[body.platform] = "retrying"
+    job.status = "pending"
+    job.error_details = json.dumps(error_details)
+    db.add(job)
+    await db.commit()
+
+    background_tasks.add_task(run_publish_retry, job.id, campaign_id, body.platform)
+
+    return {"job_id": str(job.id)}
 
 
 @router.delete("/clients/{client_id}/connections/{platform}", status_code=204)

@@ -369,6 +369,15 @@ describe("ApprovalPanel — scheduled state", () => {
     expect(screen.queryByRole("button", { name: /publish now/i })).not.toBeInTheDocument();
   });
 
+  it("failed campaign — returns null (no Approve/Reject buttons shown)", () => {
+    render(
+      <ApprovalPanel campaign={makeCampaign({ status: "failed" })} />
+    );
+
+    expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /reject/i })).not.toBeInTheDocument();
+  });
+
   it("calls campaignsApi.cancelSchedule and refreshes on Cancel schedule click", async () => {
     mockCancelSchedule.mockResolvedValueOnce({ campaign_id: "campaign-123", status: "approved" });
 

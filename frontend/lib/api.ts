@@ -126,6 +126,11 @@ export const campaignsApi = {
     apiFetch<{ campaign_id: string; status: string }>(`/campaigns/${id}/publish/schedule`, {
       method: "DELETE",
     }),
+  retryPublish: (id: string, platform: string) =>
+    apiFetch<{ job_id: string }>(`/campaigns/${id}/publish/retry`, {
+      method: "POST",
+      body: JSON.stringify({ platform }),
+    }),
 };
 
 export const dashboardApi = {

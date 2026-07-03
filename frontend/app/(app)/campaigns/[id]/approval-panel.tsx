@@ -361,6 +361,11 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     );
   }
 
+  // Failed state — RetryPanel handles the UI; sticky footer is empty
+  if (effectiveStatus === "failed") {
+    return null;
+  }
+
   // Pending approval state
   return (
     <>
