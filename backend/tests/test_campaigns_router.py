@@ -1,12 +1,12 @@
 """Unit tests for routers/campaigns.py."""
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 import pytest
 from fastapi import HTTPException
 
-from app.schemas.campaign import CampaignCreate
+from app.schemas.campaign import CampaignCreate, CampaignPatch
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -341,6 +341,94 @@ async def test_regenerate_image_raises_404_for_wrong_user():
             )
 
     assert exc_info.value.status_code == 404
+
+
+# ── PATCH /campaigns/{id}: happy path ────────────────────────────────────────
+
+async def test_patch_campaign_returns_200_for_owner():
+    from app.routers.campaigns import patch_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "pending_approval"
+
+    db = AsyncMock()
+    body = CampaignPatch(blog_html="<p>Updated</p>")
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.nh3.clean", return_value="<p>Updated</p>"),
+    ):
+        result = await patch_campaign(
+            campaign_id=campaign.id,
+            body=body,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.id == campaign.id
+    db.commit.assert_awaited_once()
+
+
+# ── PATCH /campaigns/{id}: wrong status → 400 ────────────────────────────────
+
+async def test_patch_campaign_raises_400_when_not_pending_approval():
+    from app.routers.campaigns import patch_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "published"
+
+    db = AsyncMock()
+    body = CampaignPatch(blog_html="<p>Updated</p>")
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await patch_campaign(
+                campaign_id=campaign.id,
+                body=body,
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["error"]["code"] == "INVALID_STATUS_FOR_EDIT"
+
+
+# ── PATCH /campaigns/{id}: wrong user → 404 ──────────────────────────────────
+
+async def test_patch_campaign_raises_404_for_non_owner():
+    from app.routers.campaigns import patch_campaign
+
+    owner_id = uuid.uuid4()
+    requester_id = uuid.uuid4()
+    client = _make_client(user_id=owner_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "pending_approval"
+
+    db = AsyncMock()
+    body = CampaignPatch(blog_html="<p>Updated</p>")
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await patch_campaign(
+                campaign_id=campaign.id,
+                body=body,
+                current_user={"user_id": str(requester_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail["error"]["code"] == "CAMPAIGN_NOT_FOUND"
 
 
 # ── POST /campaigns: 401 on invalid session ───────────────────────────────────

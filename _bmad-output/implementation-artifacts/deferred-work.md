@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 4-3-social-post-editing-with-character-counters (2026-07-02)
+
+- **W1 (High)**: Backend schema allows x_post/linkedin_post up to 5000 chars — platform limits (280/1300) not enforced at DB schema layer; only visual danger indicators in UI. [backend/app/schemas/campaign.py]
+- **W2 (Medium)**: No timeout/abort on campaignsApi.patch() — if the network request hangs, isSaving remains true indefinitely with the button stuck disabled. Pre-existing pattern across the app. [frontend/components/campaigns/SocialPostEditors.tsx:handleSave]
+- **W3 (Medium)**: No test asserting Save button is disabled (not just absent) while isSaving=true — low-value coverage gap. [frontend/__tests__/components/SocialPostEditors.test.tsx]
+- **W4 (Low)**: AC5 tab order gap when Save button absent (isDirty=false) — Tab from LinkedIn textarea reaches unrelated elements before Approve/Reject footer. No tabIndex or focus management applied. [frontend/components/campaigns/SocialPostEditors.tsx]
+
 ## Deferred from: code review of 4-2-blog-post-wysiwyg-editing (2026-07-02)
 
 - **D1 (Medium)**: Race condition — PATCH status check is non-atomic; a concurrent approve/reject could slip past the `pending_approval` guard before either commits. Needs `SELECT ... FOR UPDATE` or optimistic lock. [backend/app/routers/campaigns.py:patch_campaign]

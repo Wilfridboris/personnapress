@@ -9,6 +9,7 @@ import { ApprovalPanel } from "./approval-panel";
 import { GenerationGate } from "./GenerationGate";
 import { ImagePanel } from "@/components/campaigns/ImagePanel";
 import { VoiceFidelityBadge } from "@/components/campaigns/VoiceFidelityBadge";
+import { SocialPostEditors } from "@/components/campaigns/SocialPostEditors";
 import type { Campaign, Job } from "@/lib/types";
 
 const BACKEND = process.env.BACKEND_URL || "http://localhost:8000";
@@ -217,39 +218,15 @@ export default async function CampaignDetailPage({ params, searchParams }: Props
               jobErrorDetails={jobErrorDetails}
             />
 
-            {/* X Post */}
+            {/* Social Posts — editable for pending_approval, read-only otherwise */}
             <div className="border border-border">
-              <div className="px-6 py-4 border-b border-border">
-                <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
-                  X (Twitter)
-                </h2>
-              </div>
               <div className="p-6">
-                {campaign.x_post ? (
-                  <p className="font-mono text-sm text-ink leading-relaxed whitespace-pre-wrap">
-                    {campaign.x_post}
-                  </p>
-                ) : (
-                  <GeneratingPlaceholder lines={4} />
-                )}
-              </div>
-            </div>
-
-            {/* LinkedIn Post */}
-            <div className="border border-border">
-              <div className="px-6 py-4 border-b border-border">
-                <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
-                  LinkedIn
-                </h2>
-              </div>
-              <div className="p-6">
-                {campaign.linkedin_post ? (
-                  <p className="font-mono text-sm text-ink leading-relaxed whitespace-pre-wrap">
-                    {campaign.linkedin_post}
-                  </p>
-                ) : (
-                  <GeneratingPlaceholder lines={6} />
-                )}
+                <SocialPostEditors
+                  campaignId={campaign.id}
+                  initialXPost={campaign.x_post ?? null}
+                  initialLinkedInPost={campaign.linkedin_post ?? null}
+                  readOnly={!isPending}
+                />
               </div>
             </div>
           </aside>
