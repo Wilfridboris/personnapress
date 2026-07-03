@@ -65,12 +65,13 @@ export function CampaignGenerationOverlay({
     return () => clearInterval(timer);
   }, [job?.status]);
 
-  // Task 4.4: On job complete, refresh page (RSC re-fetches campaign server-side)
+  // On job complete, navigate to clean URL — this unmounts all client components so they
+  // reinitialize state from fresh server data (router.refresh() alone doesn't remount them)
   useEffect(() => {
     if (job?.status === "complete" || job?.status === "completed") {
       queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
       const timer = setTimeout(() => {
-        router.refresh();
+        router.replace(`/campaigns/${campaignId}`);
       }, 1500); // brief pause to show "Done."
       return () => clearTimeout(timer);
     }

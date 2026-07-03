@@ -1,10 +1,11 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import limiter
 from app.db.connection import get_session
 from app.db.repositories.models import Campaign, Client, Job
 from app.schemas.job import JobResponse
@@ -15,7 +16,9 @@ _INVALID_SESSION = {"error": {"code": "INVALID_SESSION", "message": "Invalid ses
 
 
 @router.get("/{job_id}", response_model=JobResponse)
+@limiter.limit("60/minute")
 async def get_job(
+    request: Request,
     job_id: uuid.UUID,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),

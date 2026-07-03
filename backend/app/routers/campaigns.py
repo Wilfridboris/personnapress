@@ -155,6 +155,7 @@ async def patch_campaign(
             tags=_ALLOWED_HTML_TAGS,
             attributes=_ALLOWED_HTML_ATTRS,
             url_schemes=_ALLOWED_URL_SCHEMES,
+            link_rel=None,
         )
 
     for key, value in patch_data.items():

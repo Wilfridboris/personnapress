@@ -56,8 +56,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-const CAMPAIGN_TERMINAL_STATUSES = new Set(["complete", "completed", "failed", "published", "rejected", "pending_approval", "approved"]);
-
 export default async function CampaignDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
   const rawJobId = (await searchParams).job_id;
@@ -72,8 +70,8 @@ export default async function CampaignDetailPage({ params, searchParams }: Props
   const isFailed = campaign.status === "failed";
   const isPublished = campaign.status === "published";
 
-  const effectiveJobId =
-    jobId && !CAMPAIGN_TERMINAL_STATUSES.has(campaign.status) ? jobId : null;
+  // Show overlay only while content hasn't been generated yet (blog_html is the canonical signal)
+  const effectiveJobId = jobId && !campaign.blog_html ? jobId : null;
 
   return (
     <>

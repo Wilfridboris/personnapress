@@ -26,8 +26,8 @@ export function useJobStatus(jobId: string | null | undefined) {
     enabled: !!jobId && jobId.length > 0,
     refetchInterval: (query) => {
       const data = query.state.data;
-      if (!data) return 2000;
-      return TERMINAL_STATUSES.has(data.status) ? false : 2000;
+      if (!data) return 3000;
+      return TERMINAL_STATUSES.has(data.status) ? false : 3000;
     },
     staleTime: 0,
   });

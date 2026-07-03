@@ -37,6 +37,15 @@ try:
 except ImportError:
     pass
 
+try:
+    from google.genai.errors import ClientError as _GenaiClientError
+
+    def _is_transient_genai_error(exc: Exception) -> bool:
+        return isinstance(exc, _GenaiClientError) and getattr(exc, "status_code", None) in (429, 503)
+except ImportError:
+    def _is_transient_genai_error(exc: Exception) -> bool:  # type: ignore[misc]
+        return False
+
 
 async def _gemini_with_retry(fn, *args, max_retries: int = 3, **kwargs):
     """Call an async Gemini function with exponential backoff on transient errors.
@@ -50,7 +59,10 @@ async def _gemini_with_retry(fn, *args, max_retries: int = 3, **kwargs):
         try:
             return await fn(*args, **kwargs)
         except Exception as exc:
-            if _RETRY_TRANSIENT_EXCEPTIONS and isinstance(exc, _RETRY_TRANSIENT_EXCEPTIONS):
+            if (
+                (_RETRY_TRANSIENT_EXCEPTIONS and isinstance(exc, _RETRY_TRANSIENT_EXCEPTIONS))
+                or _is_transient_genai_error(exc)
+            ):
                 last_exc = exc
                 logger.warning(
                     "_gemini_with_retry: transient error on attempt %d/%d: %s",
