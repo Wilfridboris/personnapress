@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,6 +37,21 @@ async def update_campaign_status(
     if not campaign:
         return None
     campaign.status = status
+    campaign.updated_at = utcnow()
+    await session.flush()
+    await session.refresh(campaign)
+    return campaign
+
+
+async def update_campaign_scheduled_at(
+    session: AsyncSession,
+    campaign_id: uuid.UUID,
+    scheduled_at: Optional[datetime],
+) -> Optional[Campaign]:
+    campaign = await get_campaign(session, campaign_id)
+    if not campaign:
+        return None
+    campaign.scheduled_at = scheduled_at
     campaign.updated_at = utcnow()
     await session.flush()
     await session.refresh(campaign)

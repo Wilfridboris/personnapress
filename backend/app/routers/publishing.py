@@ -1,9 +1,12 @@
 import json
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
+from apscheduler.jobstores.base import JobLookupError
+from apscheduler.triggers.date import DateTrigger
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -11,9 +14,9 @@ from app.core.dependencies import get_current_user
 from app.core.exceptions import PlatformError
 from app.core.security import decrypt_credential, encrypt_credential
 from app.db.connection import get_session
-from app.db.repositories.campaigns import get_campaign
+from app.db.repositories.campaigns import get_campaign, update_campaign_scheduled_at
 from app.db.repositories.clients import get_client
-from app.db.repositories.jobs import create_job
+from app.db.repositories.jobs import create_job, get_scheduled_job
 from app.db.repositories.platform_connections import (
     delete_connection,
     get_connections_for_client,
@@ -23,6 +26,7 @@ from app.integrations import linkedin as linkedin_integration
 from app.integrations import twitter as twitter_integration
 from app.integrations import webflow as webflow_integration
 from app.integrations import wordpress as wordpress_integration
+from app.scheduler.scheduler import scheduler
 from app.workers.publish import run_publish
 
 router = APIRouter(prefix="", tags=["publishing"])
@@ -321,6 +325,129 @@ async def publish_campaign_now(
     background_tasks.add_task(run_publish, job.id, campaign_id)
 
     return {"job_id": str(job.id)}
+
+
+class ScheduleRequest(BaseModel):
+    scheduled_at: datetime
+
+    @field_validator("scheduled_at")
+    @classmethod
+    def must_be_timezone_aware(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            raise ValueError("scheduled_at must include timezone information")
+        return v
+
+
+@router.post("/campaigns/{campaign_id}/publish/schedule", status_code=200)
+async def schedule_campaign_publish(
+    campaign_id: uuid.UUID,
+    body: ScheduleRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+
+    campaign = await get_campaign(db, campaign_id)
+    if not campaign:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
+        )
+
+    client = await get_client(db, campaign.client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
+        )
+
+    if campaign.status != "approved":
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "INVALID_STATUS_TRANSITION", "message": "Only approved campaigns can be scheduled.", "detail": {}}},
+        )
+
+    if campaign.scheduled_at is not None:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "ALREADY_SCHEDULED", "message": "Campaign is already scheduled.", "detail": {}}},
+        )
+
+    scheduled_at_utc = body.scheduled_at.astimezone(timezone.utc).replace(tzinfo=None)
+    if scheduled_at_utc <= datetime.now(timezone.utc).replace(tzinfo=None):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "SCHEDULED_TIME_IN_PAST", "message": "Scheduled time must be in the future.", "detail": {}}},
+        )
+
+    job = await create_job(
+        db,
+        job_type="scheduled_publish",
+        status="scheduled",
+        campaign_id=campaign_id,
+    )
+    job.scheduled_at = scheduled_at_utc
+    await update_campaign_scheduled_at(db, campaign_id, scheduled_at_utc)
+
+    # Register scheduler job before committing so DB rolls back if registration fails.
+    try:
+        scheduler.add_job(
+            run_publish,
+            trigger=DateTrigger(run_date=scheduled_at_utc),
+            args=[str(job.id), str(campaign_id)],
+            id=str(job.id),
+            replace_existing=True,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": {"code": "SCHEDULER_ERROR", "message": "Failed to register scheduled job.", "detail": {}}},
+        ) from exc
+
+    await db.commit()
+
+    return {"job_id": str(job.id), "scheduled_at": scheduled_at_utc.isoformat() + "Z"}
+
+
+@router.delete("/campaigns/{campaign_id}/publish/schedule", status_code=200)
+async def cancel_scheduled_publish(
+    campaign_id: uuid.UUID,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+
+    campaign = await get_campaign(db, campaign_id)
+    if not campaign:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
+        )
+
+    client = await get_client(db, campaign.client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
+        )
+
+    job = await get_scheduled_job(db, campaign_id)
+    if not job:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "No scheduled publish job found.", "detail": {}}},
+        )
+
+    try:
+        scheduler.remove_job(str(job.id))
+    except JobLookupError:
+        pass
+
+    await db.delete(job)
+    await update_campaign_scheduled_at(db, campaign_id, None)
+    await db.commit()
+
+    return {"campaign_id": str(campaign_id), "status": "approved"}
 
 
 @router.delete("/clients/{client_id}/connections/{platform}", status_code=204)

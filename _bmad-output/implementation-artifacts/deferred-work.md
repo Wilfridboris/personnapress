@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of 5-4-scheduled-publishing (2026-07-03)
+
+- **D1 (Medium)**: Concurrent schedule requests TOCTOU — two simultaneous POSTs for the same campaign can both pass the `campaign.scheduled_at is None` guard, creating duplicate scheduled jobs. Requires `SELECT FOR UPDATE` row-level locking. Out of scope for this story.
+- **D2 (Low)**: Magic strings for job_type/status — `"scheduled_publish"` and `"scheduled"` used as raw strings in repository queries and create calls. Pre-existing pattern throughout codebase; should be consolidated into enums in a future refactor.
+
 ## Deferred from: code review of 5-3-immediate-multi-platform-publishing (2026-07-03)
 
 - **D1 (Medium)**: Published footer missing platform names — AC7 requires "Published to [Platform] — [Date], [Time]." but dev notes explicitly allow v2 deferral when URLs aren't stored. Frontend shows "Published — [date]" only. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]

@@ -10,7 +10,7 @@ import logging
 from uuid import UUID
 
 from app.db.connection import get_session_context
-from app.db.repositories.campaigns import update_campaign_status
+from app.db.repositories.campaigns import update_campaign_scheduled_at, update_campaign_status
 from app.db.repositories.jobs import update_job
 from app.db.repositories.models import utcnow
 from app.services.publishing import dispatch_publish
@@ -28,9 +28,11 @@ async def run_publish(job_id: UUID, campaign_id: UUID) -> None:
             all_success = all(v == "success" for v in results.values()) and bool(results)
             if all_success:
                 await update_campaign_status(db, campaign_id, "published")
+                await update_campaign_scheduled_at(db, campaign_id, None)
                 await update_job(db, job_id, status="complete", completed_at=utcnow())
             else:
                 await update_campaign_status(db, campaign_id, "failed")
+                await update_campaign_scheduled_at(db, campaign_id, None)
                 await update_job(
                     db,
                     job_id,
@@ -42,6 +44,7 @@ async def run_publish(job_id: UUID, campaign_id: UUID) -> None:
         except Exception as exc:
             logger.error("Fatal publish error job=%s: %s", job_id, exc, exc_info=True)
             await update_campaign_status(db, campaign_id, "failed")
+            await update_campaign_scheduled_at(db, campaign_id, None)
             await update_job(
                 db,
                 job_id,

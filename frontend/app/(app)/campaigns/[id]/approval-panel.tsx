@@ -32,6 +32,10 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [clientHasPlatforms, setClientHasPlatforms] = useState<boolean | null>(null);
+  const [showSchedulePicker, setShowSchedulePicker] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState<string>("");
+  const [isScheduling, setIsScheduling] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const rejectBtnRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -120,6 +124,34 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     }
   }, [campaign.id, addToast]);
 
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const isPastTime = Boolean(scheduledAt && new Date(scheduledAt) <= new Date());
+
+  const handleConfirmSchedule = useCallback(async () => {
+    setIsScheduling(true);
+    try {
+      const localDate = new Date(scheduledAt);
+      await campaignsApi.schedule(campaign.id, localDate.toISOString());
+      router.refresh();
+    } catch (err) {
+      addToast(err instanceof APIError ? err.message : "Scheduling failed.", "error");
+    } finally {
+      setIsScheduling(false);
+    }
+  }, [campaign.id, scheduledAt, router, addToast]);
+
+  const handleCancelSchedule = useCallback(async () => {
+    setIsCancelling(true);
+    try {
+      await campaignsApi.cancelSchedule(campaign.id);
+      router.refresh();
+    } catch (err) {
+      addToast(err instanceof APIError ? err.message : "Could not cancel schedule.", "error");
+    } finally {
+      setIsCancelling(false);
+    }
+  }, [campaign.id, router, addToast]);
+
   // Poll publish job every 2s while in-flight
   useEffect(() => {
     if (!activeJobId) return;
@@ -152,6 +184,42 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
 
   // Post-approved state
   if (effectiveStatus === "approved") {
+    const isScheduled = campaign.scheduled_at != null;
+
+    if (isScheduled) {
+      return (
+        <div className="fixed bottom-0 left-0 md:left-14 lg:left-[240px] right-0 z-10 bg-paper border-t border-border px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-graphite">
+            <span className="font-medium text-ink">Scheduled</span>
+            {" — "}
+            <span>
+              {new Intl.DateTimeFormat("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+                timeZoneName: "short",
+              }).format(new Date(
+                campaign.scheduled_at!.endsWith("Z") || campaign.scheduled_at!.includes("+")
+                  ? campaign.scheduled_at!
+                  : campaign.scheduled_at! + "Z"
+              ))}
+            </span>
+          </p>
+          <button
+            type="button"
+            onClick={handleCancelSchedule}
+            disabled={isCancelling}
+            className="text-sm text-graphite underline hover:text-ink disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isCancelling ? "Cancelling…" : "Cancel schedule"}
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="fixed bottom-0 left-0 md:left-14 lg:left-[240px] right-0 z-10 bg-paper border-t border-border px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
         <p className="font-mono text-xs text-graphite uppercase tracking-wider">
@@ -173,31 +241,78 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
             </Link>
           </div>
         ) : (
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              disabled
-              className="inline-flex items-center px-5 py-2.5 border border-ink text-ink text-sm font-medium opacity-50 cursor-not-allowed"
-              title="Scheduling wired in Story 5.4"
-            >
-              Schedule
-            </button>
-            <button
-              type="button"
-              onClick={handlePublishNow}
-              disabled={isPublishing}
-              className={cn(
-                "inline-flex items-center gap-2 px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent",
-                "shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all",
-                "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2",
-                "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none",
-              )}
-            >
-              {isPublishing ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              ) : null}
-              {isPublishing ? "Publishing..." : "Publish now"}
-            </button>
+          <div className="w-full">
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowSchedulePicker((v) => !v)}
+                className="inline-flex items-center px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none"
+              >
+                Schedule
+              </button>
+              <button
+                type="button"
+                onClick={handlePublishNow}
+                disabled={isPublishing}
+                className={cn(
+                  "inline-flex items-center gap-2 px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent",
+                  "shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all",
+                  "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2",
+                  "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none",
+                )}
+              >
+                {isPublishing ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                ) : null}
+                {isPublishing ? "Publishing..." : "Publish now"}
+              </button>
+            </div>
+            {showSchedulePicker && (
+              <div className="mt-4 pt-4 border-t border-border space-y-3">
+                <div>
+                  <label
+                    htmlFor="schedule-datetime"
+                    className="block text-xs font-medium uppercase tracking-[0.06em] text-graphite mb-1"
+                  >
+                    Schedule date &amp; time
+                  </label>
+                  <input
+                    id="schedule-datetime"
+                    type="datetime-local"
+                    value={scheduledAt}
+                    onChange={(e) => setScheduledAt(e.target.value)}
+                    className="border-b border-ink focus:border-b-2 outline-none bg-transparent py-2 text-sm text-ink w-full"
+                  />
+                </div>
+                <p className="text-xs text-graphite">Schedules in {userTimezone}</p>
+                {isPastTime && (
+                  <p className="text-xs text-danger" role="alert">
+                    Scheduled time must be in the future.
+                  </p>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handleConfirmSchedule}
+                    disabled={!scheduledAt || isPastTime || isScheduling}
+                    className="px-5 py-2.5 bg-ink text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white hover:text-ink hover:border hover:border-ink transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none"
+                  >
+                    {isScheduling ? (
+                      <span className="inline-block size-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                    ) : (
+                      "Confirm schedule"
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowSchedulePicker(false)}
+                    className="px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors rounded-none"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

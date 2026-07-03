@@ -13,6 +13,7 @@ from starlette.responses import JSONResponse
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.routers import auth, campaigns, clients, files, health, jobs, publishing, subscriptions, webhooks
+from app.scheduler.scheduler import scheduler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,7 +25,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("PersonnaPress API starting up.")
+    scheduler.start()
     yield
+    scheduler.shutdown()
     logger.info("PersonnaPress API shutting down.")
 
 

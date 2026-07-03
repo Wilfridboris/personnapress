@@ -73,6 +73,17 @@ async def update_job(
     return job
 
 
+async def get_scheduled_job(session: AsyncSession, campaign_id: uuid.UUID) -> Optional[Job]:
+    result = await session.execute(
+        select(Job).where(
+            Job.campaign_id == campaign_id,
+            Job.job_type == "scheduled_publish",
+            Job.status == "scheduled",
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_active_ingestion_job_for_client(
     session: AsyncSession,
     client_id: uuid.UUID,
