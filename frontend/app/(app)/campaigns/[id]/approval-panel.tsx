@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect, RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
-import { campaignsApi, fetchAPI, APIError } from "@/lib/api";
+import { campaignsApi, jobsApi, fetchAPI, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { Modal } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,8 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [clientHasPlatforms, setClientHasPlatforms] = useState<boolean | null>(null);
@@ -107,6 +109,47 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     }
   }, [campaign.id, router, addToast]);
 
+  const handlePublishNow = useCallback(async () => {
+    setIsPublishing(true);
+    try {
+      const { job_id } = await campaignsApi.publishNow(campaign.id);
+      setActiveJobId(job_id);
+    } catch (err) {
+      addToast(err instanceof APIError ? err.message : "Publish failed.", "error");
+      setIsPublishing(false);
+    }
+  }, [campaign.id, addToast]);
+
+  // Poll publish job every 2s while in-flight
+  useEffect(() => {
+    if (!activeJobId) return;
+    const interval = setInterval(async () => {
+      try {
+        const job = await jobsApi.get(activeJobId);
+        if (job.status === "complete") {
+          clearInterval(interval);
+          setIsPublishing(false);
+          setActiveJobId(null);
+          router.refresh();
+        } else if (job.status === "failed") {
+          clearInterval(interval);
+          setIsPublishing(false);
+          setActiveJobId(null);
+          addToast(
+            job.error_details
+              ? "Some platforms failed to publish. Check the retry panel."
+              : "Publish failed.",
+            "error",
+          );
+          router.refresh();
+        }
+      } catch {
+        // polling errors are transient — keep polling
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [activeJobId, router, addToast]);
+
   // Post-approved state
   if (effectiveStatus === "approved") {
     return (
@@ -135,20 +178,45 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
               type="button"
               disabled
               className="inline-flex items-center px-5 py-2.5 border border-ink text-ink text-sm font-medium opacity-50 cursor-not-allowed"
-              title="Scheduling wired in Epic 5"
+              title="Scheduling wired in Story 5.4"
             >
               Schedule
             </button>
             <button
               type="button"
-              disabled
-              className="inline-flex items-center px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent opacity-50 cursor-not-allowed"
-              title="Publishing wired in Epic 5"
+              onClick={handlePublishNow}
+              disabled={isPublishing}
+              className={cn(
+                "inline-flex items-center gap-2 px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent",
+                "shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all",
+                "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2",
+                "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none",
+              )}
             >
-              Publish now
+              {isPublishing ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : null}
+              {isPublishing ? "Publishing..." : "Publish now"}
             </button>
           </div>
         )}
+      </div>
+    );
+  }
+
+  // Published state
+  if (effectiveStatus === "published") {
+    return (
+      <div className="fixed bottom-0 left-0 md:left-14 lg:left-[240px] right-0 z-10 bg-paper border-t border-border px-6 py-4">
+        <p className="text-sm text-graphite">
+          <span className="font-medium text-ink">Published</span>
+          {" — "}
+          <span>
+            {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(
+              new Date(campaign.updated_at),
+            )}
+          </span>
+        </p>
       </div>
     );
   }

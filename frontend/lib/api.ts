@@ -108,11 +108,8 @@ export const campaignsApi = {
     }),
   regenerate: (id: string) =>
     apiFetch<{ campaign_id: string; job_id: string }>(`/campaigns/${id}/regenerate`, { method: "POST" }),
-  publish: (id: string) =>
-    apiFetch<{ ok: boolean; published_urls: Record<string, string> }>(
-      `/campaigns/${id}/publish`,
-      { method: "POST" }
-    ),
+  publishNow: (id: string) =>
+    apiFetch<{ job_id: string }>(`/campaigns/${id}/publish`, { method: "POST" }),
   regenerateImage: (id: string) =>
     apiFetch<{ image_url: string; image_regen_count: number }>(
       `/campaigns/${id}/image/regenerate`,

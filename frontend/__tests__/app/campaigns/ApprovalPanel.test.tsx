@@ -20,6 +20,8 @@ const mockApprove = vi.fn();
 const mockReject = vi.fn();
 const mockRegenerate = vi.fn();
 const mockPatch = vi.fn();
+const mockPublishNow = vi.fn();
+const mockJobGet = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   campaignsApi: {
@@ -27,8 +29,12 @@ vi.mock("@/lib/api", () => ({
     reject: (...args: unknown[]) => mockReject(...args),
     regenerate: (...args: unknown[]) => mockRegenerate(...args),
     patch: (...args: unknown[]) => mockPatch(...args),
+    publishNow: (...args: unknown[]) => mockPublishNow(...args),
   },
-  fetchAPI: vi.fn().mockResolvedValue({ items: [] }),
+  jobsApi: {
+    get: (...args: unknown[]) => mockJobGet(...args),
+  },
+  fetchAPI: vi.fn().mockResolvedValue({ items: [{ platform: "wordpress", connected: true }] }),
   APIError: class APIError extends Error {
     code: string;
     constructor(message: string, code: string) {
@@ -172,5 +178,86 @@ describe("ApprovalPanel — approved state", () => {
     render(<ApprovalPanel campaign={makeCampaign({ status: "approved" })} />);
     // Initially shows skeleton while clientHasPlatforms is null
     expect(screen.getByText(/campaign approved/i)).toBeInTheDocument();
+  });
+});
+
+describe("ApprovalPanel — publish now", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  async function renderApprovedWithPlatforms() {
+    const utils = render(<ApprovalPanel campaign={makeCampaign({ status: "approved" })} />);
+    // Wait for platforms to load (fetchAPI returns items with wordpress)
+    await waitFor(() => expect(screen.queryByRole("button", { name: /publish now/i })).toBeInTheDocument());
+    return utils;
+  }
+
+  it("Publish now button calls campaignsApi.publishNow", async () => {
+    mockPublishNow.mockResolvedValueOnce({ job_id: "job-111" });
+    mockJobGet.mockResolvedValue({ status: "pending", error_details: null });
+
+    await renderApprovedWithPlatforms();
+    fireEvent.click(screen.getByRole("button", { name: /publish now/i }));
+
+    await waitFor(() => expect(mockPublishNow).toHaveBeenCalledWith("campaign-123"));
+  });
+
+  it("shows Publishing... state while job is in-flight", async () => {
+    mockPublishNow.mockResolvedValueOnce({ job_id: "job-222" });
+    mockJobGet.mockResolvedValue({ status: "in_progress", error_details: null });
+
+    await renderApprovedWithPlatforms();
+    fireEvent.click(screen.getByRole("button", { name: /publish now/i }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /publishing/i })).toBeDisabled());
+  });
+
+  it("calls router.refresh when polling detects job complete", async () => {
+    mockPublishNow.mockResolvedValueOnce({ job_id: "job-333" });
+    mockJobGet.mockResolvedValue({ status: "complete", error_details: null });
+
+    await renderApprovedWithPlatforms();
+    fireEvent.click(screen.getByRole("button", { name: /publish now/i }));
+
+    // Polling fires every 2s; wait for refresh to be called
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalled(), { timeout: 6000 });
+  });
+
+  it("shows error toast when polling detects job failure", async () => {
+    mockPublishNow.mockResolvedValueOnce({ job_id: "job-444" });
+    mockJobGet.mockResolvedValue({ status: "failed", error_details: '{"wordpress":"auth failed"}' });
+
+    await renderApprovedWithPlatforms();
+    fireEvent.click(screen.getByRole("button", { name: /publish now/i }));
+
+    await waitFor(() => expect(mockAddToast).toHaveBeenCalledWith(
+      expect.stringContaining("platforms failed"),
+      "error",
+    ), { timeout: 6000 });
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalled(), { timeout: 6000 });
+  });
+
+  it("shows error toast when publishNow API call fails", async () => {
+    const { APIError } = await import("@/lib/api");
+    mockPublishNow.mockRejectedValueOnce(new APIError("No platform connections", "NO_PLATFORM_CONNECTIONS"));
+
+    await renderApprovedWithPlatforms();
+    fireEvent.click(screen.getByRole("button", { name: /publish now/i }));
+
+    await waitFor(() => expect(mockAddToast).toHaveBeenCalledWith("No platform connections", "error"));
+  });
+});
+
+describe("ApprovalPanel — published state", () => {
+  it("shows Published footer with date", () => {
+    render(<ApprovalPanel campaign={makeCampaign({ status: "published", updated_at: "2026-07-03T14:30:00Z" })} />);
+    expect(screen.getByText("Published")).toBeInTheDocument();
+  });
+
+  it("does not show Approve/Reject buttons in published state", () => {
+    render(<ApprovalPanel campaign={makeCampaign({ status: "published" })} />);
+    expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /reject/i })).not.toBeInTheDocument();
   });
 });

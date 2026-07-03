@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-14
-last_updated: 2026-07-03  # epic-4 stories 4.1–4.4 created; 4.1, 4.2, 4.3, and 4.4 code review complete, marked done; epic-5 all 5 stories created and marked ready-for-dev; 5-1 and 5-2 code review complete, marked done
+last_updated: 2026-07-03  # epic-4 stories 4.1–4.4 created; 4.1, 4.2, 4.3, and 4.4 code review complete, marked done; epic-5 all 5 stories created and marked ready-for-dev; 5-1, 5-2, and 5-3 code review complete, marked done
 project: PersonnaPress
 project_key: NOKEY
 tracking_system: file-system
@@ -83,7 +83,7 @@ development_status:
   epic-5: in-progress
   5-1-platform-connection-setup-wordpress-webflow: done
   5-2-platform-connection-setup-x-twitter-linkedin-oauth: done
-  5-3-immediate-multi-platform-publishing: ready-for-dev
+  5-3-immediate-multi-platform-publishing: done
   5-4-scheduled-publishing: ready-for-dev
   5-5-publishing-retry-failure-handling: ready-for-dev
   epic-5-retrospective: optional

@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.db.repositories.models import Campaign
+from app.db.repositories.models import Campaign, utcnow
 
 
 async def create_campaign(
@@ -25,6 +25,21 @@ async def get_campaign(
 ) -> Optional[Campaign]:
     result = await session.execute(select(Campaign).where(Campaign.id == campaign_id))
     return result.scalar_one_or_none()
+
+
+async def update_campaign_status(
+    session: AsyncSession,
+    campaign_id: uuid.UUID,
+    status: str,
+) -> Optional[Campaign]:
+    campaign = await get_campaign(session, campaign_id)
+    if not campaign:
+        return None
+    campaign.status = status
+    campaign.updated_at = utcnow()
+    await session.flush()
+    await session.refresh(campaign)
+    return campaign
 
 
 async def update_campaign_content(

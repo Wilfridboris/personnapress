@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 5-3-immediate-multi-platform-publishing (2026-07-03)
+
+- **D1 (Medium)**: Published footer missing platform names — AC7 requires "Published to [Platform] — [Date], [Time]." but dev notes explicitly allow v2 deferral when URLs aren't stored. Frontend shows "Published — [date]" only. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]
+- **D2 (Story 5.5)**: Retry Panel not rendered on publish failure — `approval-panel.tsx` shows error toast but no RetryPanel component. Explicitly scoped to Story 5.5. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]
+- **D3 (Low)**: `str(exc)` in `results[platform]` could theoretically expose exception messages containing credentials — integrations never hold raw creds so real-world risk is negligible. [backend/app/services/publishing.py:78]
+- **D4 (Low)**: `_extract_title` duplicated in `webflow.py` and `wordpress.py` — same implementation, should be extracted to a shared utility module in a future cleanup story.
+
 ## Deferred from: code review of 5-2-platform-connection-setup-x-twitter-linkedin-oauth (2026-07-03)
 
 - `get_user_handle` returns "unknown" silently on failure — acceptable degradation, connection still stored. [backend/app/integrations/twitter.py]

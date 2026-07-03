@@ -14,6 +14,16 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def get_session_context():
+    """Async context manager for DB sessions used in BackgroundTasks."""
+    async with AsyncSessionLocal() as session:
+        yield session
+
+
 async def create_db_tables() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)

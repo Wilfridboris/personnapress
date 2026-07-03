@@ -2,7 +2,7 @@ import json
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +11,9 @@ from app.core.dependencies import get_current_user
 from app.core.exceptions import PlatformError
 from app.core.security import decrypt_credential, encrypt_credential
 from app.db.connection import get_session
+from app.db.repositories.campaigns import get_campaign
 from app.db.repositories.clients import get_client
+from app.db.repositories.jobs import create_job
 from app.db.repositories.platform_connections import (
     delete_connection,
     get_connections_for_client,
@@ -21,6 +23,7 @@ from app.integrations import linkedin as linkedin_integration
 from app.integrations import twitter as twitter_integration
 from app.integrations import webflow as webflow_integration
 from app.integrations import wordpress as wordpress_integration
+from app.workers.publish import run_publish
 
 router = APIRouter(prefix="", tags=["publishing"])
 
@@ -260,6 +263,64 @@ async def linkedin_oauth_callback(
     await upsert_connection(db, client_id, "linkedin", encrypted)
 
     return {"platform": "linkedin", "connected": True, "account_identifier": name}
+
+
+@router.post("/campaigns/{campaign_id}/publish", status_code=202)
+async def publish_campaign_now(
+    campaign_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+
+    campaign = await get_campaign(db, campaign_id)
+    if not campaign:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
+        )
+
+    # Ownership check via client
+    client = await get_client(db, campaign.client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
+        )
+
+    if campaign.status != "approved":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": "INVALID_STATUS_TRANSITION",
+                    "message": "Only approved campaigns can be published.",
+                    "detail": {},
+                }
+            },
+        )
+
+    connections = await get_connections_for_client(db, campaign.client_id)
+    if not connections:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": "NO_PLATFORM_CONNECTIONS",
+                    "message": "No platform connections found. Connect a platform first.",
+                    "detail": {},
+                }
+            },
+        )
+
+    # Create job record FIRST, then commit, then dispatch — critical invariant
+    job = await create_job(db, job_type="publish", status="pending", campaign_id=campaign_id)
+    await db.commit()
+
+    background_tasks.add_task(run_publish, job.id, campaign_id)
+
+    return {"job_id": str(job.id)}
 
 
 @router.delete("/clients/{client_id}/connections/{platform}", status_code=204)

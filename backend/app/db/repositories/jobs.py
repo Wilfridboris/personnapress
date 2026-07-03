@@ -50,6 +50,29 @@ async def update_job_status(
     return job
 
 
+_MUTABLE_JOB_FIELDS = frozenset(
+    {"status", "started_at", "completed_at", "error_details", "attempt_count", "scheduled_at"}
+)
+
+
+async def update_job(
+    session: AsyncSession,
+    job_id: uuid.UUID,
+    **kwargs,
+) -> Optional[Job]:
+    """Generic job updater — accepts mutable Job fields as keyword args."""
+    job = await get_job(session, job_id)
+    if not job:
+        return None
+    for key, value in kwargs.items():
+        if key not in _MUTABLE_JOB_FIELDS:
+            raise ValueError(f"update_job: field '{key}' is not mutable")
+        setattr(job, key, value)
+    await session.flush()
+    await session.refresh(job)
+    return job
+
+
 async def get_active_ingestion_job_for_client(
     session: AsyncSession,
     client_id: uuid.UUID,
