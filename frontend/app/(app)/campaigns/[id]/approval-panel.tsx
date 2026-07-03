@@ -1,116 +1,259 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, XCircle, Send, Loader2 } from "lucide-react";
+import { useState, useRef, useCallback, useEffect, RefObject } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import { campaignsApi, fetchAPI, APIError } from "@/lib/api";
+import { useUIStore } from "@/lib/stores/useUIStore";
+import { Modal } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
+import type { Campaign, CampaignStatus } from "@/lib/types";
+import type { BlogEditorHandle } from "@/components/campaigns/BlogEditor";
+import type { SocialPostEditorsHandle } from "@/components/campaigns/SocialPostEditors";
 
-type ActionType = "approve" | "reject" | "publish";
-type Status = "idle" | "loading" | "done" | "error";
+interface ApprovalPanelProps {
+  campaign: Campaign;
+  blogEditorRef?: RefObject<BlogEditorHandle | null>;
+  socialEditorsRef?: RefObject<SocialPostEditorsHandle | null>;
+  onOptimisticStatus?: (status: CampaignStatus) => void;
+  jobIsActive?: boolean;
+}
 
-export function ApprovalPanel({ campaignId }: { campaignId: string }) {
-  const [status, setStatus] = useState<Status>("idle");
-  const [activeAction, setActiveAction] = useState<ActionType | null>(null);
+export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOptimisticStatus, jobIsActive = false }: ApprovalPanelProps) {
+  const router = useRouter();
+  const addToast = useUIStore((s) => s.addToast);
 
-  async function handleAction(action: ActionType) {
-    setActiveAction(action);
-    setStatus("loading");
+  const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [clientHasPlatforms, setClientHasPlatforms] = useState<boolean | null>(null);
 
-    const endpoint =
-      action === "publish"
-        ? `/api/v1/campaigns/${campaignId}/publish`
-        : `/api/v1/campaigns/${campaignId}/${action}`;
+  const rejectBtnRef = useRef<HTMLButtonElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${endpoint}`,
-        { method: "POST" }
-      );
-      if (!res.ok) throw new Error();
-      setStatus("done");
-      setTimeout(() => window.location.reload(), 800);
-    } catch {
-      setStatus("error");
-      setTimeout(() => {
-        setStatus("idle");
-        setActiveAction(null);
-      }, 3000);
+  const effectiveStatus = campaign.status;
+
+  useEffect(() => {
+    if (effectiveStatus === "approved" && clientHasPlatforms === null) {
+      fetchAPI<{ items: unknown[] }>(`/clients/${campaign.client_id}/connections`)
+        .then((connections) => setClientHasPlatforms((connections?.items?.length ?? 0) > 0))
+        .catch(() => setClientHasPlatforms(false));
     }
+  }, [effectiveStatus, campaign.client_id, clientHasPlatforms]);
+
+  const handleApprove = useCallback(async () => {
+    const previousStatus = campaign.status;
+    setIsApproving(true);
+    onOptimisticStatus?.("approved");
+
+    const blogHtml = blogEditorRef?.current?.getCurrentHtml();
+    const socialValues = socialEditorsRef?.current?.getCurrentValues();
+
+    let editsPatched = false;
+    try {
+      if (blogHtml || socialValues) {
+        await campaignsApi.patch(campaign.id, {
+          ...(blogHtml ? { blog_html: blogHtml } : {}),
+          ...(socialValues ?? {}),
+        });
+        editsPatched = true;
+      }
+      const result = await campaignsApi.approve(campaign.id);
+      try {
+        const connections = await fetchAPI<{ items: unknown[] }>(`/clients/${result.client_id ?? campaign.client_id}/connections`);
+        setClientHasPlatforms((connections?.items?.length ?? 0) > 0);
+      } catch {
+        setClientHasPlatforms(false);
+      }
+      router.refresh();
+    } catch (err) {
+      onOptimisticStatus?.(previousStatus);
+      if (editsPatched) router.refresh();
+      addToast(err instanceof APIError ? err.message : "Approval failed.", "error");
+    } finally {
+      setIsApproving(false);
+    }
+  }, [campaign, blogEditorRef, socialEditorsRef, router, addToast, onOptimisticStatus]);
+
+  const handleRejectConfirm = useCallback(async () => {
+    const previousStatus = campaign.status;
+    setIsRejecting(true);
+    setShowRejectDialog(false);
+    onOptimisticStatus?.("rejected");
+    try {
+      await campaignsApi.reject(campaign.id, rejectionReason || undefined);
+      setRejectionReason("");
+      router.refresh();
+    } catch (err) {
+      onOptimisticStatus?.(previousStatus);
+      addToast(err instanceof APIError ? err.message : "Rejection failed.", "error");
+    } finally {
+      setIsRejecting(false);
+    }
+  }, [campaign, rejectionReason, router, addToast, onOptimisticStatus]);
+
+  const handleRegenerate = useCallback(async () => {
+    setIsRegenerating(true);
+    try {
+      const result = await campaignsApi.regenerate(campaign.id);
+      router.push(`/campaigns/${result.campaign_id}?job_id=${result.job_id}`);
+    } catch (err) {
+      addToast(err instanceof APIError ? err.message : "Regeneration failed.", "error");
+    } finally {
+      setIsRegenerating(false);
+    }
+  }, [campaign.id, router, addToast]);
+
+  // Post-approved state
+  if (effectiveStatus === "approved") {
+    return (
+      <div className="fixed bottom-0 left-0 md:left-14 lg:left-[240px] right-0 z-10 bg-paper border-t border-border px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
+        <p className="font-mono text-xs text-graphite uppercase tracking-wider">
+          Campaign approved
+        </p>
+        {clientHasPlatforms === null ? (
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-24 bg-border animate-pulse" />
+            <div className="h-8 w-20 bg-border animate-pulse" />
+          </div>
+        ) : clientHasPlatforms === false ? (
+          <div className="flex items-center gap-4 flex-wrap">
+            <p className="text-sm text-ink">Connect a platform to publish. Your campaign is approved and ready.</p>
+            <Link
+              href={`/clients/${campaign.client_id}/connections`}
+              className="inline-flex items-center px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+            >
+              Connect a platform
+            </Link>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              disabled
+              className="inline-flex items-center px-5 py-2.5 border border-ink text-ink text-sm font-medium opacity-50 cursor-not-allowed"
+              title="Scheduling wired in Epic 5"
+            >
+              Schedule
+            </button>
+            <button
+              type="button"
+              disabled
+              className="inline-flex items-center px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent opacity-50 cursor-not-allowed"
+              title="Publishing wired in Epic 5"
+            >
+              Publish now
+            </button>
+          </div>
+        )}
+      </div>
+    );
   }
 
-  const isLoading = status === "loading";
-
-  return (
-    <div className="border border-ink/20 bg-highlight/30 p-5 mb-8 flex items-center justify-between gap-4 flex-wrap">
-      <div>
-        <p className="font-mono text-xs text-graphite uppercase tracking-wider mb-1">
-          Awaiting your review
+  // Post-rejected state
+  if (effectiveStatus === "rejected") {
+    return (
+      <div className="fixed bottom-0 left-0 md:left-14 lg:left-[240px] right-0 z-10 bg-paper border-t border-border px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
+        <p className="font-mono text-xs text-danger uppercase tracking-wider">
+          Campaign rejected{campaign.rejection_reason ? ` — ${campaign.rejection_reason}` : ""}
         </p>
-        <p className="text-sm text-ink font-medium">
-          Approve to save for publishing, or reject to discard.
-        </p>
-      </div>
-
-      <div className="flex items-center gap-3">
-        {/* Reject */}
         <button
-          onClick={() => handleAction("reject")}
-          disabled={isLoading}
+          type="button"
+          onClick={handleRegenerate}
+          disabled={isRegenerating}
           className={cn(
-            "inline-flex items-center gap-2 text-sm font-medium px-5 py-2.5 border transition-colors",
-            "border-danger/40 text-danger hover:bg-danger hover:text-paper hover:border-danger",
+            "inline-flex items-center gap-2 px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent",
+            "shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all",
+            "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2",
+            "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+          )}
+        >
+          {isRegenerating ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="size-4" aria-hidden="true" />}
+          Regenerate from same Brain Dump
+        </button>
+      </div>
+    );
+  }
+
+  // Pending approval state
+  return (
+    <>
+      <div className="fixed bottom-0 left-0 md:left-14 lg:left-[240px] right-0 z-10 bg-paper border-t border-border px-6 py-4 flex items-center justify-end gap-3">
+        <button
+          ref={rejectBtnRef}
+          type="button"
+          onClick={() => setShowRejectDialog(true)}
+          disabled={isApproving || isRejecting || jobIsActive}
+          aria-label="Reject campaign"
+          className={cn(
+            "inline-flex items-center gap-2 rounded-none px-5 py-2.5 border border-ink text-ink text-sm font-medium",
+            "hover:bg-ink hover:text-white transition-colors",
+            "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2",
             "disabled:opacity-40 disabled:cursor-not-allowed"
           )}
         >
-          {isLoading && activeAction === "reject" ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <XCircle className="size-4" aria-hidden="true" />
-          )}
+          {isRejecting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <XCircle className="size-4" aria-hidden="true" />}
           Reject
         </button>
-
-        {/* Approve */}
         <button
-          onClick={() => handleAction("approve")}
-          disabled={isLoading}
+          type="button"
+          onClick={handleApprove}
+          disabled={isApproving || isRejecting || jobIsActive}
+          aria-label="Approve campaign"
           className={cn(
-            "inline-flex items-center gap-2 text-sm font-medium px-5 py-2.5 border transition-colors",
-            "border-success/40 text-success hover:bg-success hover:text-paper hover:border-success",
-            "disabled:opacity-40 disabled:cursor-not-allowed"
+            "inline-flex items-center gap-2 rounded-none px-5 py-2.5 bg-ink text-white text-sm font-medium border border-transparent",
+            "shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all",
+            "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2",
+            "disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
           )}
         >
-          {isLoading && activeAction === "approve" ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <CheckCircle2 className="size-4" aria-hidden="true" />
-          )}
+          {isApproving ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="size-4" aria-hidden="true" />}
           Approve
-        </button>
-
-        {/* Publish */}
-        <button
-          onClick={() => handleAction("publish")}
-          disabled={isLoading}
-          className={cn(
-            "inline-flex items-center gap-2 text-sm font-medium px-5 py-2.5 bg-ink text-paper transition-colors",
-            "hover:bg-graphite",
-            "disabled:opacity-40 disabled:cursor-not-allowed"
-          )}
-        >
-          {isLoading && activeAction === "publish" ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Send className="size-4" aria-hidden="true" />
-          )}
-          Approve and Publish
         </button>
       </div>
 
-      {status === "error" && (
-        <p className="w-full text-xs font-mono text-danger mt-1">
-          Action failed. Please try again.
-        </p>
-      )}
-    </div>
+      <Modal
+        isOpen={showRejectDialog}
+        onClose={() => {
+          setShowRejectDialog(false);
+          setRejectionReason("");
+        }}
+        title="Reject this campaign?"
+        titleId="reject-dialog-heading"
+        triggerRef={rejectBtnRef}
+        initialFocusRef={textareaRef}
+      >
+        <textarea
+          ref={textareaRef}
+          placeholder="Reason (optional) — helps us improve future generations"
+          rows={3}
+          className="w-full border-b border-ink focus:border-b-2 focus:outline-none bg-transparent text-sm font-mono text-ink resize-none px-0 py-2 mt-4"
+          value={rejectionReason}
+          onChange={(e) => setRejectionReason(e.target.value)}
+        />
+        <div className="flex items-center justify-end gap-3 mt-6">
+          <button
+            type="button"
+            onClick={() => {
+              setShowRejectDialog(false);
+              setRejectionReason("");
+            }}
+            className="px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-paper transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleRejectConfirm}
+            className="px-5 py-2.5 bg-danger text-white text-sm font-medium hover:bg-danger/90 transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-2"
+          >
+            Reject campaign
+          </button>
+        </div>
+      </Modal>
+    </>
   );
 }

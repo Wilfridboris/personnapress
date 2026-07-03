@@ -446,3 +446,214 @@ async def test_create_campaign_raises_401_on_bad_session():
 
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail["error"]["code"] == "INVALID_SESSION"
+
+
+# ── POST /campaigns/{id}/approve ─────────────────────────────────────────────
+
+async def test_approve_campaign_transitions_status_to_approved():
+    from app.routers.campaigns import approve_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "pending_approval"
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        result = await approve_campaign(
+            campaign_id=campaign.id,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert campaign.status == "approved"
+    db.add.assert_called_once_with(campaign)
+    db.commit.assert_awaited_once()
+    assert result.status == "approved"
+    assert result.client_id == campaign.client_id
+
+
+async def test_approve_campaign_returns_400_for_wrong_status():
+    from app.routers.campaigns import approve_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "rejected"
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await approve_campaign(
+                campaign_id=campaign.id,
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["error"]["code"] == "INVALID_STATUS_TRANSITION"
+
+
+async def test_approve_campaign_returns_404_when_not_owned():
+    from app.routers.campaigns import approve_campaign
+
+    user_id = uuid.uuid4()
+    other_client = _make_client(user_id=uuid.uuid4())
+    campaign = _make_campaign(client_id=other_client.id)
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=other_client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await approve_campaign(
+                campaign_id=campaign.id,
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 404
+
+
+# ── POST /campaigns/{id}/reject ──────────────────────────────────────────────
+
+async def test_reject_campaign_with_reason_saves_reason():
+    from app.routers.campaigns import reject_campaign, RejectRequest
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "pending_approval"
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        result = await reject_campaign(
+            campaign_id=campaign.id,
+            body=RejectRequest(reason="Too generic"),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert campaign.status == "rejected"
+    assert campaign.rejection_reason == "Too generic"
+    assert result.status == "rejected"
+
+
+async def test_reject_campaign_without_reason():
+    from app.routers.campaigns import reject_campaign, RejectRequest
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "pending_approval"
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        result = await reject_campaign(
+            campaign_id=campaign.id,
+            body=RejectRequest(reason=None),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert campaign.status == "rejected"
+    assert result.status == "rejected"
+
+
+async def test_reject_campaign_wrong_status_returns_400():
+    from app.routers.campaigns import reject_campaign, RejectRequest
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "approved"
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await reject_campaign(
+                campaign_id=campaign.id,
+                body=RejectRequest(reason=None),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["error"]["code"] == "INVALID_STATUS_TRANSITION"
+
+
+# ── POST /campaigns/{id}/regenerate ──────────────────────────────────────────
+
+async def test_regenerate_campaign_creates_new_campaign_and_job():
+    from app.routers.campaigns import regenerate_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    source = _make_campaign(client_id=client.id)
+    source.status = "rejected"
+    new_campaign = _make_campaign(client_id=client.id)
+    new_job = _make_job(campaign_id=new_campaign.id)
+    db = AsyncMock()
+    background_tasks = MagicMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=source)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.check_campaign_limit", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.create_campaign", AsyncMock(return_value=new_campaign)),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=new_job)),
+    ):
+        result = await regenerate_campaign(
+            campaign_id=source.id,
+            background_tasks=background_tasks,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    # Source campaign status unchanged
+    assert source.status == "rejected"
+    assert result.campaign_id == new_campaign.id
+    assert result.job_id == new_job.id
+    db.commit.assert_awaited_once()
+    background_tasks.add_task.assert_called_once()
+
+
+async def test_regenerate_campaign_only_from_rejected_status():
+    from app.routers.campaigns import regenerate_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "pending_approval"
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await regenerate_campaign(
+                campaign_id=campaign.id,
+                background_tasks=MagicMock(),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["error"]["code"] == "INVALID_STATUS_TRANSITION"

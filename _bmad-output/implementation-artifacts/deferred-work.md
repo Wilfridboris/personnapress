@@ -3,6 +3,11 @@
 ## Deferred from: code review of 4-3-social-post-editing-with-character-counters (2026-07-02)
 
 - **W1 (High)**: Backend schema allows x_post/linkedin_post up to 5000 chars — platform limits (280/1300) not enforced at DB schema layer; only visual danger indicators in UI. [backend/app/schemas/campaign.py]
+
+## Deferred from: code review of 4-4-approve-reject-campaign (2026-07-02)
+
+- **W1 (Medium)**: Race condition — non-atomic status check+write on `/approve`, `/reject`, `/regenerate`: two concurrent requests can both pass the status guard before either commits. Requires SELECT FOR UPDATE or optimistic locking. Pre-existing systemic pattern across all campaign mutations. [backend/app/routers/campaigns.py]
+- **W2 (Medium)**: `check_campaign_limit` TOCTOU gap on concurrent `/regenerate`: two simultaneous regenerate calls both pass limit check before either commits, creating one extra campaign. Same gap exists in `POST /campaigns`. Pre-existing systemic issue. [backend/app/routers/campaigns.py:290]
 - **W2 (Medium)**: No timeout/abort on campaignsApi.patch() — if the network request hangs, isSaving remains true indefinitely with the button stuck disabled. Pre-existing pattern across the app. [frontend/components/campaigns/SocialPostEditors.tsx:handleSave]
 - **W3 (Medium)**: No test asserting Save button is disabled (not just absent) while isSaving=true — low-value coverage gap. [frontend/__tests__/components/SocialPostEditors.test.tsx]
 - **W4 (Low)**: AC5 tab order gap when Save button absent (isDirty=false) — Tab from LinkedIn textarea reaches unrelated elements before Approve/Reject footer. No tabIndex or focus management applied. [frontend/components/campaigns/SocialPostEditors.tsx]

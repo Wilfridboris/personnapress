@@ -100,9 +100,14 @@ export const campaignsApi = {
       body: JSON.stringify(data),
     }),
   approve: (id: string) =>
-    apiFetch<Campaign>(`/campaigns/${id}/approve`, { method: "POST" }),
-  reject: (id: string) =>
-    apiFetch<Campaign>(`/campaigns/${id}/reject`, { method: "POST" }),
+    apiFetch<{ id: string; status: string; client_id: string }>(`/campaigns/${id}/approve`, { method: "POST" }),
+  reject: (id: string, reason?: string) =>
+    apiFetch<{ id: string; status: string; rejection_reason: string | null }>(`/campaigns/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason ?? null }),
+    }),
+  regenerate: (id: string) =>
+    apiFetch<{ campaign_id: string; job_id: string }>(`/campaigns/${id}/regenerate`, { method: "POST" }),
   publish: (id: string) =>
     apiFetch<{ ok: boolean; published_urls: Record<string, string> }>(
       `/campaigns/${id}/publish`,
