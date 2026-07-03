@@ -113,6 +113,8 @@ export const campaignsApi = {
       `/campaigns/${id}/image/regenerate`,
       { method: "POST" }
     ),
+  patch: (id: string, data: { blog_html?: string; x_post?: string; linkedin_post?: string }) =>
+    apiFetch<Campaign>(`/campaigns/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
 };
 
 export const dashboardApi = {

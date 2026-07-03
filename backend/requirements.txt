@@ -37,6 +37,9 @@ resend
 # Background jobs
 apscheduler==3.11.0
 
+# HTML sanitization
+nh3==0.3.6
+
 # Web scraping
 beautifulsoup4==4.13.4
 lxml==6.1.1

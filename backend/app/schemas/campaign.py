@@ -5,6 +5,16 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
+_BLOG_HTML_MAX = 200_000
+_SOCIAL_POST_MAX = 5_000
+
+
+class CampaignPatch(BaseModel):
+    blog_html: Optional[str] = Field(None, max_length=_BLOG_HTML_MAX)
+    x_post: Optional[str] = Field(None, max_length=_SOCIAL_POST_MAX)
+    linkedin_post: Optional[str] = Field(None, max_length=_SOCIAL_POST_MAX)
+
+
 class CampaignCreate(BaseModel):
     client_id: uuid.UUID
     brain_dump: str = Field(min_length=20, max_length=10000)

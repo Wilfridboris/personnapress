@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import { ArrowLeft } from "lucide-react";
 import { BlogHtmlRenderer } from "@/components/ui/BlogHtmlRenderer";
+import { BlogEditor } from "@/components/campaigns/BlogEditor";
 import { ApprovalPanel } from "./approval-panel";
 import { GenerationGate } from "./GenerationGate";
 import { ImagePanel } from "@/components/campaigns/ImagePanel";
@@ -186,10 +187,18 @@ export default async function CampaignDetailPage({ params, searchParams }: Props
                 </h2>
               </div>
               {rawBlogHtml ? (
-                <BlogHtmlRenderer
-                  html={rawBlogHtml}
-                  className="p-6 prose prose-sm max-w-none font-sans text-ink prose-headings:font-display prose-headings:text-ink prose-a:text-ink prose-a:underline"
-                />
+                isPending ? (
+                  <BlogEditor
+                    initialHtml={rawBlogHtml}
+                    campaignId={campaign.id}
+                    readOnly={false}
+                  />
+                ) : (
+                  <BlogHtmlRenderer
+                    html={rawBlogHtml}
+                    className="p-6 prose prose-sm max-w-none font-sans text-ink prose-headings:font-display prose-headings:text-ink prose-a:text-ink prose-a:underline"
+                  />
+                )
               ) : (
                 <div className="p-6">
                   <GeneratingPlaceholder lines={8} />

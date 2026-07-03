@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 4-2-blog-post-wysiwyg-editing (2026-07-02)
+
+- **D1 (Medium)**: Race condition — PATCH status check is non-atomic; a concurrent approve/reject could slip past the `pending_approval` guard before either commits. Needs `SELECT ... FOR UPDATE` or optimistic lock. [backend/app/routers/campaigns.py:patch_campaign]
+- **D2 (Low)**: `onSave` prop declared in BlogEditorProps but never invoked after successful save — Story 4.4 must wire this up when orchestrating the approve flow. [frontend/components/campaigns/BlogEditor.tsx]
+- **D3 (Low)**: `getCurrentHtml` forwardRef not passed from page.tsx — by design; Story 4.4 will add the ref when wiring the approve button. [frontend/app/(app)/campaigns/[id]/page.tsx]
+
 ## Deferred from: code review of 4-1-approval-gate-campaign-preview-voice-fidelity-badge (2026-07-02)
 
 - **D1 (High)**: VoiceScore null safety — TypeScript types declare `number` but runtime API could return `null`. Add integration test or Zod validation at API boundary in a future story.
