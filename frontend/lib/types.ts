@@ -157,6 +157,23 @@ export interface PlanLimits {
   image_gens: number;
 }
 
+export interface PlatformConnectionStatus {
+  platform: "wordpress" | "webflow" | "x" | "linkedin";
+  connected: boolean;
+  account_identifier?: string;
+}
+
+export interface ConnectionCreatePayload {
+  platform: string;
+  // WordPress
+  site_url?: string;
+  credential?: string;
+  username?: string;
+  // Webflow
+  token?: string;
+  collection_id?: string;
+}
+
 export interface SubscriptionResponse {
   plan_tier: PlanTier;
   status: string;

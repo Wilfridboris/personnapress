@@ -308,6 +308,27 @@ export function ClientDetail({ client }: Props) {
 
       <hr className="border-border mb-10" />
 
+      {/* ── Platform Connections ────────────────────────────────────────── */}
+      <section className="mb-10" aria-labelledby="platform-connections-heading">
+        <p
+          id="platform-connections-heading"
+          className="text-xs font-sans uppercase tracking-widest text-ink mb-4"
+        >
+          Platform Connections
+        </p>
+        <p className="text-sm text-[#555555] mb-4">
+          Connect your publishing platforms to automatically publish campaigns.
+        </p>
+        <Link
+          href={`/clients/${client.id}/connections`}
+          className={secondaryBtn}
+        >
+          Manage connections
+        </Link>
+      </section>
+
+      <hr className="border-border mb-10" />
+
       {/* ── Danger zone ─────────────────────────────────────────────────── */}
       <section aria-labelledby="danger-heading">
         <p

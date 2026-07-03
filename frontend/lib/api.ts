@@ -1,4 +1,4 @@
-import type { BrandVoiceProfile, ClientListResponse, ClientResponse, Campaign, DashboardStats, FileListResponse, Job, QuestionnairePayload } from "./types";
+import type { BrandVoiceProfile, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, FileListResponse, Job, PlatformConnectionStatus, QuestionnairePayload } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -129,4 +129,20 @@ export const dashboardApi = {
 export const authApi = {
   completeOnboarding: () =>
     apiFetch<{ status: string }>("/auth/complete-onboarding", { method: "POST" }),
+};
+
+export const publishingApi = {
+  listConnections: (clientId: string) =>
+    apiFetch<{ items: PlatformConnectionStatus[] }>(`/clients/${clientId}/connections`),
+  createConnection: (clientId: string, data: ConnectionCreatePayload) =>
+    apiFetch<PlatformConnectionStatus>(`/clients/${clientId}/connections`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deleteConnection: (clientId: string, platform: string) =>
+    apiFetch<void>(`/clients/${clientId}/connections/${platform}`, { method: "DELETE" }),
+  getWebflowCollections: (clientId: string, token: string) =>
+    apiFetch<{ collections: { id: string; name: string }[] }>(
+      `/clients/${clientId}/webflow/collections?token=${encodeURIComponent(token)}`
+    ),
 };

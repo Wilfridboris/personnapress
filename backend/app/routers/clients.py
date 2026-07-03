@@ -358,18 +358,4 @@ async def submit_voice_questionnaire(
     return {"job_id": str(job.id)}
 
 
-@router.get("/{client_id}/connections")
-async def list_platform_connections(
-    client_id: uuid.UUID,
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_session),
-) -> dict:
-    try:
-        user_id = uuid.UUID(current_user["user_id"])
-    except (ValueError, KeyError):
-        raise HTTPException(status_code=401, detail={"error": {"code": "INVALID_SESSION", "message": "Invalid session.", "detail": {}}})
-    client = await get_client(db, client_id)
-    if not client or client.user_id != user_id:
-        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Client not found.", "detail": {}}})
-    return {"items": []}
 

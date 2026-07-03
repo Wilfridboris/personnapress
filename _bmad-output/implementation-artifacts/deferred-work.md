@@ -1,5 +1,13 @@
 # Deferred Work
 
+## Deferred from: code review of 5-2-platform-connection-setup-x-twitter-linkedin-oauth (2026-07-03)
+
+- `get_user_handle` returns "unknown" silently on failure — acceptable degradation, connection still stored. [backend/app/integrations/twitter.py]
+- `useEffect` empty deps in PlatformConnectionsClient — intentional run-once on mount, acknowledged with eslint suppression. [frontend/components/publishing/PlatformConnectionsClient.tsx]
+- Cookie forwarding passes all cookies to backend — documented project pattern for session forwarding (same as Google OAuth callback). [frontend/app/api/auth/x/callback/route.ts]
+- `connectionsUrl` computed from cookie before state validation — same-origin redirect only, no external open redirect risk. [frontend/app/api/auth/x/callback/route.ts]
+- `refresh_token` stored with no refresh logic — X tokens expire in 2 hours; refresh flow is future story work (Story 5.5 or later). [backend/app/routers/publishing.py]
+
 ## Deferred from: code review of 4-3-social-post-editing-with-character-counters (2026-07-02)
 
 - **W1 (High)**: Backend schema allows x_post/linkedin_post up to 5000 chars — platform limits (280/1300) not enforced at DB schema layer; only visual danger indicators in UI. [backend/app/schemas/campaign.py]

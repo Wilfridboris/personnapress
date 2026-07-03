@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.dependencies import get_current_user
 from app.core.exceptions import PlatformError
 from app.core.security import decrypt_credential, encrypt_credential
@@ -16,6 +17,8 @@ from app.db.repositories.platform_connections import (
     get_connections_for_client,
     upsert_connection,
 )
+from app.integrations import linkedin as linkedin_integration
+from app.integrations import twitter as twitter_integration
 from app.integrations import webflow as webflow_integration
 from app.integrations import wordpress as wordpress_integration
 
@@ -173,6 +176,90 @@ async def get_webflow_collections(
         )
 
     return {"collections": collections}
+
+
+class OAuthCallbackRequest(BaseModel):
+    code: str
+    code_verifier: Optional[str] = None
+
+
+def _platform_error_msg(e: Exception) -> str:
+    """Extract a safe, serializable message from a platform exception."""
+    msg = getattr(e, "message", None)
+    return str(msg) if msg is not None else str(e)
+
+
+@router.post("/clients/{client_id}/connections/x/callback", status_code=201)
+async def x_oauth_callback(
+    client_id: uuid.UUID,
+    body: OAuthCallbackRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+    client = await get_client(db, client_id)
+    _check_ownership(client, user_id)
+
+    if not body.code_verifier:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "MISSING_CODE_VERIFIER", "message": "code_verifier is required for X OAuth PKCE", "detail": {}}},
+        )
+
+    redirect_uri = f"{settings.APP_URL}/api/auth/x/callback"
+    try:
+        tokens = await twitter_integration.exchange_code_for_tokens(
+            body.code, body.code_verifier, redirect_uri
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": _platform_error_msg(e), "detail": {}}},
+        )
+
+    access_token = tokens.get("access_token", "")
+    if not access_token:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": "X token exchange returned no access_token", "detail": {}}},
+        )
+    refresh_token = tokens.get("refresh_token", "")
+    handle = await twitter_integration.get_user_handle(access_token)
+
+    cred_json = json.dumps({"access_token": access_token, "refresh_token": refresh_token, "handle": handle})
+    encrypted = encrypt_credential(cred_json)
+    await upsert_connection(db, client_id, "x", encrypted)
+
+    return {"platform": "x", "connected": True, "account_identifier": f"@{handle}"}
+
+
+@router.post("/clients/{client_id}/connections/linkedin/callback", status_code=201)
+async def linkedin_oauth_callback(
+    client_id: uuid.UUID,
+    body: OAuthCallbackRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+    client = await get_client(db, client_id)
+    _check_ownership(client, user_id)
+
+    redirect_uri = f"{settings.APP_URL}/api/auth/linkedin/callback"
+    try:
+        access_token = await linkedin_integration.exchange_code_for_token(body.code, redirect_uri)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": _platform_error_msg(e), "detail": {}}},
+        )
+
+    name = await linkedin_integration.get_user_name(access_token)
+
+    cred_json = json.dumps({"access_token": access_token, "name": name})
+    encrypted = encrypt_credential(cred_json)
+    await upsert_connection(db, client_id, "linkedin", encrypted)
+
+    return {"platform": "linkedin", "connected": True, "account_identifier": name}
 
 
 @router.delete("/clients/{client_id}/connections/{platform}", status_code=204)
