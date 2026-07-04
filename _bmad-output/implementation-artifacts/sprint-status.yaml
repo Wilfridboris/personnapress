@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-14
-last_updated: 2026-07-04  # epic-4 stories 4.1–4.4 created; 4.1, 4.2, 4.3, and 4.4 code review complete, marked done; epic-5 all 5 stories created and marked ready-for-dev; 5-1, 5-2, 5-3, 5-4, and 5-5 code review complete, marked done; 5-6 story created for WordPress.com OAuth integration; 5-6 code review complete, marked done; epic-6 started; 6-1 and 6-2 stories created and marked ready-for-dev; 6-1 implemented and code review complete, marked done
+last_updated: 2026-07-04  # epic-4 stories 4.1–4.4 created; 4.1, 4.2, 4.3, and 4.4 code review complete, marked done; epic-5 all 5 stories created and marked ready-for-dev; 5-1, 5-2, 5-3, 5-4, and 5-5 code review complete, marked done; 5-6 story created for WordPress.com OAuth integration; 5-6 code review complete, marked done; epic-6 started; 6-1 and 6-2 stories created and marked ready-for-dev; 6-1 implemented and code review complete, marked done; 6-2 code review complete, marked done
 project: PersonnaPress
 project_key: NOKEY
 tracking_system: file-system
@@ -92,7 +92,7 @@ development_status:
   # Epic 6: Dashboard & Content Calendar
   epic-6: in-progress
   6-1-campaign-list-dashboard-with-status-filtering: done
-  6-2-content-calendar-read-only-month-view: ready-for-dev
+  6-2-content-calendar-read-only-month-view: done
   epic-6-retrospective: optional
 
   # Epic 7: Trial Lifecycle & Subscription Enforcement
