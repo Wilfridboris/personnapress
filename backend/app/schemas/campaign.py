@@ -57,6 +57,11 @@ class CampaignDetailResponse(CampaignResponse):
     publish_job: Optional[PublishJobInfo] = None
 
 
+class CampaignListResponse(BaseModel):
+    items: list[CampaignResponse]
+    total: int
+
+
 class CampaignCreateResponse(BaseModel):
     campaign_id: uuid.UUID
     job_id: uuid.UUID

@@ -183,6 +183,11 @@ export interface ConnectionCreatePayload {
   collection_id?: string;
 }
 
+export interface CampaignListResponse {
+  items: Campaign[];
+  total: number;
+}
+
 export interface SubscriptionResponse {
   plan_tier: PlanTier;
   status: string;

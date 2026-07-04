@@ -1,10 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Globe, LayoutGrid, Share2, Link2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { publishingApi } from "@/lib/api";
 import type { PlatformConnectionStatus, ConnectionCreatePayload } from "@/lib/types";
 
@@ -20,13 +20,6 @@ const PLATFORM_LABELS: Record<string, string> = {
   linkedin: "LinkedIn",
 };
 
-function PlatformIcon({ platform }: { platform: string }) {
-  const cls = "size-5 shrink-0";
-  if (platform === "wordpress") return <Globe className={cls} aria-hidden="true" />;
-  if (platform === "webflow") return <LayoutGrid className={cls} aria-hidden="true" />;
-  if (platform === "x") return <Share2 className={cls} aria-hidden="true" />;
-  return <Link2 className={cls} aria-hidden="true" />;
-}
 
 export function PlatformConnectionCard({ clientId, connection }: Props) {
   const queryClient = useQueryClient();
@@ -129,7 +122,7 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
       >
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <PlatformIcon platform={connection.platform} />
+            <PlatformIcon platform={connection.platform} className="size-5 shrink-0" />
             <div>
               <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#111111]">{label}</p>
               <span aria-live="polite">

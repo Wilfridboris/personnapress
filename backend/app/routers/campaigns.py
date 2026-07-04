@@ -2,8 +2,9 @@ import uuid
 from typing import Optional
 
 import nh3
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -13,7 +14,7 @@ from app.db.repositories.campaigns import create_campaign, get_campaign
 from app.db.repositories.clients import get_client
 from app.db.repositories.jobs import create_job, get_publish_job_for_campaign
 from app.db.repositories.models import Campaign, Client
-from app.schemas.campaign import CampaignCreate, CampaignCreateResponse, CampaignDetailResponse, CampaignPatch, CampaignResponse
+from app.schemas.campaign import CampaignCreate, CampaignCreateResponse, CampaignDetailResponse, CampaignListResponse, CampaignPatch, CampaignResponse
 from app.services import image as image_service
 from app.services.subscription_service import check_campaign_limit
 from app.workers.generate import run_generation
@@ -80,24 +81,45 @@ async def create_new_campaign(
     return CampaignCreateResponse(campaign_id=campaign.id, job_id=job.id)
 
 
-@router.get("", response_model=list[CampaignResponse])
+@router.get("", response_model=CampaignListResponse)
 async def list_campaigns(
+    client_id: uuid.UUID | None = Query(default=None),
+    status: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
-) -> list[CampaignResponse]:
+) -> CampaignListResponse:
     try:
         user_id = uuid.UUID(current_user["user_id"])
     except (ValueError, KeyError):
         raise HTTPException(status_code=401, detail=_INVALID_SESSION)
 
-    result = await db.execute(
+    query = (
         select(Campaign)
         .join(Client, Campaign.client_id == Client.id)
         .where(Client.user_id == user_id)
-        .order_by(Campaign.created_at.desc())
+    )
+    if client_id:
+        client = await get_client(db, client_id)
+        if not client or client.user_id != user_id:
+            raise HTTPException(status_code=403, detail={"error": {"code": "FORBIDDEN", "message": "Access denied.", "detail": {}}})
+        query = query.where(Campaign.client_id == client_id)
+    if status:
+        statuses = [s.strip() for s in status.split(",") if s.strip()]
+        query = query.where(Campaign.status.in_(statuses))
+
+    count_result = await db.execute(select(func.count()).select_from(query.subquery()))
+    total = count_result.scalar_one()
+
+    ordered_query = query.order_by(Campaign.created_at.desc())
+    result = await db.execute(
+        ordered_query
+             .offset((page - 1) * per_page)
+             .limit(per_page)
     )
     campaigns = result.scalars().all()
-    return [CampaignResponse.model_validate(c) for c in campaigns]
+    return CampaignListResponse(items=[CampaignResponse.model_validate(c) for c in campaigns], total=total)
 
 
 @router.get("/{campaign_id}", response_model=CampaignDetailResponse)

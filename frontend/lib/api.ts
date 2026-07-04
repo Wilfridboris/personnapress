@@ -1,4 +1,4 @@
-import type { BrandVoiceProfile, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, FileListResponse, Job, PlatformConnectionStatus, QuestionnairePayload } from "./types";
+import type { BrandVoiceProfile, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, FileListResponse, Job, PlatformConnectionStatus, QuestionnairePayload } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -92,7 +92,20 @@ export const filesApi = {
 };
 
 export const campaignsApi = {
-  list: () => apiFetch<Campaign[]>("/campaigns"),
+  listPaginated: (params: {
+    client_id?: string;
+    status?: string;
+    page?: number;
+    per_page?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params.client_id) query.set("client_id", params.client_id);
+    if (params.status) query.set("status", params.status);
+    if (params.page != null) query.set("page", String(params.page));
+    if (params.per_page != null) query.set("per_page", String(params.per_page));
+    const qs = query.toString();
+    return apiFetch<CampaignListResponse>(`/campaigns${qs ? `?${qs}` : ""}`);
+  },
   get: (id: string) => apiFetch<Campaign>(`/campaigns/${id}`),
   create: (data: { client_id: string; brain_dump: string }) =>
     apiFetch<{ job_id: string; campaign_id: string }>("/campaigns", {

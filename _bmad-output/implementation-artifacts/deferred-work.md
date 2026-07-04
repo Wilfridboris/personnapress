@@ -88,3 +88,7 @@
 
 - **D1 (Low)**: No recovery path from stuck in-progress state when `client.brand_voice_profile` is null after `router.refresh()` resolves — possible if read replica lags or model serialization error. Needs timeout/fallback transition to `"failed"` state.
 - **D2 (Medium)**: No rate-limiting or quota guard on `POST /clients/{id}/ingest` — authenticated owner can spam the endpoint creating unbounded job records. Architectural concern; address at infra or middleware layer.
+
+## Deferred from: code review of 6-1-campaign-list-dashboard-with-status-filtering (2026-07-04)
+
+- **D1 (Low)**: `sys.modules` patching at module level in `backend/tests/routers/test_campaigns.py` pollutes the test session — stubs run at import time and persist across all tests. Refactor to use `@pytest.fixture` or `unittest.mock.patch` at function scope in a future test cleanup pass.
