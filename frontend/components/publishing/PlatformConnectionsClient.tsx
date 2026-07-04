@@ -16,28 +16,6 @@ export function PlatformConnectionsClient({ clientId }: Props) {
   const addToast = useUIStore((s) => s.addToast);
   const handledRef = useRef(false);
 
-  // ── Diagnostic: log mount/unmount + intercept fetch to trace RSC re-fetch triggers ──
-  useEffect(() => {
-    console.log("[connections] CLIENT MOUNTED", performance.now().toFixed(0) + "ms");
-    return () => {
-      console.log("[connections] CLIENT UNMOUNTED", performance.now().toFixed(0) + "ms");
-    };
-  }, []);
-
-  useEffect(() => {
-    const origFetch = window.fetch;
-    window.fetch = function (input, init) {
-      const url = input?.toString() ?? "";
-      if (url.includes("/connections") && !url.includes(":8000")) {
-        console.trace("[connections] RSC fetch →", url);
-      }
-      return origFetch.call(this, input, init);
-    };
-    return () => {
-      window.fetch = origFetch;
-    };
-  }, []);
-
   useEffect(() => {
     if (handledRef.current) return;
     // Read params imperatively — avoids creating a reactive useSearchParams subscription
