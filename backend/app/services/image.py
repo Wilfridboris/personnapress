@@ -228,8 +228,11 @@ async def regenerate_image(
     # Call Replicate
     replicate_url = await _replicate_with_retry(prompt)
 
-    # Re-upload to same Supabase path (replaces previous)
-    storage_path = f"generated-images/{campaign_id}/featured.png"
+    # Upload to a version-specific path so the public URL changes with every
+    # regeneration, busting the browser/CDN cache that would otherwise serve
+    # the previous image (same URL → cached bytes, even after file overwrite).
+    new_regen_count = campaign.image_regen_count + 1
+    storage_path = f"generated-images/{campaign_id}/featured_{new_regen_count}.png"
     public_url = await supabase_storage.upload_image_from_url(replicate_url, storage_path)
 
     # Update campaign
