@@ -18,6 +18,7 @@ from app.integrations import linkedin as linkedin_integration
 from app.integrations import twitter as twitter_integration
 from app.integrations import webflow as webflow_integration
 from app.integrations import wordpress as wordpress_integration
+from app.integrations import wordpress_com as wordpress_com_integration
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,8 @@ async def dispatch_publish_for_platform(
         creds = json.loads(creds_json)
         if platform == "wordpress":
             await wordpress_integration.publish_post(creds, campaign)
+        elif platform == "wordpress-com":
+            await wordpress_com_integration.publish_post(creds, campaign)
         elif platform == "webflow":
             await webflow_integration.publish_post(creds, campaign)
         elif platform == "x":
@@ -85,6 +88,10 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID) ->
         logger.error("dispatch_publish: campaign %s not found", campaign_id)
         return {"error": f"campaign {campaign_id} not found"}
     connections = await get_connections_for_client(db, campaign.client_id)
+    # If both self-hosted and WordPress.com connections exist, prefer self-hosted (mirrors UI precedence)
+    platform_names = {(c.platform if isinstance(c.platform, str) else c.platform.value) for c in connections}
+    if "wordpress" in platform_names and "wordpress-com" in platform_names:
+        connections = [c for c in connections if (c.platform if isinstance(c.platform, str) else c.platform.value) != "wordpress-com"]
     results: dict[str, str] = {}
     last_x_publish_time = 0.0
     last_linkedin_publish_time = 0.0
@@ -97,6 +104,9 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID) ->
 
             if platform == "wordpress":
                 await wordpress_integration.publish_post(creds, campaign)
+
+            elif platform == "wordpress-com":
+                await wordpress_com_integration.publish_post(creds, campaign)
 
             elif platform == "webflow":
                 await webflow_integration.publish_post(creds, campaign)

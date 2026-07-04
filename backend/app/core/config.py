@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     LINKEDIN_CLIENT_SECRET: str = ""
     LINKEDIN_REDIRECT_URI: str = ""
 
+    WP_COM_CLIENT_ID: str = ""
+    WP_COM_CLIENT_SECRET: str = ""
+    WP_COM_REDIRECT_URI: str = ""  # e.g. http://localhost:3000/api/auth/wordpress-com/callback
+
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
     STRIPE_PRICE_STARTER: str = ""

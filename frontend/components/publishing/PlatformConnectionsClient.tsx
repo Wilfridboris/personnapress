@@ -22,7 +22,12 @@ export function PlatformConnectionsClient({ clientId }: Props) {
     const success = searchParams.get("success");
     const error = searchParams.get("error");
     if (success) {
-      addToast(`Connected to ${success === "x" ? "X" : "LinkedIn"}.`, "success");
+      const message =
+        success === "x" ? "Connected to X." :
+        success === "linkedin" ? "Connected to LinkedIn." :
+        success === "wordpress-com" ? "WordPress.com connected." :
+        `Connected to ${success}.`;
+      addToast(message, "success");
       router.replace(`/clients/${clientId}/connections`);
     }
     if (error) {

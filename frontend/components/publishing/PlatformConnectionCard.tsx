@@ -34,6 +34,7 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
   const [showDisconnect, setShowDisconnect] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [wpType, setWpType] = useState<null | "self-hosted" | "wordpress-com">(null);
 
   // WordPress form state
   const [wpSiteUrl, setWpSiteUrl] = useState("");
@@ -55,6 +56,7 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
 
   function handleCancel() {
     setShowForm(false);
+    setWpType(null);
     setError(null);
     setWpSiteUrl("");
     setWpUsername("");
@@ -107,7 +109,10 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
   async function handleDisconnect() {
     setLoading(true);
     try {
-      await publishingApi.deleteConnection(clientId, connection.platform);
+      const platformToDelete = connection.connected_via === "wordpress-com"
+        ? "wordpress-com"
+        : connection.platform;
+      await publishingApi.deleteConnection(clientId, platformToDelete);
       await queryClient.invalidateQueries({ queryKey: ["platform-connections", clientId] });
       setShowDisconnect(false);
     } catch {
@@ -183,8 +188,49 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
 
         {showForm && (
           <div className="mt-4 pt-4 border-t border-[#E5E5E5] space-y-4">
-            {connection.platform === "wordpress" && (
-              <>
+            {connection.platform === "wordpress" && wpType === null && (
+              <fieldset>
+                <legend className="block text-xs font-medium text-[#111111] mb-3">
+                  Where is your WordPress site hosted?
+                </legend>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setWpType("self-hosted")}
+                    className="w-full text-left px-4 py-3 border border-[#E5E5E5] hover:border-[#111111] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 transition-colors duration-150"
+                    aria-label="Self-hosted WordPress — your own server or managed host"
+                  >
+                    <span className="block text-sm font-medium text-[#111111]">Self-hosted WordPress</span>
+                    <span className="block text-xs text-[#555555] mt-0.5">
+                      Your own server or managed host — SiteGround, WP Engine, Kinsta, etc.
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWpType("wordpress-com")}
+                    className="w-full text-left px-4 py-3 border border-[#E5E5E5] hover:border-[#111111] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 transition-colors duration-150"
+                    aria-label="WordPress.com — free or paid site hosted by Automattic"
+                  >
+                    <span className="block text-sm font-medium text-[#111111]">WordPress.com</span>
+                    <span className="block text-xs text-[#555555] mt-0.5">
+                      Free or paid site hosted by Automattic at wordpress.com
+                    </span>
+                  </button>
+                </div>
+                <button type="button" onClick={handleCancel}
+                  className="mt-4 text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors">
+                  Cancel
+                </button>
+              </fieldset>
+            )}
+
+            {connection.platform === "wordpress" && wpType === "self-hosted" && (
+              <div className="space-y-4">
+                <button type="button" onClick={() => setWpType(null)}
+                  className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors"
+                  aria-label="Back to WordPress hosting type selection">
+                  Back
+                </button>
                 <div className="space-y-1">
                   <label htmlFor={`wp-url-${connection.platform}`} className="block text-xs font-medium text-[#111111]">
                     WordPress site URL
@@ -224,7 +270,55 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
                     className="w-full border-b border-[#111111] focus:border-b-2 outline-none bg-transparent py-2 text-sm text-[#111111] placeholder:text-[#999]"
                   />
                 </div>
-              </>
+                {error && (
+                  <p className="text-xs text-[#C0392B]" role="alert">{error}</p>
+                )}
+                <div className="flex gap-3 pt-1">
+                  <Button
+                    variant="primary"
+                    onClick={handleConnect}
+                    disabled={loading}
+                    className="text-xs px-4 py-2"
+                  >
+                    {loading ? "Connecting…" : "Connect"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleCancel}
+                    disabled={loading}
+                    className="text-xs px-4 py-2"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {connection.platform === "wordpress" && wpType === "wordpress-com" && (
+              <div className="space-y-4">
+                <button type="button" onClick={() => setWpType(null)}
+                  className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors"
+                  aria-label="Back to WordPress hosting type selection">
+                  Back
+                </button>
+                <p className="text-xs text-[#555555]">
+                  You will be redirected to WordPress.com to authorize access.
+                </p>
+                <a
+                  href={`/api/auth/wordpress-com?client_id=${clientId}`}
+                  onClick={() => setLoading(true)}
+                  className="inline-block px-5 py-2.5 border border-[#111111] text-[#111111] text-xs font-medium hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
+                  aria-label="Connect with WordPress.com via OAuth"
+                >
+                  {loading ? "Connecting…" : "Connect with WordPress.com"}
+                </a>
+                <div>
+                  <button type="button" onClick={handleCancel}
+                    className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors">
+                    Cancel
+                  </button>
+                </div>
+              </div>
             )}
 
             {connection.platform === "webflow" && (
@@ -288,28 +382,31 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
               </>
             )}
 
-            {error && (
-              <p className="text-xs text-[#C0392B]" role="alert">{error}</p>
+            {connection.platform === "webflow" && (
+              <>
+                {error && (
+                  <p className="text-xs text-[#C0392B]" role="alert">{error}</p>
+                )}
+                <div className="flex gap-3 pt-1">
+                  <Button
+                    variant="primary"
+                    onClick={handleConnect}
+                    disabled={loading}
+                    className="text-xs px-4 py-2"
+                  >
+                    {loading ? "Connecting…" : "Connect"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleCancel}
+                    disabled={loading}
+                    className="text-xs px-4 py-2"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </>
             )}
-
-            <div className="flex gap-3 pt-1">
-              <Button
-                variant="primary"
-                onClick={handleConnect}
-                disabled={loading}
-                className="text-xs px-4 py-2"
-              >
-                {loading ? "Connecting…" : "Connect"}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={handleCancel}
-                disabled={loading}
-                className="text-xs px-4 py-2"
-              >
-                Cancel
-              </Button>
-            </div>
           </div>
         )}
       </div>

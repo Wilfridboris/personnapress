@@ -26,6 +26,7 @@ from app.integrations import linkedin as linkedin_integration
 from app.integrations import twitter as twitter_integration
 from app.integrations import webflow as webflow_integration
 from app.integrations import wordpress as wordpress_integration
+from app.integrations import wordpress_com as wordpress_com_integration
 from app.scheduler.scheduler import scheduler
 from app.workers.publish import run_publish
 from app.workers.publish_retry import run_publish_retry
@@ -40,6 +41,8 @@ def _extract_identifier(platform: str, encrypted_credentials: str) -> Optional[s
         data = json.loads(decrypt_credential(encrypted_credentials))
         if platform == "wordpress":
             return data.get("site_url") or None
+        if platform == "wordpress-com":
+            return data.get("blog_url") or None
         if platform == "webflow":
             return data.get("collection_id") or None
         return data.get("handle") or data.get("name") or None
@@ -86,6 +89,15 @@ async def list_platform_connections(
                 "platform": platform,
                 "connected": True,
                 "account_identifier": _extract_identifier(platform, pc.encrypted_credentials),
+            })
+        elif platform == "wordpress" and "wordpress-com" in connected_map:
+            # WordPress.com connection shown under the wordpress card
+            pc = connected_map["wordpress-com"]
+            items.append({
+                "platform": "wordpress",
+                "connected": True,
+                "account_identifier": _extract_identifier("wordpress-com", pc.encrypted_credentials),
+                "connected_via": "wordpress-com",
             })
         else:
             items.append({"platform": platform, "connected": False})
@@ -268,6 +280,45 @@ async def linkedin_oauth_callback(
     await upsert_connection(db, client_id, "linkedin", encrypted)
 
     return {"platform": "linkedin", "connected": True, "account_identifier": name}
+
+
+class WpComCallbackRequest(BaseModel):
+    code: str
+
+
+@router.post("/clients/{client_id}/connections/wordpress-com/callback", status_code=201)
+async def wordpress_com_oauth_callback(
+    client_id: uuid.UUID,
+    body: WpComCallbackRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+    client = await get_client(db, client_id)
+    _check_ownership(client, user_id)
+
+    redirect_uri = settings.WP_COM_REDIRECT_URI or f"{settings.APP_URL}/api/auth/wordpress-com/callback"
+    try:
+        tokens = await wordpress_com_integration.exchange_code_for_tokens(body.code, redirect_uri)
+    except PlatformError as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": f"WordPress.com token exchange failed — {e.message}", "detail": {}}},
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": f"WordPress.com token exchange failed — {str(e)[:200]}", "detail": {}}},
+        )
+
+    cred_json = json.dumps(tokens)
+    encrypted = encrypt_credential(cred_json)
+    await upsert_connection(db, client_id, "wordpress-com", encrypted)
+
+    result: dict = {"platform": "wordpress-com", "connected": True}
+    if tokens.get("blog_url"):
+        result["account_identifier"] = tokens["blog_url"]
+    return result
 
 
 @router.post("/campaigns/{campaign_id}/publish", status_code=202)

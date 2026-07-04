@@ -1,5 +1,18 @@
 # Deferred Work
 
+## Deferred from: code review of 5-6-wordpress-com-oauth-integration (2026-07-03)
+
+- CSRF state-in-cookie pattern — standard OAuth PKCE-less flow, consistent with X/LinkedIn implementations already in production.
+- Session cookie forwarding to backend — pre-existing project pattern documented in prior story reviews.
+- WP_COM_CLIENT_SECRET defaults to "" — same pattern as all other OAuth secrets (LINKEDIN_CLIENT_SECRET, etc.).
+- Cookie Secure only in production — pre-existing, X/LinkedIn callback routes identical.
+- _extract_title null-safety — pre-existing imported function from wordpress.py, outside this story's scope.
+- Safari ITP may strip lax cookie on cross-site redirect — pre-existing; X/LinkedIn same-site pattern, not yet reported in prod.
+- Parallel tabs overwrite state cookie — pre-existing pattern affecting all OAuth flows.
+- Disconnect error handling silently ignored — pre-existing UI pattern across all platform cards.
+- publish_post URL return value discarded — consistent with all platform integrations (wordpress, webflow, x, linkedin).
+- scope=global requests full WordPress.com access — spec-mandated (AC4 explicitly specifies scope=global).
+
 ## Deferred from: code review of 5-4-scheduled-publishing (2026-07-03)
 
 - **D1 (Medium)**: Concurrent schedule requests TOCTOU — two simultaneous POSTs for the same campaign can both pass the `campaign.scheduled_at is None` guard, creating duplicate scheduled jobs. Requires `SELECT FOR UPDATE` row-level locking. Out of scope for this story.

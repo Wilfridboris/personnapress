@@ -169,6 +169,7 @@ export interface PlatformConnectionStatus {
   platform: "wordpress" | "webflow" | "x" | "linkedin";
   connected: boolean;
   account_identifier?: string;
+  connected_via?: "wordpress-com";  // only present on wordpress card when connected via WordPress.com OAuth
 }
 
 export interface ConnectionCreatePayload {

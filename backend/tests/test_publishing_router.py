@@ -440,3 +440,155 @@ async def test_x_oauth_callback_empty_access_token():
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail["error"]["code"] == "TOKEN_EXCHANGE_FAILED"
+
+
+# ── WordPress.com callback ────────────────────────────────────────────────────
+
+async def test_wordpress_com_callback_success():
+    from app.routers.publishing import wordpress_com_oauth_callback, WpComCallbackRequest
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    db = AsyncMock()
+    tokens = {"access_token": "tok123", "blog_id": "987", "blog_url": "https://mysite.wordpress.com"}
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.wordpress_com_integration.exchange_code_for_tokens", AsyncMock(return_value=tokens)),
+        patch("app.routers.publishing.upsert_connection", AsyncMock()),
+    ):
+        result = await wordpress_com_oauth_callback(
+            client_id=client.id,
+            body=WpComCallbackRequest(code="code123"),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result["platform"] == "wordpress-com"
+    assert result["connected"] is True
+    assert result["account_identifier"] == "https://mysite.wordpress.com"
+
+
+async def test_wordpress_com_callback_token_exchange_failure():
+    from app.routers.publishing import wordpress_com_oauth_callback, WpComCallbackRequest
+    from app.core.exceptions import PlatformError
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch(
+            "app.routers.publishing.wordpress_com_integration.exchange_code_for_tokens",
+            AsyncMock(side_effect=PlatformError("wordpress-com", 400, "bad code")),
+        ),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await wordpress_com_oauth_callback(
+                client_id=client.id,
+                body=WpComCallbackRequest(code="bad"),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["error"]["code"] == "TOKEN_EXCHANGE_FAILED"
+
+
+async def test_list_connections_with_wpcom():
+    from app.routers.publishing import list_platform_connections
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    wpcom_cred = json.dumps({"access_token": "tok", "blog_id": "123", "blog_url": "https://mysite.wordpress.com"})
+    conn = _make_connection(client_id=client.id, platform="wordpress-com", cred_json=wpcom_cred)
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connections_for_client", AsyncMock(return_value=[conn])),
+    ):
+        result = await list_platform_connections(
+            client_id=client.id,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert len(result["items"]) == 4
+    wp_item = next(i for i in result["items"] if i["platform"] == "wordpress")
+    assert wp_item["connected"] is True
+    assert wp_item.get("connected_via") == "wordpress-com"
+    assert wp_item["account_identifier"] == "https://mysite.wordpress.com"
+
+
+async def test_list_connections_prefers_selfhosted_over_wpcom():
+    from app.routers.publishing import list_platform_connections
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    sh_conn = _make_connection(client_id=client.id, platform="wordpress")
+    wpcom_cred = json.dumps({"access_token": "tok", "blog_id": "123", "blog_url": "https://mysite.wordpress.com"})
+    wpcom_conn = _make_connection(client_id=client.id, platform="wordpress-com", cred_json=wpcom_cred)
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connections_for_client", AsyncMock(return_value=[sh_conn, wpcom_conn])),
+    ):
+        result = await list_platform_connections(
+            client_id=client.id,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    wp_item = next(i for i in result["items"] if i["platform"] == "wordpress")
+    assert wp_item["connected"] is True
+    assert "connected_via" not in wp_item  # self-hosted has no connected_via
+
+
+async def test_delete_wordpress_com_connection():
+    from app.routers.publishing import delete_platform_connection
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.delete_connection", AsyncMock(return_value=True)),
+    ):
+        result = await delete_platform_connection(
+            client_id=client.id,
+            platform="wordpress-com",
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result is None  # 204 No Content
+
+
+async def test_wordpress_com_publish_dispatch():
+    from app.services.publishing import dispatch_publish_for_platform
+
+    campaign_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+    campaign = MagicMock()
+    campaign.client_id = client_id
+    campaign.blog_html = "<h1>Test</h1>"
+    campaign.image_url = None
+    campaign.x_post = None
+    campaign.linkedin_post = None
+
+    wpcom_cred = json.dumps({"access_token": "tok", "blog_id": "123", "blog_url": "https://mysite.wordpress.com"})
+    conn = _make_connection(client_id=client_id, platform="wordpress-com", cred_json=wpcom_cred)
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connection_for_platform", AsyncMock(return_value=conn)),
+        patch("app.services.publishing.wordpress_com_integration.publish_post", AsyncMock(return_value="https://post.url")),
+    ):
+        result = await dispatch_publish_for_platform(db, campaign_id, "wordpress-com")
+
+    assert result == {"wordpress-com": "success"}

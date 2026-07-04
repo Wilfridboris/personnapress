@@ -55,21 +55,21 @@ describe("PlatformConnectionCard — not connected", () => {
     expect(screen.getByRole("button", { name: "Connect WordPress" })).toBeInTheDocument();
   });
 
-  it("clicking Connect opens inline WordPress form", () => {
+  it("clicking Connect shows type picker (not form directly)", () => {
     renderCard(notConnected);
     fireEvent.click(screen.getByRole("button", { name: "Connect WordPress" }));
-    expect(screen.getByLabelText("WordPress site URL")).toBeInTheDocument();
-    expect(screen.getByLabelText("Application Password")).toBeInTheDocument();
-  });
-
-  it("Cancel closes the inline form", () => {
-    renderCard(notConnected);
-    fireEvent.click(screen.getByRole("button", { name: "Connect WordPress" }));
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByText("Where is your WordPress site hosted?")).toBeInTheDocument();
     expect(screen.queryByLabelText("WordPress site URL")).not.toBeInTheDocument();
   });
 
-  it("submitting form calls publishingApi.createConnection", async () => {
+  it("Cancel closes the type picker", () => {
+    renderCard(notConnected);
+    fireEvent.click(screen.getByRole("button", { name: "Connect WordPress" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByText("Where is your WordPress site hosted?")).not.toBeInTheDocument();
+  });
+
+  it("submitting form calls publishingApi.createConnection via self-hosted flow", async () => {
     vi.mocked(publishingApi.createConnection).mockResolvedValue({
       platform: "wordpress",
       connected: true,
@@ -78,6 +78,7 @@ describe("PlatformConnectionCard — not connected", () => {
 
     renderCard(notConnected);
     fireEvent.click(screen.getByRole("button", { name: "Connect WordPress" }));
+    fireEvent.click(screen.getByRole("button", { name: "Self-hosted WordPress — your own server or managed host" }));
 
     fireEvent.change(screen.getByLabelText("WordPress site URL"), {
       target: { value: "https://mysite.com" },
@@ -106,6 +107,7 @@ describe("PlatformConnectionCard — not connected", () => {
 
     renderCard(notConnected);
     fireEvent.click(screen.getByRole("button", { name: "Connect WordPress" }));
+    fireEvent.click(screen.getByRole("button", { name: "Self-hosted WordPress — your own server or managed host" }));
     fireEvent.change(screen.getByLabelText("WordPress site URL"), {
       target: { value: "https://mysite.com" },
     });
@@ -159,9 +161,10 @@ describe("PlatformConnectionCard — connected", () => {
 });
 
 describe("PlatformConnectionCard — accessibility", () => {
-  it("all inputs have visible labels", () => {
+  it("all inputs have visible labels after selecting self-hosted", () => {
     renderCard(notConnected);
     fireEvent.click(screen.getByRole("button", { name: "Connect WordPress" }));
+    fireEvent.click(screen.getByRole("button", { name: "Self-hosted WordPress — your own server or managed host" }));
     expect(screen.getByLabelText("WordPress site URL")).toBeInTheDocument();
     expect(screen.getByLabelText("WordPress Username")).toBeInTheDocument();
     expect(screen.getByLabelText("Application Password")).toBeInTheDocument();
@@ -188,5 +191,62 @@ describe("PlatformConnectionCard — OAuth platforms", () => {
     const link = screen.getByRole("link", { name: "Connect LinkedIn" });
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute("href", "/api/auth/linkedin?client_id=client-123");
+  });
+});
+
+describe("PlatformConnectionCard — WordPress.com sub-choice", () => {
+  it("test_wordpress_connect_shows_type_picker — clicking Connect shows type picker, not form", () => {
+    renderCard(notConnected);
+    fireEvent.click(screen.getByRole("button", { name: "Connect WordPress" }));
+    expect(screen.getByRole("button", { name: "Self-hosted WordPress — your own server or managed host" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "WordPress.com — free or paid site hosted by Automattic" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Application Password")).not.toBeInTheDocument();
+  });
+
+  it("test_wordpress_selfhosted_selection_reveals_form — Self-hosted click shows 3-field form", () => {
+    renderCard(notConnected);
+    fireEvent.click(screen.getByRole("button", { name: "Connect WordPress" }));
+    fireEvent.click(screen.getByRole("button", { name: "Self-hosted WordPress — your own server or managed host" }));
+    expect(screen.getByLabelText("WordPress site URL")).toBeInTheDocument();
+    expect(screen.getByLabelText("WordPress Username")).toBeInTheDocument();
+    expect(screen.getByLabelText("Application Password")).toBeInTheDocument();
+  });
+
+  it("test_wordpress_com_selection_reveals_oauth_button — WordPress.com click shows OAuth link", () => {
+    renderCard(notConnected);
+    fireEvent.click(screen.getByRole("button", { name: "Connect WordPress" }));
+    fireEvent.click(screen.getByRole("button", { name: "WordPress.com — free or paid site hosted by Automattic" }));
+    const link = screen.getByRole("link", { name: "Connect with WordPress.com via OAuth" });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute("href", "/api/auth/wordpress-com?client_id=client-123");
+    expect(screen.getByText("You will be redirected to WordPress.com to authorize access.")).toBeInTheDocument();
+  });
+
+  it("test_wordpress_back_navigation — Back button from self-hosted returns to type picker", () => {
+    renderCard(notConnected);
+    fireEvent.click(screen.getByRole("button", { name: "Connect WordPress" }));
+    fireEvent.click(screen.getByRole("button", { name: "Self-hosted WordPress — your own server or managed host" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to WordPress hosting type selection" }));
+    expect(screen.getByText("Where is your WordPress site hosted?")).toBeInTheDocument();
+    expect(screen.queryByLabelText("WordPress site URL")).not.toBeInTheDocument();
+  });
+
+  it("test_wordpress_com_disconnect_uses_correct_platform — connected_via=wordpress-com calls deleteConnection with wordpress-com", async () => {
+    vi.mocked(publishingApi.deleteConnection).mockResolvedValue(undefined);
+
+    const wpcomConnected: PlatformConnectionStatus = {
+      platform: "wordpress",
+      connected: true,
+      account_identifier: "https://mysite.wordpress.com",
+      connected_via: "wordpress-com",
+    };
+    renderCard(wpcomConnected);
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect WordPress" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(dialog.querySelector("button[aria-label='Disconnect WordPress']")!);
+
+    await waitFor(() => {
+      expect(publishingApi.deleteConnection).toHaveBeenCalledWith("client-123", "wordpress-com");
+    });
   });
 });
