@@ -9,6 +9,36 @@ from app.integrations.wordpress import _extract_title
 logger = logging.getLogger(__name__)
 
 
+async def _fetch_primary_blog(access_token: str) -> tuple[str, str]:
+    """Fetch the user's primary WordPress.com site.
+
+    When scope=global is used without a specific blog parameter, WordPress.com
+    returns blog_id=0 in the token response. We call /me/sites to resolve the
+    actual blog ID from the user's account.
+    """
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(
+            "https://public-api.wordpress.com/rest/v1.1/me/sites",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+    if resp.status_code != 200:
+        raise PlatformError(
+            "wordpress-com", resp.status_code,
+            "could not fetch your WordPress.com sites — please try reconnecting"
+        )
+    sites = resp.json().get("sites", [])
+    if not sites:
+        raise PlatformError(
+            "wordpress-com", 200,
+            "no WordPress.com site found on your account — create a site at wordpress.com first, then reconnect"
+        )
+    primary = next((s for s in sites if s.get("is_primary")), sites[0])
+    blog_id = str(primary.get("ID") or "")
+    if not blog_id or blog_id == "0":
+        raise PlatformError("wordpress-com", 200, "could not determine your WordPress.com site ID")
+    return blog_id, primary.get("URL", "")
+
+
 async def exchange_code_for_tokens(code: str, redirect_uri: str) -> dict:
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
@@ -27,14 +57,17 @@ async def exchange_code_for_tokens(code: str, redirect_uri: str) -> dict:
     data = resp.json()
     if "access_token" not in data:
         raise PlatformError("wordpress-com", 200, "no access_token in response")
+
+    access_token = data["access_token"]
     blog_id = str(data.get("blog_id") or "")
+    blog_url = data.get("blog_url", "")
+
+    # scope=global without a specific blog returns blog_id=0.
+    # Resolve the user's primary site via /me/sites.
     if not blog_id or blog_id == "0":
-        raise PlatformError("wordpress-com", 200, "no blog_id in token response — cannot determine which site to publish to")
-    return {
-        "access_token": data["access_token"],
-        "blog_id": blog_id,
-        "blog_url": data.get("blog_url", ""),
-    }
+        blog_id, blog_url = await _fetch_primary_blog(access_token)
+
+    return {"access_token": access_token, "blog_id": blog_id, "blog_url": blog_url}
 
 
 async def publish_post(creds: dict, campaign) -> str:
