@@ -27,8 +27,8 @@ async def exchange_code_for_tokens(code: str, redirect_uri: str) -> dict:
     data = resp.json()
     if "access_token" not in data:
         raise PlatformError("wordpress-com", 200, "no access_token in response")
-    blog_id = str(data.get("blog_id", ""))
-    if not blog_id:
+    blog_id = str(data.get("blog_id") or "")
+    if not blog_id or blog_id == "0":
         raise PlatformError("wordpress-com", 200, "no blog_id in token response — cannot determine which site to publish to")
     return {
         "access_token": data["access_token"],
@@ -40,7 +40,9 @@ async def exchange_code_for_tokens(code: str, redirect_uri: str) -> dict:
 async def publish_post(creds: dict, campaign) -> str:
     """Publish to WordPress.com. Returns the live post URL."""
     access_token = creds["access_token"]
-    blog_id = creds["blog_id"]  # numeric string — use as site identifier
+    blog_id = str(creds.get("blog_id") or "")
+    if not blog_id or blog_id == "0":
+        raise PlatformError("wordpress-com", 400, "invalid blog_id in stored credentials — disconnect and reconnect your WordPress.com account")
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
