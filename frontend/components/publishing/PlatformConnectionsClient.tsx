@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { publishingApi } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
@@ -14,13 +13,18 @@ interface Props {
 const ALL_PLATFORMS = ["wordpress", "webflow", "x", "linkedin"] as const;
 
 export function PlatformConnectionsClient({ clientId }: Props) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const addToast = useUIStore((s) => s.addToast);
+  const handledRef = useRef(false);
 
   useEffect(() => {
-    const success = searchParams.get("success");
-    const error = searchParams.get("error");
+    if (handledRef.current) return;
+    // Read params imperatively — avoids creating a reactive useSearchParams subscription
+    // that would cause the page to re-subscribe to URL changes and trigger RSC re-renders.
+    const params = new URLSearchParams(window.location.search);
+    const success = params.get("success");
+    const error = params.get("error");
+    if (!success && !error) return;
+    handledRef.current = true;
     if (success) {
       const message =
         success === "x" ? "Connected to X." :
@@ -28,19 +32,23 @@ export function PlatformConnectionsClient({ clientId }: Props) {
         success === "wordpress-com" ? "WordPress.com connected." :
         `Connected to ${success}.`;
       addToast(message, "success");
-      router.replace(`/clients/${clientId}/connections`);
     }
     if (error) {
       addToast(decodeURIComponent(error), "error");
-      router.replace(`/clients/${clientId}/connections`);
     }
+    // Do NOT call replaceState or router.replace here.
+    // window.history.replaceState is intercepted by the Next.js router and, when
+    // there is no cached RSC for the target URL, triggers completeHardNavigation
+    // (mpaNavigation: true) which causes location.replace() → hard reload → loop.
+    // The params staying in the URL is acceptable: the toast runs once (handledRef),
+    // and a manual refresh just re-shows the confirmation, which is fine UX.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const { data, isLoading } = useQuery({
     queryKey: ["platform-connections", clientId],
     queryFn: () => publishingApi.listConnections(clientId),
-    refetchOnWindowFocus: true,
+    staleTime: 30_000,
   });
 
   if (isLoading) {

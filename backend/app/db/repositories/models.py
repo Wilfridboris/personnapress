@@ -14,6 +14,7 @@ def utcnow() -> datetime:
 
 class Platform(str, Enum):
     wordpress = "wordpress"
+    wordpress_com = "wordpress-com"
     webflow = "webflow"
     x = "x"
     linkedin = "linkedin"
@@ -78,7 +79,14 @@ class PlatformConnection(SQLModel, table=True):
     client_id: uuid.UUID = Field(foreign_key="clients.id", index=True)
     platform: str = Field(
         sa_column=Column(
-            SAEnum(Platform, name="platform_enum", create_constraint=True),
+            SAEnum(
+                Platform,
+                name="platform_enum",
+                create_constraint=True,
+                # Python 3.11+ changed str(StrEnum.member) to return the member name.
+                # Explicitly use .value so PostgreSQL always gets "wordpress-com" not "wordpress_com".
+                values_callable=lambda obj: [e.value for e in obj],
+            ),
             nullable=False,
         )
     )
