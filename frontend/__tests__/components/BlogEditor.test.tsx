@@ -20,6 +20,7 @@ const mockEditor = {
   isActive: vi.fn(() => false),
   can: vi.fn(() => ({ undo: () => true })),
   getHTML: vi.fn(() => "<p>edited content</p>"),
+  isEmpty: false,
   destroy: vi.fn(),
 };
 
@@ -37,9 +38,14 @@ vi.mock("@tiptap/react", () => ({
     editor ? <div data-testid="editor-content">editor</div> : null,
 }));
 
-vi.mock("@tiptap/starter-kit", () => ({ default: {} }));
+vi.mock("@tiptap/starter-kit", () => ({
+  default: { configure: vi.fn(() => ({})) },
+}));
 vi.mock("@tiptap/extension-link", () => ({
   default: { configure: vi.fn(() => ({})) },
+}));
+vi.mock("dompurify", () => ({
+  default: { sanitize: vi.fn((html: string) => html) },
 }));
 
 // Mock campaignsApi

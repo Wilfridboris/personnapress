@@ -20,6 +20,12 @@ interface BlogEditorProps {
   onSave?: (html: string) => void;
 }
 
+const _DOMPURIFY_CONFIG = {
+  ALLOWED_TAGS: ["h1", "h2", "h3", "h4", "p", "ul", "ol", "li", "strong", "em", "a", "br", "blockquote", "code", "pre"],
+  ALLOWED_ATTR: ["href", "title", "rel"],
+  FORBID_ATTR: ["target"],
+} as const;
+
 const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
   ({ initialHtml, campaignId, readOnly = false }, ref) => {
     const [isDirty, setIsDirty] = useState(false);
@@ -31,7 +37,7 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
 
     const editor = useEditor({
       extensions: [
-        StarterKit,
+        StarterKit.configure({ horizontalRule: false, strike: false }),
         Link.configure({ openOnClick: false, HTMLAttributes: { class: "underline" } }),
       ],
       content: initialHtml,
@@ -60,12 +66,14 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
     }));
 
     async function handleSave() {
-      if (!editor) return;
+      if (!editor || editor.isEmpty) return;
       const html = editor.getHTML();
-      if (!html || html === "<p></p>") return;
+      if (!html) return;
       setIsSaving(true);
       try {
-        await campaignsApi.patch(campaignId, { blog_html: html });
+        const { default: DOMPurify } = await import("dompurify");
+        const sanitized = DOMPurify.sanitize(html, _DOMPURIFY_CONFIG);
+        await campaignsApi.patch(campaignId, { blog_html: sanitized });
         addToast("Blog post saved.", "success");
         setIsDirty(false);
       } catch (err) {
@@ -107,6 +115,24 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
             </button>
             <button
               type="button"
+              aria-label="Set link"
+              onClick={() => {
+                const url = window.prompt("URL:");
+                if (url) {
+                  editor.chain().focus().setLink({ href: url }).run();
+                } else {
+                  editor.chain().focus().unsetLink().run();
+                }
+              }}
+              className={cn(
+                "p-1.5 text-sm font-mono hover:bg-border transition-colors focus-visible:ring-2 focus-visible:ring-ink",
+                editor.isActive("link") && "bg-highlighter",
+              )}
+            >
+              <Link2 size={16} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
               aria-label="Toggle heading 2"
               onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
               className={cn(
@@ -140,24 +166,6 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
               )}
             >
               <Quote size={16} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              aria-label="Set link"
-              onClick={() => {
-                const url = window.prompt("URL:");
-                if (url) {
-                  editor.chain().focus().setLink({ href: url }).run();
-                } else {
-                  editor.chain().focus().unsetLink().run();
-                }
-              }}
-              className={cn(
-                "p-1.5 text-sm font-mono hover:bg-border transition-colors focus-visible:ring-2 focus-visible:ring-ink",
-                editor.isActive("link") && "bg-highlighter",
-              )}
-            >
-              <Link2 size={16} aria-hidden="true" />
             </button>
             <button
               type="button"

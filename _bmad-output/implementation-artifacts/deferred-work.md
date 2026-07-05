@@ -45,11 +45,15 @@
 - **W3 (Medium)**: No test asserting Save button is disabled (not just absent) while isSaving=true — low-value coverage gap. [frontend/__tests__/components/SocialPostEditors.test.tsx]
 - **W4 (Low)**: AC5 tab order gap when Save button absent (isDirty=false) — Tab from LinkedIn textarea reaches unrelated elements before Approve/Reject footer. No tabIndex or focus management applied. [frontend/components/campaigns/SocialPostEditors.tsx]
 
-## Deferred from: code review of 4-2-blog-post-wysiwyg-editing (2026-07-02)
+## Deferred from: code review of 4-2-blog-post-wysiwyg-editing (2026-07-05)
 
 - **D1 (Medium)**: Race condition — PATCH status check is non-atomic; a concurrent approve/reject could slip past the `pending_approval` guard before either commits. Needs `SELECT ... FOR UPDATE` or optimistic lock. [backend/app/routers/campaigns.py:patch_campaign]
 - **D2 (Low)**: `onSave` prop declared in BlogEditorProps but never invoked after successful save — Story 4.4 must wire this up when orchestrating the approve flow. [frontend/components/campaigns/BlogEditor.tsx]
 - **D3 (Low)**: `getCurrentHtml` forwardRef not passed from page.tsx — by design; Story 4.4 will add the ref when wiring the approve button. [frontend/app/(app)/campaigns/[id]/page.tsx]
+- **D4 (High)**: Save in-flight + Approve race → false error toast — if user saves then immediately approves, the PATCH resolves against an already-approved campaign and shows a false error. BlogEditor's `isSaving` state not surfaced to ApprovalPanel. Fix in Story 4.4 approve flow. [frontend/components/campaigns/ApprovalGateClient.tsx]
+- **D5 (High)**: handleApprove always patches blog_html even when user made no edits — bypasses dirty guard, re-sanitizes AI content through nh3 on every approval. Story 4.4 to add `isDirty` check via ref handle. [approval-panel.tsx]
+- **D6 (Medium)**: Optimistic approval shows stale blog content in BlogHtmlRenderer until router.refresh() resolves — user sees pre-edit content for the duration of the RSC refresh. Story 4.4 to track last-saved HTML in local state. [frontend/components/campaigns/ApprovalGateClient.tsx]
+- **D7 (Medium)**: `readOnly` prop change not propagated to Tiptap (`editor.setEditable` not called) — masked by current unmount/remount pattern but would break if BlogEditor is kept mounted while readOnly changes. Add `useEffect(() => { editor?.setEditable(!readOnly); }, [editor, readOnly])` as defensive fix. [frontend/components/campaigns/BlogEditor.tsx]
 
 ## Deferred from: code review of 4-1-approval-gate-campaign-preview-voice-fidelity-badge (2026-07-02)
 
@@ -88,6 +92,16 @@
 
 - **D1 (Low)**: No recovery path from stuck in-progress state when `client.brand_voice_profile` is null after `router.refresh()` resolves — possible if read replica lags or model serialization error. Needs timeout/fallback transition to `"failed"` state.
 - **D2 (Medium)**: No rate-limiting or quota guard on `POST /clients/{id}/ingest` — authenticated owner can spam the endpoint creating unbounded job records. Architectural concern; address at infra or middleware layer.
+
+## Deferred from: epic-level code review of Epic 3 (2026-07-04)
+
+- **D01 (Low)**: `completeOnboarding`-before-`create` trade-off — if campaign creation fails after onboarding is flagged complete, the flag stays set. Spec Dev Notes explicitly accept this as a UX trade-off (nudge card handles it). [frontend/components/onboarding/OnboardingFlow.tsx]
+- **D02 (Low)**: Retry creates a new campaign per AC 3.2-6 — orphaned failed campaigns accumulate with no cleanup. Design gap in the spec; no clean-up endpoint exists. [frontend/components/campaigns/CampaignGenerationOverlay.tsx]
+- **D03 (Low)**: `update_campaign_content` repo function defined but never called by the generation service (duplicate of existing D1 from story 3.3 review). [backend/app/db/repositories/campaigns.py]
+- **D04 (Low)**: `ImagePanel` hardcodes regen limit as `3` — valid coupling concern; requires API to expose the limit in campaign/subscription response. [frontend/components/campaigns/ImagePanel.tsx]
+- **D05 (Low)**: `"complete"`/`"completed"` dual terminal-status strings in both `TERMINAL_STATUSES` and `CAMPAIGN_TERMINAL_STATUSES` — defensive coverage; naming already consolidated per prior review. [frontend/hooks/useJobStatus.ts]
+- **D06 (Medium)**: Jobs permanently stuck `in_progress` after server restart — no startup sweep or cron to detect and fail orphaned jobs. Pre-existing architectural gap. [backend/app/workers/generate.py]
+- **D07 (Low)**: `handleRetry` doesn't reset `isRetrying` to `false` on success — component unmounts during navigation so no observable bug under normal conditions. [frontend/components/campaigns/CampaignGenerationOverlay.tsx]
 
 ## Deferred from: code review of 6-1-campaign-list-dashboard-with-status-filtering (2026-07-04)
 

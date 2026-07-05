@@ -175,13 +175,14 @@ async def patch_campaign(
 
     patch_data = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in _PATCHABLE_FIELDS}
     if "blog_html" in patch_data:
-        patch_data["blog_html"] = nh3.clean(
+        cleaned = nh3.clean(
             patch_data["blog_html"],
             tags=_ALLOWED_HTML_TAGS,
             attributes=_ALLOWED_HTML_ATTRS,
             url_schemes=_ALLOWED_URL_SCHEMES,
             link_rel=None,
         )
+        patch_data["blog_html"] = cleaned or None
 
     for key, value in patch_data.items():
         setattr(campaign, key, value)

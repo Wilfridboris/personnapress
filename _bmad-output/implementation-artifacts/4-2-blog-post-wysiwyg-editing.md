@@ -341,3 +341,13 @@ claude-sonnet-4-6
 - [x] [Review][Defer] Race condition: status check is non-atomic; concurrent PATCH and approve could slip past guard [backend/app/routers/campaigns.py] — deferred, pre-existing architectural pattern
 - [x] [Review][Defer] `onSave` prop declared but never called — Story 4.4 integration concern [frontend/components/campaigns/BlogEditor.tsx] — deferred, Story 4.4 will wire this up
 - [x] [Review][Defer] `getCurrentHtml` ref not passed from page.tsx — by design, Story 4.4 will add the ref [frontend/app/(app)/campaigns/[id]/page.tsx] — deferred, by design for Story 4.4
+
+- [x] [Review][Patch] StarterKit HorizontalRule and Strike produce `<hr>` and `<s>` that nh3 strips silently on save — data loss for users who use those formatting options [frontend/components/campaigns/BlogEditor.tsx]
+- [x] [Review][Patch] Toolbar button order wrong — Link placed after Blockquote, spec (AC1) requires Bold, Italic, Link, H2, H3, Blockquote, Undo [frontend/components/campaigns/BlogEditor.tsx]
+- [x] [Review][Patch] Empty-content guard only catches exact `"<p></p>"` — misses whitespace paragraphs, empty headings, etc.; use `editor.isEmpty` instead [frontend/components/campaigns/BlogEditor.tsx]
+- [x] [Review][Patch] nh3 returning `""` stored as empty string → `rawBlogHtml` is falsy → GeneratingPlaceholder shown for a saved campaign; store `None` when nh3 output is empty [backend/app/routers/campaigns.py]
+- [x] [Review][Patch] Frontend DOMPurify not applied before PATCH — AC4 requires frontend sanitization as first defense layer [frontend/components/campaigns/BlogEditor.tsx]
+- [x] [Review][Defer] Save in-flight + Approve race → false error toast after successful approval — Story 4.4 concern; BlogEditor's isSaving not surfaced to ApprovalPanel [frontend/components/campaigns/ApprovalGateClient.tsx] — deferred, Story 4.4 to fix
+- [x] [Review][Defer] handleApprove always patches even when user made no edits, bypasses empty guard, re-sanitizes AI content through nh3 — Story 4.4 concern [approval-panel.tsx] — deferred, Story 4.4 to add isDirty check
+- [x] [Review][Defer] Optimistic approval shows stale blog content in BlogHtmlRenderer until router.refresh() resolves — Story 4.4 concern [frontend/components/campaigns/ApprovalGateClient.tsx] — deferred, Story 4.4 to track last-saved HTML
+- [x] [Review][Defer] readOnly prop change not propagated to Tiptap editor (setEditable not called) — masked by current unmount/remount pattern but fragile [frontend/components/campaigns/BlogEditor.tsx] — deferred, future-proofing only
