@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("client_id", linkedInClientId);
   authUrl.searchParams.set("redirect_uri", `${APP_URL}/api/auth/linkedin/callback`);
-  authUrl.searchParams.set("scope", "w_member_social");
+  authUrl.searchParams.set("scope", "openid profile w_member_social");
   authUrl.searchParams.set("state", state);
 
   const response = NextResponse.redirect(authUrl.toString());

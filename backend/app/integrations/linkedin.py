@@ -76,7 +76,7 @@ async def get_user_name(access_token: str) -> str:
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             "https://api.linkedin.com/v2/userinfo",
-            headers={"Authorization": f"Bearer {access_token}"},
+            headers={"Authorization": f"Bearer {access_token}", "LinkedIn-Version": "202602"},
         )
     if resp.status_code != 200:
         return "unknown"
