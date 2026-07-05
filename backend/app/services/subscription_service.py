@@ -10,7 +10,7 @@ from sqlmodel import select
 
 from app.core.config import settings
 from app.core.constants import PLAN_LIMITS, get_stripe_price_to_tier
-from app.db.repositories.models import Campaign, Client, Subscription, User
+from app.db.repositories.models import Campaign, Client, GenerationLog, Subscription, User
 from app.schemas.subscription import PlanLimits, SubscriptionResponse
 
 logger = logging.getLogger(__name__)
@@ -97,6 +97,7 @@ async def check_campaign_limit(db: AsyncSession, user_id: uuid.UUID) -> None:
     if sub:
         current: int = sub.campaigns_used
     else:
+        await db.execute(select(User).where(User.id == user_id).with_for_update())
         count_result = await db.execute(
             select(func.count()).select_from(Campaign)
             .join(Client, Campaign.client_id == Client.id)
@@ -143,7 +144,19 @@ async def check_image_limit(db: AsyncSession, user_id: uuid.UUID) -> None:
         plan_tier = sub.plan_tier if sub else "starter"
 
     limit = PLAN_LIMITS.get(plan_tier, PLAN_LIMITS["starter"])["image_gens"]
-    current: int = sub.image_gen_used if sub else 0
+
+    if sub:
+        current: int = sub.image_gen_used
+    else:
+        await db.execute(select(User).where(User.id == user_id).with_for_update())
+        count_result = await db.execute(
+            select(func.coalesce(func.sum(GenerationLog.replicate_count), 0))
+            .where(
+                GenerationLog.user_id == user_id,
+                GenerationLog.replicate_count.isnot(None),
+            )
+        )
+        current = int(count_result.scalar() or 0)
 
     if current >= limit:
         next_tier_map = {"starter": "growth", "growth": "agency"}

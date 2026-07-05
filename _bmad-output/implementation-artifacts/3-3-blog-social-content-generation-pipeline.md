@@ -327,6 +327,14 @@ frontend/lib/types.ts
 - [x] [Review][Defer] `update_campaign_content`/`update_job_status` defined but unused — pre-existing design inconsistency [campaigns.py, jobs.py]
 - [x] [Review][Defer] `_strip_fences` not refactored into `extract_brand_voice` — pre-existing code not in scope [gemini.py:extract_brand_voice]
 - [x] [Review][Defer] Prompt injection risk via user-supplied `brain_dump` in template — systemic security concern [gemini.py]
+- [x] [Review][Patch] `run_generation` has no idempotency guard — added status check (`job.status != "pending"` → early return) before dispatching pipeline [backend/app/workers/generate.py]
+- [x] [Review][Patch] BVP `tone`/`banned_jargon` fields with non-string values → `str.join()` raises `TypeError` — cast to `str(t)` / `str(j)` in generator expression [backend/app/integrations/gemini.py]
+- [x] [Review][Patch] Gemini voice score values not type-checked — added `isinstance(v, (int, float))` validation for all three keys [backend/app/integrations/gemini.py]
+- [x] [Review][Patch] `_gemini_with_retry` only executes 2 sleeps (1s, 2s) — changed `max_retries=3` to `max_retries=4`; now 4 total attempts with 1s, 2s, 4s between them [backend/app/services/generation.py]
+- [x] [Review][Patch] LinkedIn post length only warned, not enforced — added truncation to 1299 chars + "…" when >1300; warning retained for <500 [backend/app/integrations/gemini.py]
+- [x] [Review][Patch] `_strip_fences` doesn't handle preamble text — changed `raw.startswith("```")` to `raw.find("```")` so preamble text before the fence is skipped [backend/app/integrations/gemini.py]
+- [x] [Review][Defer] `update_campaign_content` repo function defined but never called — generation service mutates ORM attributes directly; dead code, no correctness impact — deferred, pre-existing
+- [x] [Review][Defer] Jobs permanently stuck `in_progress` after server restart — no recovery sweep; pre-existing architectural concern — deferred, pre-existing
 
 ## Change Log
 

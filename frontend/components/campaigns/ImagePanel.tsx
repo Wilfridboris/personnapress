@@ -4,12 +4,14 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
 import { campaignsApi, APIError } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
 
 interface ImagePanelProps {
   campaignId: string;
   imageUrl: string | null;
   imageRegenCount: number;
   jobErrorDetails: string | null;
+  isGenerating?: boolean;
 }
 
 export function ImagePanel({
@@ -17,6 +19,7 @@ export function ImagePanel({
   imageUrl,
   imageRegenCount,
   jobErrorDetails,
+  isGenerating = false,
 }: ImagePanelProps) {
   const [currentImageUrl, setCurrentImageUrl] = useState(imageUrl);
   const [currentRegenCount, setCurrentRegenCount] = useState(imageRegenCount);
@@ -47,7 +50,27 @@ export function ImagePanel({
     }
   }
 
-  // No image state — covers failed generation, limit reached, and no-context cases.
+  // During active generation, show an animated placeholder — the image hasn't
+  // been generated yet so actions would be misleading.
+  if (isGenerating && !currentImageUrl) {
+    return (
+      <div className="border border-border">
+        <div className="px-6 py-4 border-b border-border">
+          <h2 className="font-mono text-xs text-graphite uppercase tracking-widest">
+            Featured Image
+          </h2>
+        </div>
+        <div className="p-6">
+          <div
+            className="w-full animate-pulse bg-border"
+            style={{ aspectRatio: "1200/630" }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // No image state — covers failed generation and no-context cases.
   // The regenerate endpoint enforces the subscription limit and will surface a proper
   // error message if the quota is genuinely exhausted.
   if (!currentImageUrl) {
@@ -64,17 +87,19 @@ export function ImagePanel({
               ? "Image generation failed — blog and social posts are complete."
               : "No featured image generated."}
           </p>
-          <button
+          <Button
+            variant="primary"
             onClick={handleRegenerate}
             disabled={isRegenerating}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-ink text-paper font-mono text-sm hover:bg-graphite transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-busy={isRegenerating}
+            className="w-full font-mono"
           >
             {isRegenerating ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
               "Generate image"
             )}
-          </button>
+          </Button>
           {error && (
             <p className="font-mono text-xs text-danger">{error}</p>
           )}
@@ -101,10 +126,12 @@ export function ImagePanel({
             sizes="(max-width: 768px) 100vw, 40vw"
           />
         </div>
-        <button
+        <Button
+          variant="secondary"
           onClick={handleRegenerate}
           disabled={isAtLimit || isRegenerating}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-transparent border border-ink text-ink font-mono text-sm hover:bg-ink hover:text-paper transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-busy={isRegenerating}
+          className="w-full font-mono"
         >
           {isRegenerating ? (
             <Loader2 className="size-4 animate-spin" />
@@ -113,7 +140,7 @@ export function ImagePanel({
           ) : (
             `Regenerate image (${remainingRegens} remaining)`
           )}
-        </button>
+        </Button>
         {error && (
           <p className="font-mono text-xs text-danger">{error}</p>
         )}

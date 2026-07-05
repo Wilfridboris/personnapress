@@ -22,6 +22,15 @@ async def run_generation(job_id: uuid.UUID) -> None:
     """Entry point called by the BackgroundTask dispatcher."""
     try:
         async with AsyncSessionLocal() as db:
+            job = await get_job(db, job_id)
+            if not job or job.status != "pending":
+                logger.warning(
+                    "run_generation: job %s skipped (status=%s)",
+                    job_id,
+                    job.status if job else "not found",
+                )
+                return
+
             # Text generation (Story 3.3)
             await generation_service.run_generation_pipeline(job_id, db)
 

@@ -111,6 +111,7 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
             imageUrl={campaign.image_url}
             imageRegenCount={campaign.image_regen_count}
             jobErrorDetails={jobErrorDetails ?? null}
+            isGenerating={jobIsActive}
           />
           <div className="border border-border">
             <div className="p-6">

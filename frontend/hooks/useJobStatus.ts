@@ -33,7 +33,9 @@ export function useJobStatus(jobId: string | null | undefined) {
   });
 
   const job = query.data ?? null;
-  const isPolling = !!jobId && !!job && POLLING_STATUSES.has(job.status);
+  // Include the pre-first-fetch window (job=null but jobId is set) so the
+  // beforeunload guard is active from the moment generation begins.
+  const isPolling = !!jobId && (!job || POLLING_STATUSES.has(job.status));
 
   return { job, isPolling, error: query.error };
 }

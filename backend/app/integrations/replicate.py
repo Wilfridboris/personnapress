@@ -42,6 +42,8 @@ async def generate_image(prompt: str, width: int = 1200, height: int = 630) -> s
         },
     )
     # output is a FileOutput object or a list — normalise either case
+    if isinstance(output, (list, tuple)) and not output:
+        raise ValueError("Replicate returned empty output list")
     image_url = str(output[0] if isinstance(output, (list, tuple)) else output)
     logger.info("replicate.generate_image: received URL %s", image_url[:60])
     return image_url

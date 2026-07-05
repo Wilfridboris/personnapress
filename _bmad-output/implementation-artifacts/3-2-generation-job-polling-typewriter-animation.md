@@ -287,6 +287,12 @@ claude-sonnet-4-6
 - [x] [Review][Defer] Hydration mismatch on `prefersReducedMotion` SSR→client — deferred, intentional progressive enhancement pattern
 - [x] [Review][Defer] `router.refresh()` fired after 1500ms without awaiting `invalidateQueries` completion — deferred, pragmatic
 - [x] [Review][Defer] AC 7 in-app navigation modal not wired up — deferred per Dev Notes (beforeunload + banner approach accepted)
+- [x] [Review][Patch] CRITICAL: Generation overlay never renders — DISMISSED as false positive; HEAD code uses `!campaign.blog_html` (not `CAMPAIGN_TERMINAL_STATUSES`) which is correct logic; no fix needed [frontend/app/(app)/campaigns/[id]/page.tsx, frontend/app/(app)/campaigns/[id]/GenerationGate.tsx]
+- [x] [Review][Patch] Generation info banner missing "Leaving will not cancel it" phrase — updated banner text to spec: "Generation is in progress. Leaving will not cancel it — your draft will be available on the Dashboard when complete." [frontend/components/campaigns/CampaignGenerationOverlay.tsx]
+- [x] [Review][Patch] `beforeunload` guard not installed during first 2s poll window — fixed `isPolling` to `!!jobId && (!job || POLLING_STATUSES.has(job.status))` to cover pre-first-fetch window [frontend/hooks/useJobStatus.ts]
+- [x] [Review][Defer] Retry handler creates new campaign per spec (AC 3.2-6) — orphaned failed campaigns accumulate as pre-existing design gap [frontend/components/campaigns/CampaignGenerationOverlay.tsx] — deferred, pre-existing
+- [x] [Review][Defer] `"complete"`/`"completed"` dual terminal-status strings in both TERMINAL_STATUSES sets — defensive coverage, naming already fixed per prior review — deferred, pre-existing
+- [x] [Review][Defer] `handleRetry` doesn't reset `isRetrying` to `false` on success — component unmounts on navigation anyway — deferred, pre-existing
 
 ## Change Log
 

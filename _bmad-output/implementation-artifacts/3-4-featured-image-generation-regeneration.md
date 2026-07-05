@@ -296,6 +296,18 @@ frontend/app/(app)/campaigns/[id]/page.tsx (modified — ImagePanel + job fetch)
 frontend/lib/api.ts (modified — regenerateImage)
 frontend/next.config.ts (modified — supabase.co + *.replicate.com remotePatterns)
 
+### Review Findings
+
+- [x] [Review][Patch] `check_image_limit` never increments `image_gen_used` when user has no Subscription row — fixed: lock User row + count from GenerationLog when sub=None; sub increment path unchanged [backend/app/services/subscription_service.py]
+- [x] [Review][Patch] Quota check bypassed when `client` is `None` — fixed: `run_image_generation` now fails job with error when client not found instead of proceeding with quota skipped [backend/app/services/image.py]
+- [x] [Review][Patch] Replicate returns empty list → unguarded `IndexError` — added explicit guard: `if isinstance(output, (list, tuple)) and not output: raise ValueError(...)` [backend/app/integrations/replicate.py]
+- [x] [Review][Patch] `getJob` in server component does not forward authentication cookies — DISMISSED as false positive; HEAD code already calls `headers: await authHeaders()` [frontend/app/(app)/campaigns/[id]/page.tsx]
+- [x] [Review][Patch] `regenerate_image` logs no `GenerationLog` entry — added `create_generation_log(..., replicate_count=1)` after successful regen commit [backend/app/services/image.py]
+- [x] [Review][Patch] `ImagePanel` shows misleading state during active generation — added `isGenerating` prop; when true and imageUrl=null shows animated placeholder instead of actions [frontend/components/campaigns/ImagePanel.tsx]
+- [x] [Review][Patch] `ImagePanel` uses raw `<button>` elements — replaced both buttons with `<Button variant="primary">` and `<Button variant="secondary">` from Paper Style component [frontend/components/campaigns/ImagePanel.tsx]
+- [x] [Review][Patch] Regenerate endpoint checks regen limit before subscription quota — swapped order: subscription quota checked first, then regen count check [backend/app/services/image.py]
+- [x] [Review][Defer] `ImagePanel` hardcodes regen limit as `3` — valid frontend/backend coupling concern; requires API to expose the limit — deferred, pre-existing
+
 ## Change Log
 
 - 2026-07-02: Story implemented — FLUX.1 [pro] image generation pipeline, Supabase Storage re-upload, regeneration endpoint, ImagePanel component with all states, subscription quota enforcement (18 tests added)

@@ -47,11 +47,11 @@ except ImportError:
         return False
 
 
-async def _gemini_with_retry(fn, *args, max_retries: int = 3, **kwargs):
+async def _gemini_with_retry(fn, *args, max_retries: int = 4, **kwargs):
     """Call an async Gemini function with exponential backoff on transient errors.
 
     Catches ServiceUnavailable (5xx) and ResourceExhausted (429).
-    Backoff: 1s, 2s, 4s between attempts.
+    4 total attempts with 1s, 2s, 4s between them.
     Re-raises on max_retries exhaustion.
     """
     last_exc: Exception | None = None

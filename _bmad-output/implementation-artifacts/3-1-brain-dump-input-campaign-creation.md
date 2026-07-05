@@ -240,6 +240,9 @@ claude-sonnet-4-6
 - [x] [Review][Defer] `campaigns_used` never reset on billing cycle renewal — pre-existing Stripe webhook handler, not this story — deferred, pre-existing
 - [x] [Review][Defer] `GET /campaigns` has no pagination — architectural gap, out of scope for this story — deferred, pre-existing
 - [x] [Review][Defer] `run_generation` stub — intentional, filled in Story 3.3 — deferred, pre-existing
+- [x] [Review][Decision] Character counter at 0 chars: applied option 1 (Danger per spec AC 3.1-2) — removed `charCount > 0 &&` guard so 0 chars shows Danger [frontend/app/(app)/campaigns/new/page.tsx]
+- [x] [Review][Patch] TOCTOU: two concurrent campaign creates for a user with no Subscription row both pass limit check — added `.with_for_update()` on User row in no-sub branch [backend/app/services/subscription_service.py]
+- [x] [Review][Patch] `create_campaign` does not explicitly set `status='pending_approval'` — added explicit `status="pending_approval"` to Campaign constructor [backend/app/db/repositories/campaigns.py]
 
 ## Change Log
 

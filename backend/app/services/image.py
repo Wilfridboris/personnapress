@@ -100,21 +100,32 @@ async def run_image_generation(
 
     client_result = await db.execute(select(Client).where(Client.id == campaign.client_id))
     client = client_result.scalar_one_or_none()
-    brand_voice_profile: dict | None = client.brand_voice_profile if client else None
-    user_id = client.user_id if client else None
+    if not client:
+        logger.error(
+            "run_image_generation: client %s not found for campaign %s, cannot check quota",
+            campaign.client_id,
+            campaign_id,
+        )
+        job.status = "complete"
+        job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        job.error_details = "Image generation failed — client record not found."
+        await db.commit()
+        return
+
+    brand_voice_profile: dict | None = client.brand_voice_profile
+    user_id = client.user_id
 
     # ── Step 2: Subscription check ────────────────────────────────────────────
-    if user_id:
-        try:
-            await subscription_service.check_image_limit(db, user_id)
-        except HTTPException:
-            logger.warning(
-                "run_image_generation: image limit reached for user %s, skipping", user_id
-            )
-            job.status = "complete"
-            job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
-            await db.commit()
-            return
+    try:
+        await subscription_service.check_image_limit(db, user_id)
+    except HTTPException:
+        logger.warning(
+            "run_image_generation: image limit reached for user %s, skipping", user_id
+        )
+        job.status = "complete"
+        job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        await db.commit()
+        return
 
     # ── Step 3: Build prompt ──────────────────────────────────────────────────
     h1_match = re.search(
@@ -197,7 +208,10 @@ async def regenerate_image(
             detail={"error": {"code": "CAMPAIGN_NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
         )
 
-    # Regen count check (before quota so we don't consume a slot on a blocked regen)
+    # Subscription quota check first (spec AC 3.4-5: quota before regen limit)
+    await subscription_service.check_image_limit(db, user_id)
+
+    # Regen count check
     if campaign.image_regen_count >= _IMAGE_REGEN_LIMIT:
         raise HTTPException(
             status_code=400,
@@ -209,9 +223,6 @@ async def regenerate_image(
                 }
             },
         )
-
-    # Subscription quota check
-    await subscription_service.check_image_limit(db, user_id)
 
     # Build prompt
     client_result = await db.execute(select(Client).where(Client.id == campaign.client_id))
@@ -238,6 +249,14 @@ async def regenerate_image(
     # Update campaign
     campaign.image_url = public_url
     campaign.image_regen_count += 1
+    await db.commit()
+
+    await generation_logs_repo.create_generation_log(
+        db,
+        user_id=user_id,
+        campaign_id=campaign_id,
+        replicate_count=1,
+    )
     await db.commit()
 
     return public_url, campaign.image_regen_count

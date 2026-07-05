@@ -166,7 +166,7 @@ export default function NewCampaignPage() {
         <p
           className={cn(
             "text-xs font-mono",
-            charCount > 0 && charCount < MIN_CHARS ? "text-danger" : "text-graphite"
+            charCount < MIN_CHARS ? "text-danger" : "text-graphite"
           )}
         >
           {charCount} / {MAX_CHARS.toLocaleString()} characters

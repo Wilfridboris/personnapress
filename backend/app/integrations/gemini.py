@@ -144,9 +144,10 @@ Return ONLY a valid JSON object (no markdown):
 
 
 def _strip_fences(raw: str) -> str:
-    if not raw.startswith("```"):
+    fence_start = raw.find("```")
+    if fence_start == -1:
         return raw
-    lines = raw.split("\n")
+    lines = raw[fence_start:].split("\n")
     start = 1
     end = len(lines)
     if lines and lines[-1].strip() == "```":
@@ -161,10 +162,10 @@ async def generate_blog(
 ) -> str:
     if brand_voice_profile:
         bvp_json = json.dumps(brand_voice_profile)
-        tone_list = ", ".join(brand_voice_profile.get("tone", []))
+        tone_list = ", ".join(str(t) for t in brand_voice_profile.get("tone", []))
         cadence = brand_voice_profile.get("cadence", {})
         avg_sentence_length = cadence.get("avg_sentence_length", 15)
-        banned_jargon_list = ", ".join(brand_voice_profile.get("banned_jargon", []))
+        banned_jargon_list = ", ".join(str(j) for j in brand_voice_profile.get("banned_jargon", []))
     else:
         bvp_json = _DEFAULT_VOICE
         tone_list = "professional, clear, authoritative"
@@ -216,6 +217,10 @@ async def check_fidelity(
     for key in ("tone_score", "cadence_score", "jargon_violations"):
         if key not in data:
             raise ValueError(f"check_fidelity: missing key '{key}' in Gemini response")
+        if not isinstance(data[key], (int, float)):
+            raise ValueError(
+                f"check_fidelity: '{key}' must be numeric, got {type(data[key]).__name__}"
+            )
 
     return data
 
@@ -263,9 +268,15 @@ async def generate_social(
         data["x_post"] = data["x_post"][:279] + "…"
 
     ln_len = len(data["linkedin_post"])
-    if ln_len < 500 or ln_len > 1300:
+    if ln_len > 1300:
         logger.warning(
-            "generate_social: LinkedIn post length %d is outside expected 500–1300 chars",
+            "generate_social: LinkedIn post exceeded 1300 chars (%d), truncating",
+            ln_len,
+        )
+        data["linkedin_post"] = data["linkedin_post"][:1299] + "…"
+    elif ln_len < 500:
+        logger.warning(
+            "generate_social: LinkedIn post length %d is below expected 500 chars",
             ln_len,
         )
 
