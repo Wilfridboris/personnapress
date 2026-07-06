@@ -12,8 +12,6 @@ import {
   Clock,
   Users,
   LayoutDashboard,
-  ShieldCheck,
-  Zap,
 } from "lucide-react";
 import { FaqAccordion } from "./_components/FaqAccordion";
 
@@ -144,28 +142,6 @@ const PERSONAS = [
   },
 ];
 
-const FEATURES = [
-  {
-    icon: Globe,
-    heading: "Brand Voice Ingestion",
-    body: "Paste a website URL or upload writing samples. PersonaPress extracts your tone, cadence, and banned jargon into a living profile that improves with every campaign.",
-  },
-  {
-    icon: Mic,
-    heading: "Brain Dump to Campaign",
-    body: "Drop a raw thought or bullet list. In under 90 seconds you get a full SEO blog post (800-1,500 words), an X post, a LinkedIn post, and a featured image.",
-  },
-  {
-    icon: ShieldCheck,
-    heading: "Human Approval Gate",
-    body: "Every draft lands in your inbox for review. Edit in a WYSIWYG editor, approve, reject, or regenerate. Nothing ships without your sign-off.",
-  },
-  {
-    icon: Zap,
-    heading: "One-Click Publishing",
-    body: "Publish to WordPress, Webflow, X, and LinkedIn simultaneously. Schedule posts to go live at peak engagement times without logging into four separate platforms.",
-  },
-];
 
 const PAIN_POINTS = [
   {
@@ -454,36 +430,6 @@ export default function LandingPage() {
                 </h3>
                 <p className="text-sm text-graphite leading-relaxed text-pretty">
                   {description}
-                </p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <div className="border-t border-border" />
-
-        {/* Features */}
-        <section id="features" className="max-w-6xl mx-auto px-6 py-20">
-          <header className="mb-14">
-            <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-4">
-              Features
-            </p>
-            <h2 className="font-display text-4xl font-bold text-ink text-balance">
-              Everything from idea to live post
-            </h2>
-          </header>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-px border border-border bg-border">
-            {FEATURES.map(({ icon: Icon, heading, body }) => (
-              <article
-                key={heading}
-                className="bg-paper p-8 group hover:bg-highlight transition-colors"
-              >
-                <Icon className="size-5 text-graphite mb-6 group-hover:text-ink transition-colors" aria-hidden="true" />
-                <h3 className="font-display text-xl font-bold text-ink mb-3 text-balance">
-                  {heading}
-                </h3>
-                <p className="text-sm text-graphite leading-relaxed text-pretty">
-                  {body}
                 </p>
               </article>
             ))}
