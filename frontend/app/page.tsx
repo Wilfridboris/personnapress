@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   Mic,
@@ -8,7 +9,14 @@ import {
   CheckCircle2,
   Send,
   Globe,
+  Clock,
+  Users,
+  LayoutDashboard,
+  ShieldCheck,
+  Zap,
 } from "lucide-react";
+import { FaqAccordion } from "./_components/FaqAccordion";
+
 export const metadata: Metadata = {
   title: "PersonaPress - Publish in Your Voice, Not AI's",
   description:
@@ -25,13 +33,50 @@ export const metadata: Metadata = {
   },
 };
 
-const jsonLd: Record<string, unknown> = {
+const schemaWebsite = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: "PersonaPress",
   url: "https://personapress.io",
   description:
     "An autonomous content engine that turns brain dumps into SEO-ranked blog posts and social campaigns in your authentic voice.",
+};
+
+const schemaSoftwareApp = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "PersonaPress",
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web",
+  url: "https://personapress.io",
+  description:
+    "PersonaPress learns your writing voice from existing content, then turns raw brain dumps into SEO-structured blog posts, social campaigns, and featured images. Published across WordPress, Webflow, X, and LinkedIn.",
+  offers: {
+    "@type": "Offer",
+    price: "0",
+    priceCurrency: "USD",
+    description: "14-day free trial, no credit card required",
+  },
+  featureList: [
+    "Brand voice extraction from existing content",
+    "AI blog post generation (SEO-structured HTML)",
+    "X (Twitter) and LinkedIn social post generation",
+    "AI featured image generation via FLUX.1",
+    "Human approval gate before any publish",
+    "WordPress and Webflow publishing",
+    "Scheduled publishing",
+    "Multi-client agency management",
+  ],
+};
+
+const schemaOrganization = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "PersonaPress",
+  url: "https://personapress.io",
+  logo: "https://personapress.io/images/PersonnaPress-opengraph.png",
+  description:
+    "PersonaPress is an AI content automation platform that learns your brand voice and publishes SEO-structured content across multiple platforms.",
 };
 
 const WORKFLOW_STEPS = [
@@ -81,20 +126,172 @@ const WORKFLOW_STEPS = [
 
 const PLATFORMS = ["WordPress", "Webflow", "X (Twitter)", "LinkedIn"];
 
+const PERSONAS = [
+  {
+    role: "Founders & Executives",
+    description:
+      "Turn domain expertise into consistent content without writing every word yourself. Set your voice once; the engine handles every post.",
+  },
+  {
+    role: "Solo Coaches",
+    description:
+      "Publish in your distinctive voice across platforms without hiring a content team. Your audience gets you, not a generic AI.",
+  },
+  {
+    role: "Content Agencies",
+    description:
+      "Manage multiple client voices from one dashboard. Each client gets a separate Brand Voice Profile; campaigns never cross-contaminate.",
+  },
+];
+
+const FEATURES = [
+  {
+    icon: Globe,
+    heading: "Brand Voice Ingestion",
+    body: "Paste a website URL or upload writing samples. PersonaPress extracts your tone, cadence, and banned jargon into a living profile that improves with every campaign.",
+  },
+  {
+    icon: Mic,
+    heading: "Brain Dump to Campaign",
+    body: "Drop a raw thought or bullet list. In under 90 seconds you get a full SEO blog post (800-1,500 words), an X post, a LinkedIn post, and a featured image.",
+  },
+  {
+    icon: ShieldCheck,
+    heading: "Human Approval Gate",
+    body: "Every draft lands in your inbox for review. Edit in a WYSIWYG editor, approve, reject, or regenerate. Nothing ships without your sign-off.",
+  },
+  {
+    icon: Zap,
+    heading: "One-Click Publishing",
+    body: "Publish to WordPress, Webflow, X, and LinkedIn simultaneously. Schedule posts to go live at peak engagement times without logging into four separate platforms.",
+  },
+];
+
+const PAIN_POINTS = [
+  {
+    icon: Clock,
+    stat: "6 hours per post",
+    description: "Writing takes too long even with generic AI tools that still require heavy editing.",
+  },
+  {
+    icon: Users,
+    stat: "Sounds like everyone else",
+    description: "No brand voice means no differentiation. Generic AI produces generic content.",
+  },
+  {
+    icon: LayoutDashboard,
+    stat: "4 platforms, 4 logins",
+    description: "Publishing friction kills consistency. Most teams give up before they build momentum.",
+  },
+];
+
+const FAQ_ITEMS = [
+  {
+    question: "What is PersonaPress and how does it work?",
+    answer:
+      "PersonaPress is an AI content engine that learns your exact writing voice, then turns raw ideas into SEO-structured blog posts and social campaigns. You paste a website URL or upload past writing samples, PersonaPress extracts your tone and style into a Brand Voice Profile, and then any time you submit a brain dump it generates a complete campaign in under 90 seconds.",
+  },
+  {
+    question: "How does PersonaPress learn my writing voice?",
+    answer:
+      "PersonaPress scrapes your website for blog posts and public content, then runs it through a voice extraction model (Gemini 2.5 Flash) that identifies your tone, sentence cadence, and words you never use (banned jargon). The resulting Brand Voice Profile is stored on your account and applied to every campaign. You can review and edit every field before finalizing.",
+  },
+  {
+    question: "What publishing platforms does PersonaPress support?",
+    answer:
+      "PersonaPress currently supports WordPress (self-hosted and WordPress.com), Webflow, X (Twitter), and LinkedIn. Meta / Instagram / Threads are architected and will ship in Phase 2. Each platform integration is independent; a failure on one platform does not block publishing to the others.",
+  },
+  {
+    question: "How long does content generation take?",
+    answer:
+      "A typical campaign (blog post + X post + LinkedIn post + featured image) generates in under 90 seconds. The 95th-percentile upper bound is 120 seconds. You see real-time progress via a typewriter animation while the pipeline runs.",
+  },
+  {
+    question: "Does PersonaPress publish content automatically?",
+    answer:
+      "No. Every draft goes through a human approval gate before anything is published. You review the full campaign, edit it in a WYSIWYG editor if needed, then explicitly approve or reject. Only after your approval can you trigger immediate or scheduled publishing.",
+  },
+  {
+    question: "What is a Brain Dump?",
+    answer:
+      "A Brain Dump is a free-form text input where you write your raw idea, voice note transcript, or bullet list. It can be between 20 and 10,000 characters. No structure is required. PersonaPress takes that rough input and transforms it into a polished, on-brand campaign.",
+  },
+  {
+    question: "How is PersonaPress different from ChatGPT or other AI writing tools?",
+    answer:
+      "Generic AI tools produce generic-sounding content because they have no knowledge of your voice. PersonaPress is trained on your specific content before generating anything. It also automates the full pipeline from idea to live post, including featured image generation and multi-platform publishing, which no general-purpose AI tool does.",
+  },
+  {
+    question: "Can I edit the AI-generated content before publishing?",
+    answer:
+      "Yes. The approval gate includes a full WYSIWYG editor for the blog post and plain-text editors with live character counters for X and LinkedIn posts. You can edit as much or as little as you want before approving.",
+  },
+  {
+    question: "What does the free trial include?",
+    answer:
+      "The 14-day free trial includes full access to all features: brand voice ingestion, campaign generation, image generation, and publishing to all connected platforms. No credit card is required to start. After 14 days you can subscribe to continue or your account enters a read-only state for 30 days.",
+  },
+  {
+    question: "Is PersonaPress suitable for agencies managing multiple clients?",
+    answer:
+      "Yes. PersonaPress has first-class multi-client support. Each client has a separate Brand Voice Profile, campaign history, and platform connections. You switch between clients from the dashboard. Campaigns never cross-contaminate between clients.",
+  },
+  {
+    question: "Can I publish to WordPress.com (not just self-hosted WordPress)?",
+    answer:
+      "Yes. PersonaPress supports both self-hosted WordPress (via Application Password) and WordPress.com (via OAuth 2.0). The WordPress.com OAuth flow handles authentication without requiring you to generate an application password.",
+  },
+  {
+    question: "How are featured images generated?",
+    answer:
+      "Featured images are generated using FLUX.1 [pro] via the Replicate API. The image is based on your blog post title and content summary, sized at 1200x630 pixels (standard OG/social dimensions), and stored in Supabase Storage. You can request up to 3 regenerations per campaign with an optional prompt override.",
+  },
+];
+
+const schemaFaq = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: FAQ_ITEMS.map(({ question, answer }) => ({
+    "@type": "Question",
+    name: question,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: answer,
+    },
+  })),
+};
+
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-paper">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaWebsite) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaSoftwareApp) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaOrganization) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaFaq) }}
       />
 
       {/* Navigation */}
       <header className="border-b border-border sticky top-0 bg-paper z-50">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <span className="font-display text-xl font-bold text-ink tracking-tight">
-            PersonaPress
-          </span>
+          <Image
+            src="/images/PersonnaPress-logo.png"
+            alt="PersonnaPress"
+            width={128}
+            height={128}
+            priority
+            className="h-8 w-auto"
+          />
           <nav className="flex items-center gap-8">
             <a
               href="#workflow"
@@ -108,11 +305,17 @@ export default function LandingPage() {
             >
               Platforms
             </a>
+            <a
+              href="#faq"
+              className="text-sm text-graphite hover:text-ink transition-colors"
+            >
+              FAQ
+            </a>
             <Link
               href="/dashboard"
               className="inline-flex items-center gap-2 bg-ink text-paper text-sm font-medium px-5 py-2 hover:bg-graphite transition-colors"
             >
-              Open App
+              Start Free Trial
               <ArrowRight className="size-3.5" aria-hidden="true" />
             </Link>
           </nav>
@@ -150,7 +353,7 @@ export default function LandingPage() {
                 href="/dashboard"
                 className="inline-flex items-center gap-2 bg-ink text-paper font-medium px-8 py-4 shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all"
               >
-                Start Publishing
+                Start Free Trial
                 <ArrowRight className="size-4" aria-hidden="true" />
               </Link>
               <a
@@ -160,10 +363,66 @@ export default function LandingPage() {
                 See how it works
               </a>
             </div>
+            <p className="font-mono text-xs text-graphite mt-4">
+              14-day free trial. No credit card required.
+            </p>
           </div>
         </section>
 
-        {/* Divider */}
+        <div className="border-t border-border" />
+
+        {/* Problem Statement */}
+        <section id="problem" className="max-w-6xl mx-auto px-6 py-20">
+          <header className="mb-14">
+            <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-4">
+              The Problem
+            </p>
+            <h2 className="font-display text-4xl font-bold text-ink text-balance">
+              AI tools write content that sounds like every other AI
+            </h2>
+          </header>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-px border border-border bg-border">
+            {PAIN_POINTS.map(({ icon: Icon, stat, description }) => (
+              <article key={stat} className="bg-paper p-8 group hover:bg-highlight transition-colors">
+                <Icon className="size-5 text-graphite mb-6 group-hover:text-ink transition-colors" aria-hidden="true" />
+                <h3 className="font-display text-xl font-bold text-ink mb-3 text-balance">
+                  {stat}
+                </h3>
+                <p className="text-sm text-graphite leading-relaxed text-pretty">
+                  {description}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <div className="border-t border-border" />
+
+        {/* Who It's For */}
+        <section id="for-who" className="max-w-6xl mx-auto px-6 py-20">
+          <header className="mb-14">
+            <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-4">
+              Built For
+            </p>
+            <h2 className="font-display text-4xl font-bold text-ink text-balance">
+              Content that sounds like you, at scale
+            </h2>
+          </header>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-px border border-border bg-border">
+            {PERSONAS.map(({ role, description }) => (
+              <article
+                key={role}
+                className="bg-paper p-8 group hover:bg-highlight transition-colors"
+              >
+                <h3 className="font-display text-xl font-bold text-ink mb-3">
+                  {role}
+                </h3>
+                <p className="text-sm text-graphite leading-relaxed">{description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <div className="border-t border-border" />
 
         {/* Workflow */}
@@ -201,7 +460,36 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Divider */}
+        <div className="border-t border-border" />
+
+        {/* Features */}
+        <section id="features" className="max-w-6xl mx-auto px-6 py-20">
+          <header className="mb-14">
+            <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-4">
+              Features
+            </p>
+            <h2 className="font-display text-4xl font-bold text-ink text-balance">
+              Everything from idea to live post
+            </h2>
+          </header>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-px border border-border bg-border">
+            {FEATURES.map(({ icon: Icon, heading, body }) => (
+              <article
+                key={heading}
+                className="bg-paper p-8 group hover:bg-highlight transition-colors"
+              >
+                <Icon className="size-5 text-graphite mb-6 group-hover:text-ink transition-colors" aria-hidden="true" />
+                <h3 className="font-display text-xl font-bold text-ink mb-3 text-balance">
+                  {heading}
+                </h3>
+                <p className="text-sm text-graphite leading-relaxed text-pretty">
+                  {body}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <div className="border-t border-border" />
 
         {/* Platforms */}
@@ -229,37 +517,73 @@ export default function LandingPage() {
           </p>
         </section>
 
-        {/* Divider */}
         <div className="border-t border-border" />
 
-        {/* CTA */}
-        <section className="max-w-6xl mx-auto px-6 py-20">
+        {/* Trial CTA */}
+        <section id="trial" className="max-w-6xl mx-auto px-6 py-20">
           <div className="border border-ink p-12 shadow-brutal">
+            <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-4">
+              Get Started
+            </p>
             <h2 className="font-display text-4xl font-bold text-ink mb-4 text-balance">
-              Ready to stop writing and start publishing?
+              14 days free. Your voice, ranked and published.
             </h2>
-            <p className="text-graphite mb-8 max-w-lg text-pretty">
-              Set up your brand voice profile in under 10 minutes. Your first
-              campaign draft is waiting.
+            <p className="text-graphite mb-2 max-w-lg text-pretty">
+              Set up your brand voice profile in under 10 minutes. Your first campaign draft is ready in 90 seconds.
+            </p>
+            <p className="font-mono text-xs text-graphite mb-8">
+              No credit card required. Cancel anytime.
             </p>
             <Link
               href="/dashboard"
               className="inline-flex items-center gap-2 bg-ink text-paper font-medium px-8 py-4 hover:bg-graphite transition-colors"
             >
-              Open PersonaPress
+              Start Your Free Trial
               <ArrowRight className="size-4" aria-hidden="true" />
             </Link>
           </div>
+        </section>
+
+        <div className="border-t border-border" />
+
+        {/* FAQ */}
+        <section id="faq" className="max-w-6xl mx-auto px-6 py-20">
+          <header className="mb-14">
+            <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-4">
+              FAQ
+            </p>
+            <h2 className="font-display text-4xl font-bold text-ink text-balance">
+              Frequently asked questions
+            </h2>
+          </header>
+          <FaqAccordion items={FAQ_ITEMS} />
         </section>
       </main>
 
       {/* Footer */}
       <footer className="border-t border-border">
-        <div className="max-w-6xl mx-auto px-6 py-8 flex items-center justify-between">
-          <span className="font-display font-bold text-ink">PersonaPress</span>
-          <p className="font-mono text-xs text-graphite">
-            Your Ideas, Published and Ranked.
-          </p>
+        <div className="max-w-6xl mx-auto px-6 py-8">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <Image
+              src="/images/PersonnaPress-logo.png"
+              alt="PersonnaPress"
+              width={128}
+              height={128}
+              className="h-7 w-auto"
+            />
+            <nav className="flex flex-wrap gap-6">
+              <a href="#workflow" className="font-mono text-xs text-graphite hover:text-ink transition-colors">How it works</a>
+              <a href="#platforms" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Platforms</a>
+              <a href="#faq" className="font-mono text-xs text-graphite hover:text-ink transition-colors">FAQ</a>
+              <Link href="/dashboard" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Sign up</Link>
+              <Link href="/login" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Log in</Link>
+            </nav>
+          </div>
+          <div className="border-t border-border mt-6 pt-6">
+            <p className="font-mono text-xs text-graphite">
+              &copy; {new Date().getFullYear()} PersonnaPress. All rights reserved.
+            </p>
+          </div>
         </div>
       </footer>
     </div>

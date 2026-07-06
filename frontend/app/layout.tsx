@@ -33,11 +33,24 @@ export const metadata: Metadata = {
   keywords: [
     "AI content writing",
     "blog automation",
-    "content marketing",
+    "content marketing automation",
     "social media automation",
     "SEO blog posts",
     "brand voice AI",
+    "AI writing tool",
+    "content agency tool",
+    "WordPress publishing automation",
+    "LinkedIn content automation",
   ],
+  manifest: "/site.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon.png", type: "image/png" },
+    ],
+    apple: "/apple-icon.png",
+    shortcut: "/favicon.ico",
+  },
   openGraph: {
     title: "PersonaPress - Publish in Your Voice, Not AI's",
     description:
@@ -45,15 +58,28 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     siteName: "PersonaPress",
+    images: [
+      {
+        url: "https://personapress.io/images/PersonnaPress-opengraph.png",
+        width: 1200,
+        height: 630,
+        alt: "PersonaPress - AI content engine that publishes in your voice",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "PersonaPress",
+    title: "PersonaPress - Publish in Your Voice, Not AI's",
     description: "AI content that sounds like you, published and ranked.",
+    images: ["https://personapress.io/images/PersonnaPress-opengraph.png"],
   },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
   },
 };
 
