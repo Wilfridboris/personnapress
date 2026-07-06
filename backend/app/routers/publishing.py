@@ -28,6 +28,7 @@ from app.integrations import webflow as webflow_integration
 from app.integrations import wordpress as wordpress_integration
 from app.integrations import wordpress_com as wordpress_com_integration
 from app.scheduler.scheduler import scheduler
+from app.services.subscription_service import check_trial_not_expired
 from app.workers.publish import run_publish
 from app.workers.publish_retry import run_publish_retry
 
@@ -345,6 +346,8 @@ async def publish_campaign_now(
             detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
         )
 
+    await check_trial_not_expired(user_id, db, "publish")
+
     if campaign.status != "approved":
         raise HTTPException(
             status_code=400,
@@ -412,6 +415,8 @@ async def schedule_campaign_publish(
             status_code=404,
             detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
         )
+
+    await check_trial_not_expired(user_id, db, "schedule publishing")
 
     if campaign.status != "approved":
         raise HTTPException(
@@ -529,6 +534,8 @@ async def retry_platform_publish(
             status_code=404,
             detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
         )
+
+    await check_trial_not_expired(user_id, db, "publish")
 
     if campaign.status != "failed":
         raise HTTPException(

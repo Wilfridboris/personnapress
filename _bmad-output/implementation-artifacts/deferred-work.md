@@ -1,5 +1,13 @@
 # Deferred Work
 
+## Deferred from: code review of 7-2-trial-expiry-restricted-state-upgrade-banner (2026-07-06)
+
+- **D1 (Low)**: `.replace(tzinfo=timezone.utc)` used to make `billing_cycle_end` tz-aware in `check_and_expire_trial`, but Stripe webhook handler stores tz-aware datetimes; inconsistency is harmless now (Postgres strips tzinfo on write for naive columns) but creates a fragile convention. [backend/app/services/subscription_service.py:35]
+- **D2 (Low)**: TrialBanner flash-of-absent-content — on first load of a newly-expired user, `useSubscriptionStatus` returns `null` until AppShell's async `/status` call completes and invalidates the query cache; banner appears ~100–300ms late. Architectural RSC limitation; server components cannot do data fetching per project rule.
+- **D3 (Low)**: Long-lived sessions never re-expire mid-session — AppShell's `useEffect` that calls `/status` runs once on mount; a user whose trial expires while they have the tab open will not see the banner until they navigate away or refresh. Spec intent was on-login check, not real-time enforcement.
+- **D4 (Low)**: `useSubscription` stale up to 60s after Stripe portal return — `staleTime: 60_000` in the subscription query means the banner may not disappear immediately after a user subscribes and returns from the portal. Pre-existing from 7.1 hook design.
+- **D5 (Low)**: Trial expiry not enforced at session-validation/auth-middleware layer — AC1 spec intent ("When login/session validated") is partially met; actual DB write only occurs when frontend hits `GET /subscriptions/status`. Intentional trade-off given the RSC/no-server-data-fetch architectural rule.
+
 ## Deferred from: code review of 7-1-trial-expiry-nudge-notifications (2026-07-06)
 
 - **D1 (Medium)**: Direct key access (`sub_obj["current_period_start"]`, `sub_obj["current_period_end"]`) in `_handle_subscription_updated` — raises `KeyError` on partial Stripe payloads (paused subscriptions, free trials with no billing period). Pre-existing; all other fields use `.get()`. [backend/app/services/subscription_service.py:263-264]
@@ -112,3 +120,4 @@
 ## Deferred from: code review of 6-1-campaign-list-dashboard-with-status-filtering (2026-07-04)
 
 - **D1 (Low)**: `sys.modules` patching at module level in `backend/tests/routers/test_campaigns.py` pollutes the test session — stubs run at import time and persist across all tests. Refactor to use `@pytest.fixture` or `unittest.mock.patch` at function scope in a future test cleanup pass.
+

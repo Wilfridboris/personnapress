@@ -50,6 +50,7 @@ async def test_publish_now_success():
     background_tasks.add_task = MagicMock()
 
     with (
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock(return_value=None)),
         patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
         patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
         patch("app.routers.publishing.get_connections_for_client", AsyncMock(return_value=[conn])),
@@ -78,6 +79,7 @@ async def test_publish_now_no_connections():
     background_tasks = MagicMock()
 
     with (
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock(return_value=None)),
         patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
         patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
         patch("app.routers.publishing.get_connections_for_client", AsyncMock(return_value=[])),
@@ -104,6 +106,7 @@ async def test_publish_now_wrong_status():
     background_tasks = MagicMock()
 
     with (
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock(return_value=None)),
         patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
         patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
     ):

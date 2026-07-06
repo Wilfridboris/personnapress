@@ -225,6 +225,10 @@ claude-sonnet-4-6
 - `frontend/components/onboarding/OnboardingFlow.tsx` (modified)
 - `frontend/__tests__/components/OnboardingFlow.test.tsx` (created)
 
+### Review Findings
+
+- [x] [Review][Defer] `completeOnboarding` called before `campaignsApi.create` — if campaign creation fails, `onboarding_completed=true` stays set permanently; spec Dev Notes explicitly accepts this as an acceptable UX trade-off — deferred, pre-existing
+
 ## Change Log
 
 - 2026-07-02: Story 3.5 implemented — replaced Step 3 Brain Dump stub submit handler with real campaign creation flow: complete-onboarding → campaignsApi.create → navigate to /campaigns/{id}?job_id={id}. Added step3Error state with inline error UI and Try again button. Added no-client guard on submit button. Created 6 unit tests covering happy path, client ID priority, error display, and disabled state.

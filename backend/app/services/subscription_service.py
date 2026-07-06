@@ -19,6 +19,48 @@ logger = logging.getLogger(__name__)
 import app.integrations.stripe_client  # noqa: F401
 
 
+async def check_and_expire_trial(user_id: uuid.UUID, db: AsyncSession) -> str | None:
+    """
+    Called on every authenticated request. If status='trialing' and billing_cycle_end
+    has passed, atomically updates status to 'trial_expired'. Returns the effective status.
+    """
+    result = await db.execute(
+        select(Subscription).where(Subscription.user_id == user_id).with_for_update()
+    )
+    sub = result.scalars().first()
+    if sub is None:
+        return None
+    if (
+        sub.status == "trialing"
+        and datetime.now(timezone.utc) > sub.billing_cycle_end.replace(tzinfo=timezone.utc)
+    ):
+        sub.status = "trial_expired"
+        sub.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        await db.commit()
+    return sub.status
+
+
+async def check_trial_not_expired(user_id: uuid.UUID, db: AsyncSession, action: str = "perform this action") -> None:
+    """
+    Raises HTTP 403 if user's subscription status is 'trial_expired'.
+    Calls check_and_expire_trial first so stale 'trialing' rows are transitioned atomically
+    before the gate check — prevents bypass by users who never hit /subscriptions/status.
+    Call this BEFORE check_client_limit / check_campaign_limit / check_image_limit.
+    """
+    status = await check_and_expire_trial(user_id, db)
+    if status == "trial_expired":
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": {
+                    "code": "TRIAL_EXPIRED",
+                    "message": f"Subscribe to {action}.",
+                    "detail": {"status": "trial_expired"},
+                }
+            },
+        )
+
+
 async def check_client_limit(user_id: uuid.UUID, db: AsyncSession) -> None:
     # Lock subscription row to serialize concurrent create-client requests (TOCTOU guard).
     # If no subscription row exists, fall back to locking the user row.

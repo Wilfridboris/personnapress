@@ -137,6 +137,48 @@ async def test_list_campaigns_multiple_status():
     assert len(result.items) == 2
 
 
+async def test_create_campaign_blocked_for_trial_expired():
+    from fastapi import HTTPException
+    from unittest.mock import patch, AsyncMock
+    from app.routers.campaigns import create_new_campaign
+    from app.schemas.campaign import CampaignCreate
+
+    user_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+    client = _make_client(user_id=user_id, client_id=client_id)
+
+    db = AsyncMock()
+
+    trial_expired_error = HTTPException(
+        status_code=403,
+        detail={
+            "error": {
+                "code": "TRIAL_EXPIRED",
+                "message": "Subscribe to create campaigns.",
+                "detail": {"status": "trial_expired"},
+            }
+        },
+    )
+
+    with (
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch(
+            "app.routers.campaigns.check_trial_not_expired",
+            AsyncMock(side_effect=trial_expired_error),
+        ),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await create_new_campaign(
+                body=CampaignCreate(client_id=client_id, brain_dump="x" * 25),
+                background_tasks=MagicMock(),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["error"]["code"] == "TRIAL_EXPIRED"
+
+
 async def test_list_campaigns_pagination():
     from app.routers.campaigns import list_campaigns
 

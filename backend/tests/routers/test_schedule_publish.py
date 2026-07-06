@@ -54,6 +54,7 @@ async def test_schedule_publish_success():
     scheduled_at = _future_dt()
 
     with (
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock(return_value=None)),
         patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
         patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
         patch("app.routers.publishing.create_job", AsyncMock(return_value=job)),
@@ -82,6 +83,7 @@ async def test_schedule_publish_past_time():
     db = AsyncMock()
 
     with (
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock(return_value=None)),
         patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
         patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
     ):
@@ -106,6 +108,7 @@ async def test_schedule_publish_not_approved():
     db = AsyncMock()
 
     with (
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock(return_value=None)),
         patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
         patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
     ):

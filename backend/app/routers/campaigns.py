@@ -16,7 +16,7 @@ from app.db.repositories.jobs import create_job, get_publish_job_for_campaign
 from app.db.repositories.models import Campaign, Client
 from app.schemas.campaign import CampaignCreate, CampaignCreateResponse, CampaignDetailResponse, CampaignListResponse, CampaignPatch, CampaignResponse
 from app.services import image as image_service
-from app.services.subscription_service import check_campaign_limit
+from app.services.subscription_service import check_campaign_limit, check_trial_not_expired
 from app.workers.generate import run_generation
 
 
@@ -69,6 +69,7 @@ async def create_new_campaign(
     if not client or client.user_id != user_id:
         raise HTTPException(status_code=404, detail={"error": {"code": "CLIENT_NOT_FOUND", "message": "Client not found.", "detail": {}}})
 
+    await check_trial_not_expired(user_id, db, "create campaigns")
     await check_campaign_limit(db, user_id)
 
     campaign = await create_campaign(db, body.client_id, body.brain_dump)
@@ -214,6 +215,8 @@ async def regenerate_campaign_image(
     if not client or client.user_id != user_id:
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
 
+    await check_trial_not_expired(user_id, db, "generate content")
+
     new_url, regen_count = await image_service.regenerate_image(campaign_id, user_id, db)
     return ImageRegenerateResponse(image_url=new_url, image_regen_count=regen_count)
 
@@ -315,6 +318,7 @@ async def regenerate_campaign(
             detail={"error": {"code": "INVALID_STATUS_TRANSITION", "message": "Only rejected campaigns can be regenerated.", "detail": {}}},
         )
 
+    await check_trial_not_expired(user_id, db, "generate content")
     await check_campaign_limit(db, user_id)
 
     new_campaign = await create_campaign(db, campaign.client_id, campaign.brain_dump)

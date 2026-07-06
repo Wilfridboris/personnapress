@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { useClientStore } from "@/lib/stores/useClientStore";
 import { campaignsApi, APIError } from "@/lib/api";
+import { useUIStore } from "@/lib/stores/useUIStore";
 
 const MAX_CHARS = 10000;
 const MIN_CHARS = 20;
@@ -15,6 +16,7 @@ const MIN_CHARS = 20;
 export default function NewCampaignPage() {
   const router = useRouter();
   const { clients, activeClientId } = useClientStore();
+  const showUpgradePrompt = useUIStore((s) => s.showUpgradePrompt);
   const activeClient = clients.find((c) => c.id === activeClientId) ?? null;
 
   const [brainDump, setBrainDump] = useState("");
@@ -63,7 +65,9 @@ export default function NewCampaignPage() {
       setIsSubmitting(false);
       router.push(`/campaigns/${data.campaign_id}?job_id=${data.job_id}`);
     } catch (err: unknown) {
-      if (err instanceof APIError && err.code === "CAMPAIGN_LIMIT_EXCEEDED") {
+      if (err instanceof APIError && err.code === "TRIAL_EXPIRED") {
+        showUpgradePrompt(err.message);
+      } else if (err instanceof APIError && err.code === "CAMPAIGN_LIMIT_EXCEEDED") {
         setLimitExceeded({ message: err.message, nextTier: "" });
       } else {
         const msg =

@@ -157,6 +157,7 @@ export const authApi = {
 
 export const subscriptionsApi = {
   getMe: () => apiFetch<SubscriptionInfo>("/subscriptions/me"),
+  getStatus: () => apiFetch<{ status: string }>("/subscriptions/status"),
   createPortal: () => apiFetch<{ portal_url: string }>("/subscriptions/portal", { method: "POST" }),
 };
 

@@ -23,6 +23,7 @@ interface ApprovalPanelProps {
 export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOptimisticStatus, jobIsActive = false }: ApprovalPanelProps) {
   const router = useRouter();
   const addToast = useUIStore((s) => s.addToast);
+  const showUpgradePrompt = useUIStore((s) => s.showUpgradePrompt);
 
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -107,11 +108,15 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
       const result = await campaignsApi.regenerate(campaign.id);
       router.push(`/campaigns/${result.campaign_id}?job_id=${result.job_id}`);
     } catch (err) {
-      addToast(err instanceof APIError ? err.message : "Regeneration failed.", "error");
+      if (err instanceof APIError && err.code === "TRIAL_EXPIRED") {
+        showUpgradePrompt(err.message);
+      } else {
+        addToast(err instanceof APIError ? err.message : "Regeneration failed.", "error");
+      }
     } finally {
       setIsRegenerating(false);
     }
-  }, [campaign.id, router, addToast]);
+  }, [campaign.id, router, addToast, showUpgradePrompt]);
 
   const handlePublishNow = useCallback(async () => {
     setIsPublishing(true);
@@ -119,10 +124,14 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
       const { job_id } = await campaignsApi.publishNow(campaign.id);
       setActiveJobId(job_id);
     } catch (err) {
-      addToast(err instanceof APIError ? err.message : "Publish failed.", "error");
+      if (err instanceof APIError && err.code === "TRIAL_EXPIRED") {
+        showUpgradePrompt(err.message);
+      } else {
+        addToast(err instanceof APIError ? err.message : "Publish failed.", "error");
+      }
       setIsPublishing(false);
     }
-  }, [campaign.id, addToast]);
+  }, [campaign.id, addToast, showUpgradePrompt]);
 
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const isPastTime = Boolean(scheduledAt && new Date(scheduledAt) <= new Date());
@@ -134,11 +143,15 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
       await campaignsApi.schedule(campaign.id, localDate.toISOString());
       router.refresh();
     } catch (err) {
-      addToast(err instanceof APIError ? err.message : "Scheduling failed.", "error");
+      if (err instanceof APIError && err.code === "TRIAL_EXPIRED") {
+        showUpgradePrompt(err.message);
+      } else {
+        addToast(err instanceof APIError ? err.message : "Scheduling failed.", "error");
+      }
     } finally {
       setIsScheduling(false);
     }
-  }, [campaign.id, scheduledAt, router, addToast]);
+  }, [campaign.id, scheduledAt, router, addToast, showUpgradePrompt]);
 
   const handleCancelSchedule = useCallback(async () => {
     setIsCancelling(true);

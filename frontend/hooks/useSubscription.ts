@@ -13,6 +13,11 @@ export function useSubscription() {
   });
 }
 
+export function useSubscriptionStatus(): string | null {
+  const { data } = useSubscription();
+  return data?.status ?? null;
+}
+
 export function useTrialDaysRemaining(): number | null {
   const { data } = useSubscription();
   if (!data || data.status !== "trialing") return null;

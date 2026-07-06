@@ -21,6 +21,10 @@ interface UIStore {
   isMobileDrawerOpen: boolean;
   openMobileDrawer: () => void;
   closeMobileDrawer: () => void;
+
+  upgradePromptMessage: string | null;
+  showUpgradePrompt: (message: string) => void;
+  hideUpgradePrompt: () => void;
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -45,4 +49,8 @@ export const useUIStore = create<UIStore>((set) => ({
   isMobileDrawerOpen: false,
   openMobileDrawer: () => set({ isMobileDrawerOpen: true }),
   closeMobileDrawer: () => set({ isMobileDrawerOpen: false }),
+
+  upgradePromptMessage: null,
+  showUpgradePrompt: (message) => set({ upgradePromptMessage: message }),
+  hideUpgradePrompt: () => set({ upgradePromptMessage: null }),
 }));
