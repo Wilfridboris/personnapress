@@ -302,6 +302,8 @@ async def _handle_subscription_updated(sub_obj: dict, db: AsyncSession) -> None:
             sub.plan_tier = price_to_tier[price_id]
 
     sub.status = sub_obj.get("status", sub.status)
+    if sub.status == "active":
+        sub.deletion_scheduled_at = None  # cancel any pending deletion when user subscribes
     sub.billing_cycle_start = datetime.fromtimestamp(sub_obj["current_period_start"], tz=timezone.utc)
     sub.billing_cycle_end = datetime.fromtimestamp(sub_obj["current_period_end"], tz=timezone.utc)
     sub.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)

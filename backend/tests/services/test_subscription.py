@@ -186,3 +186,20 @@ async def test_check_trial_not_expired_passes_for_active():
     db = _db_with_status("active")
     # Should not raise
     await check_trial_not_expired(uuid.uuid4(), db)
+
+
+# ---------------------------------------------------------------------------
+# _handle_subscription_updated clears deletion_scheduled_at on active status
+# ---------------------------------------------------------------------------
+
+async def test_handle_subscription_updated_clears_deletion_scheduled_at():
+    sub = _make_sub(status="trial_expired")
+    sub.deletion_scheduled_at = datetime(2026, 7, 20, tzinfo=timezone.utc)
+    db = _db_with_sub(sub)
+
+    event = _make_event("customer.subscription.updated", status="active")
+    await handle_stripe_webhook(event, db)
+
+    assert sub.status == "active"
+    assert sub.deletion_scheduled_at is None
+    db.commit.assert_awaited_once()

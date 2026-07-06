@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 7-3-data-retention-account-deletion-cleanup-scheduler (2026-07-06)
+
+- **D1 (Medium)**: Multiple `trial_expired` subscription rows for same `user_id` causes Phase 2 to re-anonymize the already-hashed email, corrupting the audit trail. No `UNIQUE` constraint on `subscriptions.user_id`. Pre-existing schema design gap; low probability in practice. [backend/app/workers/cleanup.py]
+- **D2 (Medium)**: Stripe customer object not deleted from Stripe on account anonymization — only the local `stripe_customer_id` field is cleared. GDPR Art. 17 gap. Out of scope for this story; requires Stripe API call + error handling in `_anonymize_user`. [backend/app/workers/cleanup.py:_anonymize_user]
+- **D3 (Low)**: Truncated 64-bit SHA-256 prefix for email anonymization is brute-forceable over structured email namespaces (no salt). Design decision; acceptable given the low-value target. If GDPR compliance is hardened, replace with salted full hash or random UUID. [backend/app/workers/cleanup.py:_anonymize_user]
+
 ## Deferred from: code review of 7-2-trial-expiry-restricted-state-upgrade-banner (2026-07-06)
 
 - **D1 (Low)**: `.replace(tzinfo=timezone.utc)` used to make `billing_cycle_end` tz-aware in `check_and_expire_trial`, but Stripe webhook handler stores tz-aware datetimes; inconsistency is harmless now (Postgres strips tzinfo on write for naive columns) but creates a fragile convention. [backend/app/services/subscription_service.py:35]

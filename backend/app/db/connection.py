@@ -13,6 +13,7 @@ engine = create_async_engine(
     pool_recycle=1800,    # recycle connections every 30 min (Supabase pooler idle timeout)
 )
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+async_session_factory = AsyncSessionLocal  # for workers running outside the HTTP request lifecycle
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:

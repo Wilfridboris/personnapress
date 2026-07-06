@@ -54,6 +54,7 @@ class Subscription(SQLModel, table=True):
     image_gen_used: int = Field(default=0)
     billing_cycle_start: datetime
     billing_cycle_end: datetime
+    deletion_scheduled_at: Optional[datetime] = Field(default=None, nullable=True)
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

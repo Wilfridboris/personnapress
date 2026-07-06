@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -17,4 +18,5 @@ class SubscriptionResponse(BaseModel):
     image_gen_used: int
     billing_cycle_start: datetime
     billing_cycle_end: datetime
+    deletion_scheduled_at: Optional[datetime] = None
     plan_limits: PlanLimits
