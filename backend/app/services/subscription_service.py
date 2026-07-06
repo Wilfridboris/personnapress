@@ -236,7 +236,7 @@ async def create_billing_portal_session(user_id: str, db: AsyncSession) -> str:
 
 async def handle_stripe_webhook(event: dict, db: AsyncSession) -> None:
     event_type = event.get("type")
-    if event_type == "customer.subscription.updated":
+    if event_type in ("customer.subscription.updated", "customer.subscription.created"):
         await _handle_subscription_updated(event["data"]["object"], db)
     elif event_type == "customer.subscription.deleted":
         await _handle_subscription_deleted(event["data"]["object"], db)

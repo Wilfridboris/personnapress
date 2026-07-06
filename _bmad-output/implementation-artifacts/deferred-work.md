@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 7-1-trial-expiry-nudge-notifications (2026-07-06)
+
+- **D1 (Medium)**: Direct key access (`sub_obj["current_period_start"]`, `sub_obj["current_period_end"]`) in `_handle_subscription_updated` — raises `KeyError` on partial Stripe payloads (paused subscriptions, free trials with no billing period). Pre-existing; all other fields use `.get()`. [backend/app/services/subscription_service.py:263-264]
+- **D2 (Medium)**: `customer.subscription.created` handler delegates to `_handle_subscription_updated` which looks up by `stripe_sub_id` — if the DB row was not yet populated with `stripe_sub_id` (race with `checkout.session.completed`), lookup returns None and billing dates are not updated. Architectural Stripe webhook ordering concern; pre-existing. [backend/app/services/subscription_service.py]
+- **D3 (Low)**: `billing_cycle_end` timezone parsing — if backend ever returns naive datetime string (without UTC offset), browser parses as local time. Backend currently uses `tz=timezone.utc` so FastAPI serializes with offset; defensive `+"Z"` append not added. Pre-existing risk. [frontend/hooks/useSubscription.ts:20]
+
 ## Deferred from: code review of 5-6-wordpress-com-oauth-integration (2026-07-03)
 
 - CSRF state-in-cookie pattern — standard OAuth PKCE-less flow, consistent with X/LinkedIn implementations already in production.

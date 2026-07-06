@@ -8,6 +8,7 @@ import { clientsApi } from "@/lib/api";
 import { Sidebar } from "./sidebar";
 import { MobileTopBar } from "./MobileTopBar";
 import { MobileDrawer } from "./MobileDrawer";
+import { TrialNudgeToast } from "./TrialNudgeToast";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -50,6 +51,7 @@ export function AppShell({ children }: AppShellProps) {
       <Sidebar />
       <MobileTopBar />
       <MobileDrawer />
+      <TrialNudgeToast />
       <main className="md:ml-14 lg:ml-60 pt-14 lg:pt-0 min-h-screen">
         <div className="max-w-5xl px-8 lg:px-12 py-8 mx-auto">
           {children}

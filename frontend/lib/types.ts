@@ -199,6 +199,8 @@ export interface SubscriptionResponse {
   plan_limits: PlanLimits;
 }
 
+export type SubscriptionInfo = SubscriptionResponse;
+
 export interface Subscription {
   id: string;
   user_id: string;

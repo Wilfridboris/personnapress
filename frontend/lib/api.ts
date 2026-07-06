@@ -1,4 +1,4 @@
-import type { BrandVoiceProfile, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, FileListResponse, Job, PlatformConnectionStatus, QuestionnairePayload } from "./types";
+import type { BrandVoiceProfile, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, FileListResponse, Job, PlatformConnectionStatus, QuestionnairePayload, SubscriptionInfo } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -153,6 +153,11 @@ export const dashboardApi = {
 export const authApi = {
   completeOnboarding: () =>
     apiFetch<{ status: string }>("/auth/complete-onboarding", { method: "POST" }),
+};
+
+export const subscriptionsApi = {
+  getMe: () => apiFetch<SubscriptionInfo>("/subscriptions/me"),
+  createPortal: () => apiFetch<{ portal_url: string }>("/subscriptions/portal", { method: "POST" }),
 };
 
 export const publishingApi = {
