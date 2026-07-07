@@ -264,11 +264,16 @@ async def get_subscription(user_id: str, db: AsyncSession) -> SubscriptionRespon
 async def create_billing_portal_session(user_id: str, db: AsyncSession) -> str:
     result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
     user = result.scalar_one_or_none()
-    if not user or not user.stripe_customer_id:
+    if not user:
         raise HTTPException(
-            status_code=400,
-            detail={"error": {"code": "NO_STRIPE_CUSTOMER", "message": "No billing account found. Please contact support.", "detail": {}}},
+            status_code=404,
+            detail={"error": {"code": "USER_NOT_FOUND", "message": "User not found.", "detail": {}}},
         )
+    if not user.stripe_customer_id:
+        customer = stripe_sdk.Customer.create(email=user.email, metadata={"user_id": user_id})
+        user.stripe_customer_id = customer.id
+        db.add(user)
+        await db.commit()
     session = stripe_sdk.billing_portal.Session.create(
         customer=user.stripe_customer_id,
         return_url=settings.APP_URL + "/account",

@@ -6,6 +6,7 @@ Do not call this module directly from routers or workers.
 
 import json
 import logging
+import re
 
 from google import genai
 from google.genai import types
@@ -105,7 +106,8 @@ REQUIREMENTS:
 - Match the tone: {tone_list}
 - Match the cadence: avg sentence length {avg_sentence_length} words
 - Never use these jargon terms: {banned_jargon_list}
-- Output ONLY the HTML — no explanation, no markdown
+- Output ONLY valid HTML tags — NEVER use markdown syntax like **bold**, *italic*, ##, ###
+- Bold text must use <strong>, italics must use <em>, headings must use <h2>/<h3> tags
 """
 
 _FIDELITY_PROMPT = """Score the following blog post against the Brand Voice Profile.
@@ -155,6 +157,19 @@ def _strip_fences(raw: str) -> str:
     return "\n".join(lines[start:end]).strip()
 
 
+def _md_to_html(html: str) -> str:
+    """Fix markdown syntax that Gemini leaks inside otherwise-valid HTML."""
+    # **bold** → <strong>bold</strong>
+    html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html, flags=re.DOTALL)
+    # *italic* → <em>italic</em> (single asterisks not part of **)
+    html = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<em>\1</em>", html, flags=re.DOTALL)
+    # ## Heading / ### Heading at the start of a line (if Gemini emits bare markdown headings)
+    html = re.sub(r"^### (.+)$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
+    html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html, flags=re.MULTILINE)
+    html = re.sub(r"^# (.+)$", r"<h1>\1</h1>", html, flags=re.MULTILINE)
+    return html
+
+
 async def generate_blog(
     brain_dump: str,
     brand_voice_profile: dict | None,
@@ -185,7 +200,7 @@ async def generate_blog(
         contents=prompt,
         config=_thinking_config(thinking_tokens),
     )
-    return _strip_fences(response.text.strip())
+    return _md_to_html(_strip_fences(response.text.strip()))
 
 
 async def check_fidelity(
