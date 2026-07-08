@@ -174,6 +174,7 @@ The webhook flow: Stripe fires an event to the Next.js relay route at `/api/webh
 
 3. Start the webhook forwarder (run this in a separate terminal while testing):
    ```bash
+   stripe listen --api-key key --forward-to http://localhost:8000/api/v1/webhooks/stripe
    stripe listen --forward-to localhost:3000/api/webhooks/stripe
    ```
 
