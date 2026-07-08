@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 
-const APP_URL = process.env.APP_URL ?? "http://localhost:3000";
+const APP_URL = (process.env.APP_URL ?? "http://localhost:3000").replace(/[./]+$/, "");
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
