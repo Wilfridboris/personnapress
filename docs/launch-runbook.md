@@ -294,12 +294,12 @@ Add these in **Project → Settings → Environment Variables** (set scope to *P
 | `JWT_SECRET` | same as backend |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | same as backend |
 | `GOOGLE_CLIENT_ID` | same as backend |
-| `GOOGLE_CLIENT_SECRET` | same as backend |
+| `GOOGLE_CLIENT_SECRET` | same as backend ¹ |
 | `NEXT_PUBLIC_X_CLIENT_ID` | `dW56bXF0YnhBTExiUUZRYUZYMGw6MTpjaQ` |
-| `X_CLIENT_SECRET` | same as backend |
 | `NEXT_PUBLIC_LINKEDIN_CLIENT_ID` | `86ayg7642eu9pw` |
-| `LINKEDIN_CLIENT_SECRET` | same as backend |
 | `WP_COM_CLIENT_ID` | `143164` |
+
+> ¹ **Google only:** The Next.js Google callback route exchanges the token directly with Google's API, so `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are needed here. LinkedIn and X/Twitter callbacks just forward the auth code to the FastAPI backend — their secrets live on the Droplet only and must **not** be added to Vercel.
 
 ### 4.3 Trigger the First Deploy
 
