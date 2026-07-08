@@ -18,11 +18,13 @@ import {
 } from "lucide-react";
 import { FaqAccordion } from "./_components/FaqAccordion";
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://personnapress.com";
+
 export const metadata: Metadata = {
-  title: "PersonaPress - AI Blog Writer That Sounds Like You | Publish Everywhere",
+  title: "PersonnaPress - AI Blog Writer That Sounds Like You | Publish Everywhere",
   description:
-    "PersonaPress is an AI blog writer that learns your voice and turns rough ideas into SEO-ranked blog posts and social campaigns. Schedule and publish to WordPress, Webflow, X, and LinkedIn — without sounding like AI.",
-  metadataBase: new URL("https://personapress.io"),
+    "PersonnaPress is an AI blog writer that learns your voice and turns rough ideas into SEO-ranked blog posts and social campaigns. Schedule and publish to WordPress, Webflow, X, and LinkedIn — without sounding like AI.",
+  metadataBase: new URL(APP_URL),
   keywords: [
     "ai blog writer",
     "ai content publisher",
@@ -33,20 +35,20 @@ export const metadata: Metadata = {
     "publish blog with ai",
   ],
   alternates: {
-    canonical: "https://personapress.io",
+    canonical: APP_URL,
   },
   openGraph: {
-    title: "PersonaPress - AI Blog Writer That Sounds Like You",
+    title: "PersonnaPress - AI Blog Writer That Sounds Like You",
     description:
       "Turn rough ideas into ranked blog posts and social campaigns in your own voice. Schedule and publish everywhere.",
-    url: "https://personapress.io",
+    url: APP_URL,
     type: "website",
     images: [
       {
-        url: "https://personapress.io/images/PersonnaPress-opengraph.png",
+        url: "/images/PersonnaPress-opengraph.png",
         width: 1200,
         height: 630,
-        alt: "PersonaPress - AI Blog Writer That Sounds Like You",
+        alt: "PersonnaPress - AI Blog Writer That Sounds Like You",
       },
     ],
   },
@@ -55,8 +57,8 @@ export const metadata: Metadata = {
 const schemaWebsite = {
   "@context": "https://schema.org",
   "@type": "WebSite",
-  name: "PersonaPress",
-  url: "https://personapress.io",
+  name: "PersonnaPress",
+  url: APP_URL,
   description:
     "An AI blog writer and content engine that turns brain dumps into SEO-ranked blog posts and social campaigns in your authentic voice.",
 };
@@ -64,12 +66,12 @@ const schemaWebsite = {
 const schemaSoftwareApp = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  name: "PersonaPress",
+  name: "PersonnaPress",
   applicationCategory: "BusinessApplication",
   operatingSystem: "Web",
-  url: "https://personapress.io",
+  url: APP_URL,
   description:
-    "PersonaPress is an AI blog writer and social media scheduler that learns your writing voice from existing content, then turns raw brain dumps into SEO-structured blog posts, social campaigns, and featured images. Schedule and publish across WordPress, Webflow, X, and LinkedIn. No AI fluff — content sounds like you, not a robot.",
+    "PersonnaPress is an AI blog writer and social media scheduler that learns your writing voice from existing content, then turns raw brain dumps into SEO-structured blog posts, social campaigns, and featured images. Schedule and publish across WordPress, Webflow, X, and LinkedIn. No AI fluff — content sounds like you, not a robot.",
   offers: {
     "@type": "Offer",
     price: "0",
@@ -92,11 +94,11 @@ const schemaSoftwareApp = {
 const schemaOrganization = {
   "@context": "https://schema.org",
   "@type": "Organization",
-  name: "PersonaPress",
-  url: "https://personapress.io",
-  logo: "https://personapress.io/images/PersonnaPress-opengraph.png",
+  name: "PersonnaPress",
+  url: APP_URL,
+  logo: `${APP_URL}/images/PersonnaPress-opengraph.png`,
   description:
-    "PersonaPress is an AI content automation platform that learns your brand voice and publishes SEO-structured content across multiple platforms.",
+    "PersonnaPress is an AI content automation platform that learns your brand voice and publishes SEO-structured content across multiple platforms.",
 };
 
 const WORKFLOW_STEPS = [

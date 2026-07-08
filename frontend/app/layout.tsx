@@ -23,13 +23,13 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://personapress.io"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://personnapress.com"),
   title: {
-    default: "PersonaPress - Publish in Your Voice, Not AI's",
-    template: "%s | PersonaPress",
+    default: "PersonnaPress - Publish in Your Voice, Not AI's",
+    template: "%s | PersonnaPress",
   },
   description:
-    "PersonaPress turns your raw ideas into SEO-ranked blog posts and social campaigns that sound exactly like you. Built for founders, coaches, and agencies.",
+    "PersonnaPress turns your raw ideas into SEO-ranked blog posts and social campaigns that sound exactly like you. Built for founders, coaches, and agencies.",
   keywords: [
     "AI content writing",
     "blog automation",
@@ -52,26 +52,26 @@ export const metadata: Metadata = {
     shortcut: "/favicon.ico",
   },
   openGraph: {
-    title: "PersonaPress - Publish in Your Voice, Not AI's",
+    title: "PersonnaPress - Publish in Your Voice, Not AI's",
     description:
       "Turn your brain dumps into published, ranked content. Your voice, your style, every time.",
     type: "website",
     locale: "en_US",
-    siteName: "PersonaPress",
+    siteName: "PersonnaPress",
     images: [
       {
-        url: "https://personapress.io/images/PersonnaPress-opengraph.png",
+        url: "/images/PersonnaPress-opengraph.png",
         width: 1200,
         height: 630,
-        alt: "PersonaPress - AI content engine that publishes in your voice",
+        alt: "PersonnaPress - AI content engine that publishes in your voice",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "PersonaPress - Publish in Your Voice, Not AI's",
+    title: "PersonnaPress - Publish in Your Voice, Not AI's",
     description: "AI content that sounds like you, published and ranked.",
-    images: ["https://personapress.io/images/PersonnaPress-opengraph.png"],
+    images: ["/images/PersonnaPress-opengraph.png"],
   },
   robots: {
     index: true,

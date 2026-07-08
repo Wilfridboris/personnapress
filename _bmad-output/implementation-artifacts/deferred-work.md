@@ -1,5 +1,14 @@
 # Deferred Work
 
+## Deferred from: code review of 9-1-production-launch-infrastructure (2026-07-07)
+
+- **D1 (High)**: CORS locked to single APP_URL origin (`allow_origins=[settings.APP_URL]`) — Vercel preview deployments and localhost are not in the allowlist; CORS-gated fetch calls fail. Pre-existing architecture; fix by adding `EXTRA_CORS_ORIGINS` list env var in a future story. [backend/app/main.py]
+- **D2 (High)**: nginx has no rate limiting on any endpoint — auth, OAuth, and generation endpoints fully exposed to brute-force. Infrastructure enhancement; add `limit_req_zone`/`limit_req` in a future nginx hardening story. [backend/deploy/nginx.conf]
+- **D3 (Medium)**: systemd service has no OS-level security hardening (`NoNewPrivileges`, `ProtectSystem`, `PrivateTmp`, `CapabilityBoundingSet`) — compromised uvicorn process retains broad file access. Infrastructure hardening; add in a future security story. [backend/deploy/personnapress-api.service]
+- **D4 (Medium)**: EnvironmentFile at `/var/www/personnapress/backend/.env` permissions not documented — if world-readable (`644`), all secrets exposed to any process on the host. Operator runbook should mandate `chmod 600`. [backend/deploy/personnapress-api.service]
+- **D5 (Low)**: `EMAIL_FROM` default domain (`noreply@personnapress.com`) causes Resend 422 in dev/staging where domain is not verified — silent email failure in non-prod environments. Pre-existing operational concern; configure separate dev Resend domain or empty default in a future story.
+- **D6 (Low)**: `resend.api_key` set at module-level import time — tests patching `settings.RESEND_API_KEY` after import have no effect on the already-bound global. Pre-existing design; fix with lazy initialization or dependency injection in a test-cleanup story. [backend/app/integrations/email.py]
+
 ## Deferred from: code review of 8-2-landing-page-conversion-keyword-optimization (2026-07-07)
 
 - **D1 (Low)**: DOMPurify config mutability — `_DOMPURIFY_CONFIG` changed from `as const` to typed `Config`; removes readonly guarantee. DOMPurify does not mutate configs in practice but future spread/assign could silently drop `FORBID_ATTR`. [frontend/components/campaigns/BlogEditor.tsx:21]

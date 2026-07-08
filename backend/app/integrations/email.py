@@ -8,7 +8,7 @@ resend.api_key = settings.RESEND_API_KEY
 def send_deletion_warning_email(to_email: str, deletion_date: str) -> None:
     """deletion_date: pre-formatted human-readable string, e.g. "July 11, 2026"."""
     resend.Emails.send({
-        "from": "PersonnaPress <noreply@personnapress.io>",
+        "from": settings.EMAIL_FROM,
         "to": [to_email],
         "subject": "Your PersonnaPress account will be deleted in 7 days",
         "html": (
@@ -25,7 +25,7 @@ def send_deletion_warning_email(to_email: str, deletion_date: str) -> None:
 def send_verification_email(to_email: str, token: str) -> None:
     verification_url = f"{settings.APP_URL}/verify-email/confirm?token={token}"
     resend.Emails.send({
-        "from": "PersonnaPress <noreply@personnapress.io>",
+        "from": settings.EMAIL_FROM,
         "to": [to_email],
         "subject": "Verify your email address",
         "html": (

@@ -1,0 +1,23 @@
+[Unit]
+Description=PersonnaPress FastAPI API
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/personnapress/backend
+EnvironmentFile=/var/www/personnapress/backend/.env
+ExecStart=/var/www/personnapress/.venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 1
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=personnapress-api
+
+[Install]
+WantedBy=multi-user.target

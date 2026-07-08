@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.supabase.co" },
       // DigitalOcean Droplet static image server (Nginx)
       { protocol: "http", hostname: "localhost" },
-      { protocol: "https", hostname: "*.personapress.io" },
+      { protocol: "https", hostname: "*.personnapress.com" },
     ],
   },
 };

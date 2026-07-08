@@ -15,6 +15,6 @@ export default function robots(): MetadataRoute.Robots {
       { userAgent: "ClaudeBot", allow: "/" },
       { userAgent: "CCBot", allow: "/" },
     ],
-    sitemap: "https://personapress.io/sitemap.xml",
+    sitemap: `${(process.env.NEXT_PUBLIC_APP_URL ?? "https://personnapress.com").replace(/\/$/, "")}/sitemap.xml`,
   };
 }
