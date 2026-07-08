@@ -19,26 +19,26 @@ import {
 import { FaqAccordion } from "./_components/FaqAccordion";
 
 export const metadata: Metadata = {
-  title: "PersonaPress — Brand Voice AI for Founders, Coaches, and Agencies",
+  title: "PersonaPress - AI Blog Writer That Sounds Like You | Publish Everywhere",
   description:
-    "PersonaPress learns your writing voice from your existing content, then turns rough ideas into SEO-ranked blog posts and social campaigns that sound exactly like you. Built for founders, coaches, and agencies. Schedule and publish to WordPress, Webflow, X, and LinkedIn.",
+    "PersonaPress is an AI blog writer that learns your voice and turns rough ideas into SEO-ranked blog posts and social campaigns. Schedule and publish to WordPress, Webflow, X, and LinkedIn — without sounding like AI.",
   metadataBase: new URL("https://personapress.io"),
   keywords: [
+    "ai blog writer",
+    "ai content publisher",
+    "social media scheduler",
     "brand voice ai",
-    "ai content automation",
     "wordpress publishing",
-    "content agency ai",
+    "ai copywriting tool",
     "publish blog with ai",
-    "ai writing in your voice",
-    "brand voice content",
   ],
   alternates: {
     canonical: "https://personapress.io",
   },
   openGraph: {
-    title: "PersonaPress — Brand Voice AI That Publishes for You",
+    title: "PersonaPress - AI Blog Writer That Sounds Like You",
     description:
-      "Turn rough ideas into ranked blog posts and social campaigns that sound exactly like you. Built for founders, coaches, and agencies.",
+      "Turn rough ideas into ranked blog posts and social campaigns in your own voice. Schedule and publish everywhere.",
     url: "https://personapress.io",
     type: "website",
     images: [
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
         url: "https://personapress.io/images/PersonnaPress-opengraph.png",
         width: 1200,
         height: 630,
-        alt: "PersonaPress — Brand Voice AI for Founders, Coaches, and Agencies",
+        alt: "PersonaPress - AI Blog Writer That Sounds Like You",
       },
     ],
   },
@@ -58,7 +58,7 @@ const schemaWebsite = {
   name: "PersonaPress",
   url: "https://personapress.io",
   description:
-    "A brand voice AI that turns brain dumps into SEO-ranked blog posts and social campaigns in your authentic voice.",
+    "An AI blog writer and content engine that turns brain dumps into SEO-ranked blog posts and social campaigns in your authentic voice.",
 };
 
 const schemaSoftwareApp = {
@@ -69,7 +69,7 @@ const schemaSoftwareApp = {
   operatingSystem: "Web",
   url: "https://personapress.io",
   description:
-    "PersonaPress is a brand voice AI that learns your writing voice from existing content, then turns raw brain dumps into SEO-structured blog posts, social campaigns, and featured images. Schedule and publish across WordPress, Webflow, X, and LinkedIn. Built for founders, coaches, and agencies — content sounds like you, not a robot.",
+    "PersonaPress is an AI blog writer and social media scheduler that learns your writing voice from existing content, then turns raw brain dumps into SEO-structured blog posts, social campaigns, and featured images. Schedule and publish across WordPress, Webflow, X, and LinkedIn. No AI fluff — content sounds like you, not a robot.",
   offers: {
     "@type": "Offer",
     price: "0",
@@ -307,9 +307,9 @@ const FAQ_ITEMS = [
       "Featured images are generated using FLUX.1 [pro] via the Replicate API. The image is based on your blog post title and content summary, sized at 1200x630 pixels (standard OG/social dimensions), and stored in Supabase Storage. You can request up to 3 regenerations per campaign with an optional prompt override.",
   },
   {
-    question: "Can PersonaPress manage content for multiple clients at once?",
+    question: "What is the best AI blog writer for small businesses?",
     answer:
-      "Yes. PersonaPress is built for agencies and founders managing multiple brands. Each client gets a separate Brand Voice Profile, campaign history, and platform connections. You switch between clients from the dashboard in one click. Campaigns never cross-contaminate &mdash; Client A's voice profile is never applied to Client B's content. Agencies on the Growth and Agency plans can manage up to 5 or 20 clients respectively.",
+      "PersonaPress is designed for small businesses and entrepreneurs who need consistent, authentic blog content without a dedicated content team. Unlike generic AI writers, PersonaPress learns your specific voice, tone, and banned phrases before writing anything. The result is blog posts that sound like you wrote them, not a robot. Posts are also SEO-structured with proper headings and meta descriptions, so they are ready to rank when published.",
   },
   {
     question: "Can I use PersonaPress to schedule social media posts?",
