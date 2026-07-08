@@ -1,4 +1,4 @@
-"""Replicate integration for FLUX.1 [pro] image generation.
+"""Replicate integration for FLUX 1.1 Pro image generation.
 
 Called ONLY from services/image.py (AR-19).
 """
@@ -12,13 +12,13 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-_FLUX_MODEL = "black-forest-labs/flux-pro"
+_FLUX_MODEL = "black-forest-labs/flux-1.1-pro"
 
 _client = replicate.Client(api_token=settings.REPLICATE_API_TOKEN)
 
 
 async def generate_image(prompt: str, width: int = 1200, height: int = 630) -> str:
-    """Call FLUX.1 [pro] on Replicate and return the temporary image URL.
+    """Call FLUX 1.1 Pro on Replicate and return the temporary image URL.
 
     Args:
         prompt: Visual description prompt for the image.
@@ -36,9 +36,12 @@ async def generate_image(prompt: str, width: int = 1200, height: int = 630) -> s
         _FLUX_MODEL,
         input={
             "prompt": prompt,
+            "aspect_ratio": "custom",
             "width": width,
             "height": height,
             "output_format": "png",
+            "output_quality": 100,
+            "safety_tolerance": 2,
         },
     )
     # output is a FileOutput object or a list — normalise either case

@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.db.repositories import generation_logs as generation_logs_repo
-from app.db.repositories.models import Campaign, Client, Job, Subscription
+from app.db.repositories.models import Campaign, Client, Job
 from app.integrations import replicate as replicate_integration
 from app.integrations import supabase_storage
 from app.services import subscription_service
@@ -29,25 +29,27 @@ _IMAGE_REGEN_LIMIT = 3
 
 
 def _build_image_prompt(blog_title: str, brand_voice_profile: dict | None) -> str:
-    tone_descriptor = ""
+    tone_sentence = ""
     if brand_voice_profile:
         tone_list = brand_voice_profile.get("tone", [])
         tone_map = {
-            "professional": "corporate editorial",
-            "casual": "warm lifestyle",
-            "formal": "minimalist clean",
-            "friendly": "approachable human-centered",
-            "authoritative": "bold editorial",
-            "conversational": "relaxed lifestyle",
+            "professional": "clean, corporate editorial aesthetic",
+            "casual": "warm, approachable lifestyle atmosphere",
+            "formal": "minimalist, refined editorial look",
+            "friendly": "inviting, human-centered composition",
+            "authoritative": "bold, confident editorial presence",
+            "conversational": "relaxed, accessible visual tone",
         }
-        visual_tones = [tone_map.get(t.lower(), t) for t in tone_list[:2]]
+        visual_tones = [tone_map.get(t.lower(), f"{t} visual style") for t in tone_list[:2]]
         if visual_tones:
-            tone_descriptor = ", ".join(visual_tones) + " style, "
+            combined = " and ".join(visual_tones)
+            tone_sentence = f" The image has a {combined}."
 
     return (
-        f"{tone_descriptor}featured blog image for '{blog_title}', "
-        f"photorealistic, high resolution, 16:9 aspect ratio, "
-        f"professional photography, no text overlay, clean background"
+        f"A professional editorial photograph for a blog post titled '{blog_title}'."
+        f"{tone_sentence}"
+        " The composition is clean, with no text overlays, watermarks, or logos."
+        " Sharp focus, natural lighting, suitable as a 16:9 hero banner."
     )
 
 
