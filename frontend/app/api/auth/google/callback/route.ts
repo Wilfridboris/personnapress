@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   const storedState = request.cookies.get("oauth_state")?.value;
 
   if (!code || !state || !storedState || state !== storedState) {
-    return NextResponse.redirect(`${APP_URL}/register?error=oauth_failed`);
+    return NextResponse.redirect(`${APP_URL}/register?error=oauth_failed&detail=state_mismatch`);
   }
 
   try {
@@ -36,7 +36,10 @@ export async function GET(request: NextRequest) {
     });
 
     if (!tokenRes.ok) {
-      return NextResponse.redirect(`${APP_URL}/register?error=oauth_failed`);
+      const body = await tokenRes.text();
+      return NextResponse.redirect(
+        `${APP_URL}/register?error=oauth_failed&detail=token_exchange&msg=${encodeURIComponent(body.slice(0, 200))}`
+      );
     }
 
     const tokenData = await tokenRes.json();
@@ -47,7 +50,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!userRes.ok) {
-      return NextResponse.redirect(`${APP_URL}/register?error=oauth_failed`);
+      return NextResponse.redirect(`${APP_URL}/register?error=oauth_failed&detail=userinfo`);
     }
 
     const profile = await userRes.json();
@@ -63,7 +66,10 @@ export async function GET(request: NextRequest) {
     });
 
     if (!backendRes.ok) {
-      return NextResponse.redirect(`${APP_URL}/register?error=oauth_failed`);
+      const body = await backendRes.text();
+      return NextResponse.redirect(
+        `${APP_URL}/register?error=oauth_failed&detail=backend&msg=${encodeURIComponent(body.slice(0, 200))}`
+      );
     }
 
     const setCookieHeader = backendRes.headers.get("set-cookie");
@@ -75,7 +81,9 @@ export async function GET(request: NextRequest) {
       response.headers.append("set-cookie", setCookieHeader);
     }
     return response;
-  } catch {
-    return NextResponse.redirect(`${APP_URL}/register?error=oauth_failed`);
+  } catch (err) {
+    return NextResponse.redirect(
+      `${APP_URL}/register?error=oauth_failed&detail=exception&msg=${encodeURIComponent(String(err).slice(0, 200))}`
+    );
   }
 }
