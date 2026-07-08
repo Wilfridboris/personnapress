@@ -784,10 +784,19 @@ export default function LandingPage() {
               <Link href="/login" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Log in</Link>
             </nav>
           </div>
-          <div className="border-t border-border mt-6 pt-6">
+          <div className="border-t border-border mt-6 pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <p className="font-mono text-xs text-graphite">
               &copy; {new Date().getFullYear()} PersonnaPress. All rights reserved.
             </p>
+            <nav className="flex items-center gap-4" aria-label="Legal">
+              <Link href="/terms" className="font-mono text-xs text-graphite hover:text-ink transition-colors">
+                Terms of Service
+              </Link>
+              <span className="font-mono text-xs text-graphite/40" aria-hidden="true">&middot;</span>
+              <Link href="/privacy" className="font-mono text-xs text-graphite hover:text-ink transition-colors">
+                Privacy Policy
+              </Link>
+            </nav>
           </div>
         </div>
       </footer>
