@@ -138,6 +138,13 @@ export function RegisterForm() {
         Sign up with Google
       </Button>
 
+      <p className="text-xs text-graphite text-center mt-4">
+        By registering you agree to our{" "}
+        <Link href="/terms" className="underline underline-offset-2">Terms of Service</Link>
+        {" "}and{" "}
+        <Link href="/privacy" className="underline underline-offset-2">Privacy Policy</Link>.
+      </p>
+
       <p className="text-sm text-graphite text-center">
         Already have an account?{" "}
         <Link href="/login" className="text-ink underline underline-offset-2 hover:no-underline">

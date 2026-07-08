@@ -30,13 +30,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const cookieStore = await cookies();
   const session = cookieStore.get("session")?.value;
-  if (!session) return { title: "Brand Voice — PersonnaPress" };
+  if (!session) return { title: "Brand Voice | PersonnaPress" };
   const result = await getClient(id, session);
   const client = result === "expired" || result === null ? null : result;
   return {
     title: client
-      ? `Brand Voice — ${client.name} — PersonnaPress`
-      : "Brand Voice — PersonnaPress",
+      ? `Brand Voice | ${client.name} | PersonnaPress`
+      : "Brand Voice | PersonnaPress",
     robots: { index: false },
   };
 }

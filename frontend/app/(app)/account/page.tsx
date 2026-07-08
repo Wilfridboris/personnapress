@@ -7,7 +7,7 @@ import type { SubscriptionResponse } from "@/lib/types";
 import { AccountClient } from "./AccountClient";
 
 export const metadata: Metadata = {
-  title: "Account — PersonnaPress",
+  title: "Account | PersonnaPress",
 };
 
 export default async function AccountPage() {

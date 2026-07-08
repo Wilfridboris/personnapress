@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { VerifyEmailClient } from "./VerifyEmailClient";
 
 export const metadata: Metadata = {
-  title: "Verify your email — PersonnaPress",
+  title: "Verify your email | PersonnaPress",
 };
 
 interface Props {

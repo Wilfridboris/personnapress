@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { CreateClientForm } from "@/components/clients/CreateClientForm";
 
 export const metadata: Metadata = {
-  title: "New Client — PersonnaPress",
+  title: "New Client | PersonnaPress",
   robots: { index: false },
 };
 

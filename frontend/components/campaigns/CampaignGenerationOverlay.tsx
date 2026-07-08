@@ -134,7 +134,7 @@ export function CampaignGenerationOverlay({
     <>
       {isPolling && (
         <div className="bg-highlight/10 border border-highlight/30 px-4 py-3 mb-6 font-mono text-xs text-graphite">
-          Generation is in progress. Leaving will not cancel it — your draft will be available on the Dashboard when complete.
+          Generation is in progress. Leaving will not cancel it. Your draft will be available on the Dashboard when complete.
         </div>
       )}
       <TypewriterAnimation

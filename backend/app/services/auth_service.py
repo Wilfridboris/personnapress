@@ -111,7 +111,7 @@ async def verify_email_token(token: str, db: AsyncSession) -> JSONResponse:
     except ExpiredSignatureError:
         raise HTTPException(
             status_code=400,
-            detail=_err("TOKEN_EXPIRED", "Verification link expired — request a new one."),
+            detail=_err("TOKEN_EXPIRED", "Verification link expired. Request a new one."),
         )
     except JWTError:
         raise HTTPException(

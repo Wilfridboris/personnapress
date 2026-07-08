@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DROPLET_IP="${DROPLET_IP:?DROPLET_IP env var must be set}"
-SSH_USER="${SSH_USER:-root}"
+echo "Deploying PersonnaPress API to 134.209.72.22..."
 
-echo "Deploying PersonnaPress API to $SSH_USER@$DROPLET_IP..."
-
-ssh "$SSH_USER@$DROPLET_IP" bash -s << 'REMOTE'
+ssh -i /c/Users/boris/.ssh/personapress_key root@134.209.72.22 bash -s << 'REMOTE'
 set -euo pipefail
 cd /var/www/personnapress
 

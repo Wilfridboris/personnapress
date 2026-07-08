@@ -32,11 +32,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const cookieStore = await cookies();
   const session = cookieStore.get("session")?.value;
-  if (!session) return { title: "Client — PersonnaPress" };
+  if (!session) return { title: "Client | PersonnaPress" };
   const result = await getClient(id, session);
   const client = result === "expired" || result === null ? null : result;
   return {
-    title: client ? `${client.name} — PersonnaPress` : "Client — PersonnaPress",
+    title: client ? `${client.name} | PersonnaPress` : "Client | PersonnaPress",
     robots: { index: false },
   };
 }

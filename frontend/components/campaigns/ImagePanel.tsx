@@ -84,7 +84,7 @@ export function ImagePanel({
         <div className="p-6 space-y-4">
           <p className="font-mono text-sm text-graphite">
             {jobErrorDetails?.includes("Image generation failed")
-              ? "Image generation failed — blog and social posts are complete."
+              ? "Image generation failed. Blog and social posts are complete."
               : "No featured image generated."}
           </p>
           <Button

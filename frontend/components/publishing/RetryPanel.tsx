@@ -85,7 +85,7 @@ export function RetryPanel({
               </span>
               {attemptCount >= MAX_RETRIES ? (
                 <span className="text-xs text-graphite">
-                  Maximum retries reached — reconnect {platform} and try again.
+                  Maximum retries reached. Reconnect {platform} and try again.
                 </span>
               ) : (
                 <button

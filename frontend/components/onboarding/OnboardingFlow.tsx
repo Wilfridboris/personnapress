@@ -106,7 +106,7 @@ function InlineProfileReview({ bvp, clientId, onConfirmed }: InlineProfileReview
       <p className="font-sans text-xs uppercase tracking-[0.06em] text-[#111111] mb-2">Cadence</p>
       <p className="text-sm text-[#111111] mb-6">
         Avg. sentence length: {cadence.avg_sentence_length} words
-        {cadence.variation_pattern ? ` — ${cadence.variation_pattern}` : ""}
+        {cadence.variation_pattern ? `. ${cadence.variation_pattern}` : ""}
       </p>
 
       {bannedJargon.length > 0 && (
@@ -335,7 +335,7 @@ export function OnboardingFlow() {
 
       const clientId = createdClientId ?? activeClientId;
       if (!clientId) {
-        setStep3Error("Create a client first — go back to Step 1.");
+        setStep3Error("Create a client first. Go back to Step 1.");
         return;
       }
 
@@ -347,7 +347,7 @@ export function OnboardingFlow() {
       router.push(`/campaigns/${campaign_id}?job_id=${job_id}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong.";
-      setStep3Error(`Could not start generation — ${message}`);
+      setStep3Error(`Could not start generation: ${message}`);
     } finally {
       setStep3Loading(false);
     }
@@ -424,7 +424,7 @@ export function OnboardingFlow() {
               Website URL
             </label>
             <p className="text-xs text-[#555555] mb-1">
-              Recommended — for automatic voice setup
+              Recommended: automatic voice setup
             </p>
             <Input
               id="website-url"
@@ -457,7 +457,7 @@ export function OnboardingFlow() {
             </p>
           )}
           <SkipLink onClick={handleSkipAll}>
-            Skip for now — I&apos;ll set this up later.
+            Skip for now
           </SkipLink>
         </Card>
       </div>
@@ -484,7 +484,7 @@ export function OnboardingFlow() {
           />
         </Card>
         <SkipLink onClick={handleSkipStep2}>
-          Skip — I&apos;ll refine this later.
+          Skip
         </SkipLink>
       </div>
     );
@@ -501,7 +501,7 @@ export function OnboardingFlow() {
         What&apos;s on your mind this week?
       </h2>
       <p className="text-[0.9375rem] text-[#555555] leading-[1.6] mb-6 text-center">
-        Paste anything — bullet points, half-formed thoughts, a topic title.
+        Paste anything: bullet points, half-formed thoughts, a topic title.
         PersonnaPress will do the rest.
       </p>
 

@@ -84,7 +84,7 @@ function CalendarEntry({
         }).format(new Date(campaign.scheduled_at))
       : null;
 
-  const ariaLabel = `${shortTitle} — ${
+  const ariaLabel = `${shortTitle}: ${
     campaign.status === "published" ? "Published" : `Scheduled ${timeLabel}`
   }`;
 

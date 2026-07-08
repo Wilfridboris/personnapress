@@ -191,18 +191,18 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
                     type="button"
                     onClick={() => setWpType("self-hosted")}
                     className="w-full text-left px-4 py-3 border border-[#E5E5E5] hover:border-[#111111] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 transition-colors duration-150"
-                    aria-label="Self-hosted WordPress — your own server or managed host"
+                    aria-label="Self-hosted WordPress: your own server or managed host"
                   >
                     <span className="block text-sm font-medium text-[#111111]">Self-hosted WordPress</span>
                     <span className="block text-xs text-[#555555] mt-0.5">
-                      Your own server or managed host — SiteGround, WP Engine, Kinsta, etc.
+                      Your own server or managed host: SiteGround, WP Engine, Kinsta, etc.
                     </span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setWpType("wordpress-com")}
                     className="w-full text-left px-4 py-3 border border-[#E5E5E5] hover:border-[#111111] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 transition-colors duration-150"
-                    aria-label="WordPress.com — free or paid site hosted by Automattic"
+                    aria-label="WordPress.com: free or paid site hosted by Automattic"
                   >
                     <span className="block text-sm font-medium text-[#111111]">WordPress.com</span>
                     <span className="block text-xs text-[#555555] mt-0.5">

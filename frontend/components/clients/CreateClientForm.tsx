@@ -135,7 +135,7 @@ export function CreateClientForm() {
             Website URL
           </label>
           <p className="text-sm text-[#555555] mb-2">
-            Recommended — for automatic voice setup
+            Recommended: automatic voice setup
           </p>
           <input
             id="website_url"
@@ -161,7 +161,7 @@ export function CreateClientForm() {
           className="text-sm text-[#555555] hover:underline"
           tabIndex={isPending ? -1 : 0}
         >
-          Skip — set this up later
+          Skip for now
         </Link>
       </div>
     </form>
