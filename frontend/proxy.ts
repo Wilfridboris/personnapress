@@ -11,6 +11,8 @@ export async function proxy(request: NextRequest) {
 
   const isPublicRoute =
     pathname === "/" ||
+    pathname === "/sitemap.xml" ||
+    pathname === "/robots.txt" ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
     pathname.startsWith("/verify-email") ||
