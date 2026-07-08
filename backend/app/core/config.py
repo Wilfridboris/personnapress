@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     EMAIL_FROM: str = "PersonnaPress <noreply@personnapress.com>"
 
     APP_URL: str = "http://localhost:3000"
+    COOKIE_DOMAIN: str | None = None
 
     TRIAL_DAYS: int = 14
 

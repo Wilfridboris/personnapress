@@ -71,6 +71,7 @@ def set_session_cookie(response: JSONResponse, token: str) -> None:
         samesite="lax",
         max_age=60 * 60 * 24 * SESSION_EXPIRY_DAYS,
         path="/",
+        domain=settings.COOKIE_DOMAIN,
     )
 
 
