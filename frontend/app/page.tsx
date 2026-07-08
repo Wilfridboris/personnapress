@@ -12,22 +12,43 @@ import {
   Clock,
   Users,
   LayoutDashboard,
+  Fingerprint,
+  Eraser,
+  CalendarCheck,
 } from "lucide-react";
 import { FaqAccordion } from "./_components/FaqAccordion";
 
 export const metadata: Metadata = {
-  title: "PersonaPress - Publish in Your Voice, Not AI's",
+  title: "PersonaPress - AI Blog Writer That Sounds Like You | Publish Everywhere",
   description:
-    "PersonaPress turns your raw brain dumps into SEO-ranked blog posts and social campaigns that sound exactly like you. Built for founders, coaches, and agencies.",
+    "PersonaPress is an AI blog writer that learns your voice and turns rough ideas into SEO-ranked blog posts and social campaigns. Schedule and publish to WordPress, Webflow, X, and LinkedIn — without sounding like AI.",
+  metadataBase: new URL("https://personapress.io"),
+  keywords: [
+    "ai blog writer",
+    "ai content publisher",
+    "social media scheduler",
+    "brand voice ai",
+    "wordpress publishing",
+    "ai copywriting tool",
+    "publish blog with ai",
+  ],
   alternates: {
     canonical: "https://personapress.io",
   },
   openGraph: {
-    title: "PersonaPress - Publish in Your Voice, Not AI's",
+    title: "PersonaPress - AI Blog Writer That Sounds Like You",
     description:
-      "Turn raw ideas into published, ranked content. Your voice, your style, every time.",
+      "Turn rough ideas into ranked blog posts and social campaigns in your own voice. Schedule and publish everywhere.",
     url: "https://personapress.io",
     type: "website",
+    images: [
+      {
+        url: "https://personapress.io/images/PersonnaPress-opengraph.png",
+        width: 1200,
+        height: 630,
+        alt: "PersonaPress - AI Blog Writer That Sounds Like You",
+      },
+    ],
   },
 };
 
@@ -37,7 +58,7 @@ const schemaWebsite = {
   name: "PersonaPress",
   url: "https://personapress.io",
   description:
-    "An autonomous content engine that turns brain dumps into SEO-ranked blog posts and social campaigns in your authentic voice.",
+    "An AI blog writer and content engine that turns brain dumps into SEO-ranked blog posts and social campaigns in your authentic voice.",
 };
 
 const schemaSoftwareApp = {
@@ -48,7 +69,7 @@ const schemaSoftwareApp = {
   operatingSystem: "Web",
   url: "https://personapress.io",
   description:
-    "PersonaPress learns your writing voice from existing content, then turns raw brain dumps into SEO-structured blog posts, social campaigns, and featured images. Published across WordPress, Webflow, X, and LinkedIn.",
+    "PersonaPress is an AI blog writer and social media scheduler that learns your writing voice from existing content, then turns raw brain dumps into SEO-structured blog posts, social campaigns, and featured images. Schedule and publish across WordPress, Webflow, X, and LinkedIn. No AI fluff — content sounds like you, not a robot.",
   offers: {
     "@type": "Offer",
     price: "0",
@@ -60,9 +81,10 @@ const schemaSoftwareApp = {
     "AI blog post generation (SEO-structured HTML)",
     "X (Twitter) and LinkedIn social post generation",
     "AI featured image generation via FLUX.1",
+    "No AI fluff detection and removal",
+    "Scheduled social media publishing",
     "Human approval gate before any publish",
     "WordPress and Webflow publishing",
-    "Scheduled publishing",
     "Multi-client agency management",
   ],
 };
@@ -142,7 +164,6 @@ const PERSONAS = [
   },
 ];
 
-
 const PAIN_POINTS = [
   {
     icon: Clock,
@@ -159,6 +180,69 @@ const PAIN_POINTS = [
     stat: "4 platforms, 4 logins",
     description: "Publishing friction kills consistency. Most teams give up before they build momentum.",
   },
+];
+
+const KEY_FEATURES = [
+  {
+    icon: Fingerprint,
+    title: "Voice Profile",
+    description:
+      "PersonaPress scrapes your website and past writing to extract your tone, cadence, and banned phrases into a living Brand Voice Profile applied to every campaign.",
+  },
+  {
+    icon: Eraser,
+    title: "No AI Fluff",
+    description:
+      "Detects and strips overused AI phrases like “Unlock the power of”, “Game-changing”, and “Seamlessly”, replacing them with cleaner, more human copy.",
+  },
+  {
+    icon: CalendarCheck,
+    title: "Schedule and Publish",
+    description:
+      "Approve a campaign and publish immediately or schedule it for a future date. One action sends your blog post and social content to every connected platform simultaneously.",
+  },
+];
+
+const BEFORE_ITEMS = [
+  "One blog post takes 6 hours.",
+  "Social posts are written separately.",
+  "Your content sounds inconsistent.",
+  "Publishing is manual across 4 tools.",
+  "You disappear when you get busy.",
+];
+
+const AFTER_ITEMS = [
+  "One idea becomes a full content package.",
+  "Everything sounds like you.",
+  "Blog and social posts in under 90 seconds.",
+  "One click publishes to all your platforms.",
+  "You stay visible consistently.",
+];
+
+const STARTER_FEATURES = [
+  "2 clients",
+  "10 campaigns / month",
+  "10 image generations / month",
+  "WordPress and Webflow publishing",
+  "X and LinkedIn scheduling",
+  "14-day free trial",
+];
+
+const GROWTH_FEATURES = [
+  "5 clients",
+  "30 campaigns / month",
+  "30 image generations / month",
+  "Everything in Starter",
+  "Content calendar",
+  "Scheduled publishing",
+];
+
+const AGENCY_FEATURES = [
+  "Unlimited clients",
+  "Unlimited campaigns",
+  "Everything in Growth",
+  "Multi-brand workspace",
+  "Priority support",
 ];
 
 const FAQ_ITEMS = [
@@ -222,6 +306,16 @@ const FAQ_ITEMS = [
     answer:
       "Featured images are generated using FLUX.1 [pro] via the Replicate API. The image is based on your blog post title and content summary, sized at 1200x630 pixels (standard OG/social dimensions), and stored in Supabase Storage. You can request up to 3 regenerations per campaign with an optional prompt override.",
   },
+  {
+    question: "What is the best AI blog writer for small businesses?",
+    answer:
+      "PersonaPress is designed for small businesses and entrepreneurs who need consistent, authentic blog content without a dedicated content team. Unlike generic AI writers, PersonaPress learns your specific voice, tone, and banned phrases before writing anything. The result is blog posts that sound like you wrote them, not a robot. Posts are also SEO-structured with proper headings and meta descriptions, so they are ready to rank when published.",
+  },
+  {
+    question: "Can I use PersonaPress to schedule social media posts?",
+    answer:
+      "Yes. Once you approve a campaign in the Approval Gate, you can publish immediately or set a future date and time for automatic publishing. Your LinkedIn post and X post are scheduled alongside the blog post. You manage everything from one place without switching between tools or logging into each platform separately.",
+  },
 ];
 
 const schemaFaq = {
@@ -282,6 +376,12 @@ export default function LandingPage() {
               Platforms
             </a>
             <a
+              href="#pricing"
+              className="text-sm text-graphite hover:text-ink transition-colors"
+            >
+              Pricing
+            </a>
+            <a
               href="#faq"
               className="text-sm text-graphite hover:text-ink transition-colors"
             >
@@ -316,17 +416,17 @@ export default function LandingPage() {
               </span>
             </h1>
             <p className="text-xl text-graphite leading-relaxed text-pretty mb-10 max-w-xl">
-              Stop spending 6 hours writing blog posts that sound like every other
-              AI-generated article. PersonaPress learns your voice from your past
-              content, then turns your raw brain dumps into ranked posts and social
-              campaigns.
+              Stop spending 6 hours on blog posts that sound like every other AI
+              blog writer. PersonaPress learns your voice, then turns rough notes
+              into ranked articles and social campaigns &mdash; ready to publish
+              or schedule across every platform.
             </p>
             <div className="flex items-center gap-4">
               <Link
                 href="/dashboard"
                 className="inline-flex items-center gap-2 bg-ink text-paper font-medium px-8 py-4 shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all"
               >
-                Start Free Trial
+                Create My First Post
                 <ArrowRight className="size-4" aria-hidden="true" />
               </Link>
               <a
@@ -398,6 +498,33 @@ export default function LandingPage() {
 
         <div className="border-t border-border" />
 
+        {/* Key Features */}
+        <section id="features" className="max-w-6xl mx-auto px-6 py-20">
+          <header className="mb-14">
+            <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-4">
+              Key Features
+            </p>
+            <h2 className="font-display text-4xl font-bold text-ink text-balance">
+              Built different from the ground up
+            </h2>
+          </header>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-px border border-border bg-border">
+            {KEY_FEATURES.map(({ icon: Icon, title, description }) => (
+              <article key={title} className="bg-paper p-8 group hover:bg-highlight transition-colors">
+                <Icon className="size-5 text-graphite mb-6 group-hover:text-ink transition-colors" aria-hidden="true" />
+                <h3 className="font-display text-xl font-bold text-ink mb-3 text-balance">
+                  {title}
+                </h3>
+                <p className="text-sm text-graphite leading-relaxed text-pretty">
+                  {description}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <div className="border-t border-border" />
+
         {/* Workflow */}
         <section id="workflow" className="max-w-6xl mx-auto px-6 py-20">
           <header className="mb-14">
@@ -430,6 +557,48 @@ export default function LandingPage() {
                 </p>
               </article>
             ))}
+          </div>
+        </section>
+
+        <div className="border-t border-border" />
+
+        {/* Before and After */}
+        <section id="before-after" className="max-w-6xl mx-auto px-6 py-20">
+          <header className="mb-14">
+            <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-4">
+              The Difference
+            </p>
+            <h2 className="font-display text-4xl font-bold text-ink text-balance">
+              Life before and after PersonaPress
+            </h2>
+          </header>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-px border border-border bg-border">
+            <div className="bg-paper p-8">
+              <h3 className="font-mono text-xs text-graphite tracking-widest uppercase mb-6">
+                Before PersonaPress
+              </h3>
+              <ul className="space-y-3">
+                {BEFORE_ITEMS.map((item) => (
+                  <li key={item} className="flex items-start gap-3 text-sm text-graphite">
+                    <span className="text-graphite mt-0.5" aria-hidden="true">&#8212;</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="bg-highlight p-8">
+              <h3 className="font-mono text-xs text-ink tracking-widest uppercase mb-6">
+                After PersonaPress
+              </h3>
+              <ul className="space-y-3">
+                {AFTER_ITEMS.map((item) => (
+                  <li key={item} className="flex items-start gap-3 text-sm text-ink">
+                    <CheckCircle2 className="size-4 text-ink mt-0.5 shrink-0" aria-hidden="true" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </section>
 
@@ -489,6 +658,99 @@ export default function LandingPage() {
 
         <div className="border-t border-border" />
 
+        {/* Pricing */}
+        <section id="pricing" className="max-w-6xl mx-auto px-6 py-20">
+          <header className="mb-14">
+            <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-4">
+              Pricing
+            </p>
+            <h2 className="font-display text-4xl font-bold text-ink text-balance">
+              Simple, transparent pricing
+            </h2>
+          </header>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-px border border-border bg-border">
+            {/* Starter */}
+            <article className="bg-paper p-8">
+              <h3 className="font-display text-2xl font-bold text-ink mb-1">Starter</h3>
+              {/* TODO: Replace with actual pricing */}
+              <p className="font-display text-4xl font-bold text-ink mb-1">
+                $--<span className="font-mono text-sm text-graphite">/mo</span>
+              </p>
+              <p className="text-sm text-graphite mb-6">For individuals getting started with AI content.</p>
+              <ul className="space-y-2 mb-8">
+                {STARTER_FEATURES.map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-graphite">
+                    <CheckCircle2 className="size-4 text-ink mt-0.5 shrink-0" aria-hidden="true" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/dashboard"
+                className="inline-flex w-full justify-center items-center gap-2 bg-ink text-paper font-medium px-6 py-3 hover:bg-graphite transition-colors"
+              >
+                Start Free
+                <ArrowRight className="size-3.5" aria-hidden="true" />
+              </Link>
+            </article>
+
+            {/* Growth */}
+            <article className="bg-paper p-8">
+              <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-2">
+                Most popular
+              </p>
+              <h3 className="font-display text-2xl font-bold text-ink mb-1">Growth</h3>
+              {/* TODO: Replace with actual pricing */}
+              <p className="font-display text-4xl font-bold text-ink mb-1">
+                $--<span className="font-mono text-sm text-graphite">/mo</span>
+              </p>
+              <p className="text-sm text-graphite mb-6">For businesses that publish weekly.</p>
+              <ul className="space-y-2 mb-8">
+                {GROWTH_FEATURES.map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-graphite">
+                    <CheckCircle2 className="size-4 text-ink mt-0.5 shrink-0" aria-hidden="true" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/dashboard"
+                className="inline-flex w-full justify-center items-center gap-2 bg-ink text-paper font-medium px-6 py-3 hover:bg-graphite transition-colors"
+              >
+                Start Free Trial
+                <ArrowRight className="size-3.5" aria-hidden="true" />
+              </Link>
+            </article>
+
+            {/* Agency */}
+            <article className="bg-paper p-8">
+              <h3 className="font-display text-2xl font-bold text-ink mb-1">Agency</h3>
+              {/* TODO: Replace with actual pricing */}
+              <p className="font-display text-4xl font-bold text-ink mb-1">
+                $--<span className="font-mono text-sm text-graphite">/mo</span>
+              </p>
+              <p className="text-sm text-graphite mb-6">For agencies managing multiple client voices.</p>
+              <ul className="space-y-2 mb-8">
+                {AGENCY_FEATURES.map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-graphite">
+                    <CheckCircle2 className="size-4 text-ink mt-0.5 shrink-0" aria-hidden="true" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/dashboard"
+                className="inline-flex w-full justify-center items-center gap-2 bg-ink text-paper font-medium px-6 py-3 hover:bg-graphite transition-colors"
+              >
+                Book a Demo
+                <ArrowRight className="size-3.5" aria-hidden="true" />
+              </Link>
+            </article>
+          </div>
+        </section>
+
+        <div className="border-t border-border" />
+
         {/* FAQ */}
         <section id="faq" className="max-w-6xl mx-auto px-6 py-20">
           <header className="mb-14">
@@ -517,6 +779,7 @@ export default function LandingPage() {
             <nav className="flex flex-wrap gap-6">
               <a href="#workflow" className="font-mono text-xs text-graphite hover:text-ink transition-colors">How it works</a>
               <a href="#platforms" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Platforms</a>
+              <a href="#pricing" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Pricing</a>
               <a href="#faq" className="font-mono text-xs text-graphite hover:text-ink transition-colors">FAQ</a>
               <Link href="/dashboard" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Sign up</Link>
               <Link href="/login" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Log in</Link>

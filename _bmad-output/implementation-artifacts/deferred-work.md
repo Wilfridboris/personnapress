@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of 8-2-landing-page-conversion-keyword-optimization (2026-07-07)
+
+- **D1 (Low)**: DOMPurify config mutability — `_DOMPURIFY_CONFIG` changed from `as const` to typed `Config`; removes readonly guarantee. DOMPurify does not mutate configs in practice but future spread/assign could silently drop `FORBID_ATTR`. [frontend/components/campaigns/BlogEditor.tsx:21]
+- **D2 (Low)**: `window.prompt` in BlogEditor inside sandboxed iframe — link toolbar button uses `window.prompt` which is blocked/silent in sandboxed iframes; breaks link insertion UX in embed contexts. Pre-existing, outside this story's scope. [frontend/components/campaigns/BlogEditor.tsx:121]
+
 ## Deferred from: code review of 7-3-data-retention-account-deletion-cleanup-scheduler (2026-07-06)
 
 - **D1 (Medium)**: Multiple `trial_expired` subscription rows for same `user_id` causes Phase 2 to re-anonymize the already-hashed email, corrupting the audit trail. No `UNIQUE` constraint on `subscriptions.user_id`. Pre-existing schema design gap; low probability in practice. [backend/app/workers/cleanup.py]

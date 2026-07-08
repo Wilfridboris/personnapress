@@ -4,6 +4,7 @@ import { forwardRef, useImperativeHandle, useState, useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
+import type { Config } from "dompurify";
 import { Bold, Italic, Heading2, Link2, Quote, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { campaignsApi } from "@/lib/api";
@@ -20,11 +21,11 @@ interface BlogEditorProps {
   onSave?: (html: string) => void;
 }
 
-const _DOMPURIFY_CONFIG = {
+const _DOMPURIFY_CONFIG: Config = {
   ALLOWED_TAGS: ["h1", "h2", "h3", "h4", "p", "ul", "ol", "li", "strong", "em", "a", "br", "blockquote", "code", "pre"],
   ALLOWED_ATTR: ["href", "title", "rel"],
   FORBID_ATTR: ["target"],
-} as const;
+};
 
 const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
   ({ initialHtml, campaignId, readOnly = false }, ref) => {
