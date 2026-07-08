@@ -672,9 +672,8 @@ export default function LandingPage() {
             {/* Starter */}
             <article className="bg-paper p-8">
               <h3 className="font-display text-2xl font-bold text-ink mb-1">Starter</h3>
-              {/* TODO: Replace with actual pricing */}
               <p className="font-display text-4xl font-bold text-ink mb-1">
-                $--<span className="font-mono text-sm text-graphite">/mo</span>
+                $29<span className="font-mono text-sm text-graphite">/mo</span>
               </p>
               <p className="text-sm text-graphite mb-6">For individuals getting started with AI content.</p>
               <ul className="space-y-2 mb-8">
@@ -700,9 +699,8 @@ export default function LandingPage() {
                 Most popular
               </p>
               <h3 className="font-display text-2xl font-bold text-ink mb-1">Growth</h3>
-              {/* TODO: Replace with actual pricing */}
               <p className="font-display text-4xl font-bold text-ink mb-1">
-                $--<span className="font-mono text-sm text-graphite">/mo</span>
+                $79<span className="font-mono text-sm text-graphite">/mo</span>
               </p>
               <p className="text-sm text-graphite mb-6">For businesses that publish weekly.</p>
               <ul className="space-y-2 mb-8">
@@ -725,9 +723,8 @@ export default function LandingPage() {
             {/* Agency */}
             <article className="bg-paper p-8">
               <h3 className="font-display text-2xl font-bold text-ink mb-1">Agency</h3>
-              {/* TODO: Replace with actual pricing */}
               <p className="font-display text-4xl font-bold text-ink mb-1">
-                $--<span className="font-mono text-sm text-graphite">/mo</span>
+                $199<span className="font-mono text-sm text-graphite">/mo</span>
               </p>
               <p className="text-sm text-graphite mb-6">For agencies managing multiple client voices.</p>
               <ul className="space-y-2 mb-8">
