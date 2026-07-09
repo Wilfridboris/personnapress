@@ -49,6 +49,7 @@ export interface ClientListItem {
   website_url: string | null;
   brand_voice_profile_status: BrandVoiceProfileStatus;
   campaign_count: number;
+  brand_voice_profile?: BrandVoiceProfile | null;
 }
 
 export interface ClientListResponse {

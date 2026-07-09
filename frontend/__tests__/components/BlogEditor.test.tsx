@@ -111,7 +111,7 @@ describe("BlogEditor", () => {
     // Simulate editor becoming dirty by triggering onUpdate
     const { useEditor } = await import("@tiptap/react");
     const opts = vi.mocked(useEditor).mock.calls[0]?.[0];
-    opts?.onUpdate?.({ editor: mockEditor as never });
+    opts?.onUpdate?.({ editor: mockEditor } as unknown as Parameters<NonNullable<typeof opts.onUpdate>>[0]);
 
     const saveBtn = screen.getByRole("button", { name: /save edits/i });
 
@@ -131,7 +131,7 @@ describe("BlogEditor", () => {
 
     const { useEditor } = await import("@tiptap/react");
     const opts = vi.mocked(useEditor).mock.calls[0]?.[0];
-    opts?.onUpdate?.({ editor: mockEditor as never });
+    opts?.onUpdate?.({ editor: mockEditor } as unknown as Parameters<NonNullable<typeof opts.onUpdate>>[0]);
 
     const saveBtn = screen.getByRole("button", { name: /save edits/i });
     await waitFor(() => expect(saveBtn).not.toBeDisabled());
@@ -150,7 +150,7 @@ describe("BlogEditor", () => {
 
     const { useEditor } = await import("@tiptap/react");
     const opts = vi.mocked(useEditor).mock.calls[0]?.[0];
-    opts?.onUpdate?.({ editor: mockEditor as never });
+    opts?.onUpdate?.({ editor: mockEditor } as unknown as Parameters<NonNullable<typeof opts.onUpdate>>[0]);
 
     const saveBtn = screen.getByRole("button", { name: /save edits/i });
     await waitFor(() => expect(saveBtn).not.toBeDisabled());

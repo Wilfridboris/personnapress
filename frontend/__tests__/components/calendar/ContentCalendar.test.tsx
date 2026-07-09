@@ -74,7 +74,7 @@ function mockCalendarData(data: ReturnType<typeof makeCampaign>[] | undefined, o
 describe("ContentCalendar", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(usePlatformConnections).mockReturnValue(noConnections as ReturnType<typeof usePlatformConnections>);
+    vi.mocked(usePlatformConnections).mockReturnValue(noConnections as unknown as ReturnType<typeof usePlatformConnections>);
   });
 
   it("renders current month header in H2", () => {

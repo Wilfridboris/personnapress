@@ -63,7 +63,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(usePlatformConnections).mockReturnValue(noConnections as ReturnType<typeof usePlatformConnections>);
+  vi.mocked(usePlatformConnections).mockReturnValue(noConnections as unknown as ReturnType<typeof usePlatformConnections>);
 });
 
 describe("CampaignList", () => {
@@ -79,7 +79,7 @@ describe("CampaignList", () => {
     vi.mocked(useCampaigns).mockReturnValue({
       data: { items: [campaign], total: 1 },
       isLoading: false,
-    } as ReturnType<typeof useCampaigns>);
+    } as unknown as ReturnType<typeof useCampaigns>);
 
     render(<CampaignList />, { wrapper });
 
@@ -92,7 +92,7 @@ describe("CampaignList", () => {
     vi.mocked(useCampaigns).mockReturnValue({
       data: { items: [], total: 0 },
       isLoading: false,
-    } as ReturnType<typeof useCampaigns>);
+    } as unknown as ReturnType<typeof useCampaigns>);
 
     render(<CampaignList />, { wrapper });
 
@@ -106,7 +106,7 @@ describe("CampaignList", () => {
     vi.mocked(useCampaigns).mockReturnValue({
       data: { items: [campaign], total: 1 },
       isLoading: false,
-    } as ReturnType<typeof useCampaigns>);
+    } as unknown as ReturnType<typeof useCampaigns>);
 
     render(<CampaignList />, { wrapper });
 
@@ -119,7 +119,7 @@ describe("CampaignList", () => {
     vi.mocked(useCampaigns).mockReturnValue({
       data: { items: [], total: 0 },
       isLoading: false,
-    } as ReturnType<typeof useCampaigns>);
+    } as unknown as ReturnType<typeof useCampaigns>);
 
     render(<CampaignList />, { wrapper });
 
