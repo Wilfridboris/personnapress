@@ -1,4 +1,4 @@
-import type { BrandVoiceProfile, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, FileListResponse, Job, PlatformConnectionStatus, QuestionnairePayload, SubscriptionInfo } from "./types";
+import type { BrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, FileListResponse, Job, PlatformConnectionStatus, QuestionnairePayload, SubscriptionInfo } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -107,7 +107,7 @@ export const campaignsApi = {
     return apiFetch<CampaignListResponse>(`/campaigns${qs ? `?${qs}` : ""}`);
   },
   get: (id: string) => apiFetch<Campaign>(`/campaigns/${id}`),
-  create: (data: { client_id: string; brain_dump: string }) =>
+  create: (data: CampaignCreate) =>
     apiFetch<{ job_id: string; campaign_id: string }>("/campaigns", {
       method: "POST",
       body: JSON.stringify(data),

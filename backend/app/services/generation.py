@@ -138,6 +138,8 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
             campaign.brain_dump,
             brand_voice_profile,
             _BLOG_THINKING_TOKENS,
+            campaign.target_keyword,
+            campaign.target_audience,
         )
         if not blog_html:
             raise ValueError("generate_blog returned empty content")

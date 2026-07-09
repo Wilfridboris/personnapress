@@ -120,6 +120,8 @@ class Campaign(SQLModel, table=True):
     rejection_reason: Optional[str] = None
     scheduled_at: Optional[datetime] = None
     image_regen_count: int = Field(default=0)
+    target_keyword: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    target_audience: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

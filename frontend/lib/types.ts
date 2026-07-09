@@ -68,6 +68,7 @@ export interface BrandVoiceProfile {
   tone: string[];
   cadence: BrandVoiceCadence;
   banned_jargon: string[];
+  target_audience?: string | null;
 }
 
 export interface QuestionnairePayload {
@@ -109,6 +110,17 @@ export interface VoiceScore {
   tone_score: number;
   cadence_score: number;
   jargon_violations: number;
+  seo_bluf_present?: boolean;
+  seo_h2_count?: number;
+  seo_faq_present?: boolean;
+  seo_fluff_detected?: boolean;
+}
+
+export interface CampaignCreate {
+  client_id: string;
+  brain_dump: string;
+  target_keyword?: string | null;
+  target_audience?: string | null;
 }
 
 export interface Job {

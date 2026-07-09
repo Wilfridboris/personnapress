@@ -12,8 +12,16 @@ async def create_campaign(
     session: AsyncSession,
     client_id: uuid.UUID,
     brain_dump: str,
+    target_keyword: Optional[str] = None,
+    target_audience: Optional[str] = None,
 ) -> Campaign:
-    campaign = Campaign(client_id=client_id, brain_dump=brain_dump, status="pending_approval")
+    campaign = Campaign(
+        client_id=client_id,
+        brain_dump=brain_dump,
+        status="pending_approval",
+        target_keyword=target_keyword,
+        target_audience=target_audience,
+    )
     session.add(campaign)
     await session.flush()
     await session.refresh(campaign)

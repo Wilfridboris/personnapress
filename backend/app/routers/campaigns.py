@@ -72,7 +72,13 @@ async def create_new_campaign(
     await check_trial_not_expired(user_id, db, "create campaigns")
     await check_campaign_limit(db, user_id)
 
-    campaign = await create_campaign(db, body.client_id, body.brain_dump)
+    campaign = await create_campaign(
+        db,
+        body.client_id,
+        body.brain_dump,
+        target_keyword=body.target_keyword,
+        target_audience=body.target_audience,
+    )
     job = await create_job(db, job_type="generation", status="pending", campaign_id=campaign.id)
 
     await db.commit()

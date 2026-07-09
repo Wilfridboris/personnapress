@@ -16,7 +16,7 @@ def _make_job(campaign_id=None, status="pending"):
     return job
 
 
-def _make_campaign(client_id=None):
+def _make_campaign(client_id=None, target_keyword=None, target_audience=None):
     campaign = MagicMock()
     campaign.id = uuid.uuid4()
     campaign.client_id = client_id or uuid.uuid4()
@@ -25,6 +25,8 @@ def _make_campaign(client_id=None):
     campaign.voice_score = None
     campaign.x_post = None
     campaign.linkedin_post = None
+    campaign.target_keyword = target_keyword
+    campaign.target_audience = target_audience
     return campaign
 
 
@@ -70,7 +72,15 @@ _BVP = {
 }
 
 _BLOG_HTML = "<h1>Test Title</h1><p>Body text here.</p>"
-_VOICE_SCORE = {"tone_score": 9, "cadence_score": 8, "jargon_violations": 0}
+_VOICE_SCORE = {
+    "tone_score": 9,
+    "cadence_score": 8,
+    "jargon_violations": 0,
+    "seo_bluf_present": True,
+    "seo_h2_count": 3,
+    "seo_faq_present": True,
+    "seo_fluff_detected": False,
+}
 _SOCIAL = {"x_post": "Tweet!", "linkedin_post": "LinkedIn post " * 40}
 
 
@@ -231,3 +241,58 @@ async def test_job_marked_in_progress_before_generation(mock_gemini, mock_logs_r
 
     # First commit should be the in_progress status update
     assert "in_progress" in committed_statuses
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation.generation_logs_repo")
+@patch("app.services.generation.gemini")
+async def test_target_keyword_and_audience_passed_to_generate_blog(mock_gemini, mock_logs_repo):
+    """Verify target_keyword and target_audience flow from campaign → generate_blog call."""
+    from app.services.generation import run_generation_pipeline
+
+    job_id = uuid.uuid4()
+    campaign = _make_campaign(target_keyword="indie app founders", target_audience="solo iOS developers")
+    client = _make_client(bvp=_BVP)
+    job = _make_job(campaign_id=campaign.id)
+
+    mock_gemini.generate_blog = AsyncMock(return_value=_BLOG_HTML)
+    mock_gemini.check_fidelity = AsyncMock(return_value=_VOICE_SCORE)
+    mock_gemini.generate_social = AsyncMock(return_value=_SOCIAL)
+    mock_logs_repo.create_generation_log = AsyncMock()
+
+    db = _make_db(job, campaign, client)
+    await run_generation_pipeline(job_id, db)
+
+    call_args = mock_gemini.generate_blog.call_args
+    positional = call_args[0]
+    # generate_blog is called as fn(*args) via _gemini_with_retry
+    # args: brain_dump, brand_voice_profile, thinking_tokens, target_keyword, target_audience
+    assert positional[3] == "indie app founders"
+    assert positional[4] == "solo iOS developers"
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation.generation_logs_repo")
+@patch("app.services.generation.gemini")
+async def test_null_keyword_and_audience_still_produces_blog(mock_gemini, mock_logs_repo):
+    """Regression: when target_keyword and target_audience are None, pipeline succeeds."""
+    from app.services.generation import run_generation_pipeline
+
+    job_id = uuid.uuid4()
+    campaign = _make_campaign(target_keyword=None, target_audience=None)
+    client = _make_client(bvp=_BVP)
+    job = _make_job(campaign_id=campaign.id)
+
+    mock_gemini.generate_blog = AsyncMock(return_value=_BLOG_HTML)
+    mock_gemini.check_fidelity = AsyncMock(return_value=_VOICE_SCORE)
+    mock_gemini.generate_social = AsyncMock(return_value=_SOCIAL)
+    mock_logs_repo.create_generation_log = AsyncMock()
+
+    db = _make_db(job, campaign, client)
+    await run_generation_pipeline(job_id, db)
+
+    assert campaign.blog_html == _BLOG_HTML
+    call_args = mock_gemini.generate_blog.call_args
+    positional = call_args[0]
+    assert positional[3] is None
+    assert positional[4] is None

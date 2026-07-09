@@ -27,11 +27,21 @@ class CampaignPatch(BaseModel):
 class CampaignCreate(BaseModel):
     client_id: uuid.UUID
     brain_dump: str = Field(min_length=20, max_length=10000)
+    target_keyword: Optional[str] = Field(default=None, max_length=200)
+    target_audience: Optional[str] = Field(default=None, max_length=500)
 
     @field_validator("brain_dump", mode="before")
     @classmethod
     def strip_brain_dump(cls, v: str) -> str:
         return v.strip() if isinstance(v, str) else v
+
+    @field_validator("target_keyword", "target_audience", mode="before")
+    @classmethod
+    def strip_optional_text(cls, v: object) -> object:
+        if isinstance(v, str):
+            stripped = v.strip()
+            return stripped if stripped else None
+        return v
 
 
 class CampaignResponse(BaseModel):

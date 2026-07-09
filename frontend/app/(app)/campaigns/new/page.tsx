@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -20,10 +20,28 @@ export default function NewCampaignPage() {
   const activeClient = clients.find((c) => c.id === activeClientId) ?? null;
 
   const [brainDump, setBrainDump] = useState("");
+  const [targetKeyword, setTargetKeyword] = useState("");
+  const [targetAudience, setTargetAudience] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [limitExceeded, setLimitExceeded] = useState<{ message: string; nextTier: string } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Track which clientId we last auto-filled from, so we re-fill on client
+  // switch and on async client-list load (when activeClientId is set before
+  // clients arrive in the store).
+  const lastAutoFilledClientId = useRef<string | null>(null);
+
+  useEffect(() => {
+    const bvpAudience = activeClient?.brand_voice_profile?.target_audience ?? "";
+    if (!bvpAudience) return;
+    // Fill when: (a) field is empty, or (b) switching to a different client
+    // whose BVP has an audience (overrides the previous client's auto-fill).
+    const switchingClient = activeClientId !== lastAutoFilledClientId.current;
+    if (targetAudience === "" || switchingClient) {
+      setTargetAudience(bvpAudience);
+      lastAutoFilledClientId.current = activeClientId ?? null;
+    }
+  }, [activeClientId, activeClient]);
 
   const charCount = brainDump.length;
   const hasActiveClient = activeClient !== null;
@@ -61,7 +79,12 @@ export default function NewCampaignPage() {
       const data = await campaignsApi.create({
         client_id: activeClient.id,
         brain_dump: brainDump.trim(),
+        target_keyword: targetKeyword.trim() || null,
+        target_audience: targetAudience.trim() || null,
       });
+      setBrainDump("");
+      setTargetKeyword("");
+      setTargetAudience("");
       setIsSubmitting(false);
       router.push(`/campaigns/${data.campaign_id}?job_id=${data.job_id}`);
     } catch (err: unknown) {
@@ -175,6 +198,34 @@ export default function NewCampaignPage() {
         >
           {charCount} / {MAX_CHARS.toLocaleString()} characters
         </p>
+      </div>
+
+      <div className="space-y-1 mb-2">
+        <label className="font-mono text-xs text-graphite uppercase tracking-widest">
+          Target keyword <span className="normal-case">(optional)</span>
+        </label>
+        <input
+          type="text"
+          value={targetKeyword}
+          onChange={(e) => setTargetKeyword(e.target.value)}
+          maxLength={200}
+          placeholder="e.g. how to scale a subscription mobile app"
+          className="w-full bg-transparent font-mono text-sm text-ink border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink py-2 focus:outline-none transition-all placeholder:text-graphite/40"
+        />
+      </div>
+
+      <div className="space-y-1 mb-6">
+        <label className="font-mono text-xs text-graphite uppercase tracking-widest">
+          Target audience <span className="normal-case">(optional)</span>
+        </label>
+        <input
+          type="text"
+          value={targetAudience}
+          onChange={(e) => setTargetAudience(e.target.value)}
+          maxLength={500}
+          placeholder="e.g. indie app developers, solo founders building iOS apps"
+          className="w-full bg-transparent font-mono text-sm text-ink border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink py-2 focus:outline-none transition-all placeholder:text-graphite/40"
+        />
       </div>
 
       <Button

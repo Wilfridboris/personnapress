@@ -19,8 +19,8 @@ _sqlalchemy_js = _types.ModuleType("apscheduler.jobstores.sqlalchemy")
 _sqlalchemy_js.SQLAlchemyJobStore = MagicMock
 sys.modules.setdefault("apscheduler.jobstores.sqlalchemy", _sqlalchemy_js)
 
-# Stub google.generativeai so the module-level genai.configure() call in
-# integrations/gemini.py does not require a real API key during test runs.
+# Stub google SDK modules so integrations/gemini.py is importable without a
+# real API key or network access during test runs.
 import types as _types
 
 if "google" not in sys.modules:
@@ -30,3 +30,23 @@ if "google" not in sys.modules:
 
 if "google.generativeai" not in sys.modules:
     sys.modules["google.generativeai"] = MagicMock()
+
+# Stub the new google-genai SDK (google.genai) used by integrations/gemini.py.
+# Without this, 'from google import genai' fails when google.genai hasn't been
+# imported before conftest creates the fake google package.
+if "google.genai" not in sys.modules:
+    _genai_stub = MagicMock()
+    sys.modules["google.genai"] = _genai_stub
+    # Expose as attribute so 'from google import genai' resolves correctly.
+    sys.modules["google"].genai = _genai_stub  # type: ignore[attr-defined]
+
+if "google.genai.types" not in sys.modules:
+    sys.modules["google.genai.types"] = MagicMock()
+
+# Pre-import the real gemini module now that google.genai is stubbed.
+# Some test files use sys.modules.setdefault("app.integrations.gemini", MagicMock())
+# to stub heavy transitive deps; pre-importing here ensures the real module wins
+# and those setdefault calls become no-ops.
+import importlib as _importlib
+_importlib.import_module("app.integrations.gemini")
+_importlib.import_module("app.services.generation")

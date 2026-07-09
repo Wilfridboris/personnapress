@@ -6,6 +6,11 @@
 - `git pull origin main` has no non-fast-forward protection: if main was force-pushed, the pull fails mid-deploy leaving new pip deps installed but migration not run — pre-existing in `deploy.sh`.
 - No rollback on `alembic upgrade head` failure: failed migration leaves the DB in a partially upgraded state with no automated revert — pre-existing in `deploy.sh`.
 
+## Deferred from: code review of 3-7-seo-aware-content-generation (2026-07-09)
+
+- `tone_score`/`cadence_score`/`jargon_violations` in `check_fidelity()` accept floats (not strictly int) — only the new `seo_h2_count` field enforces strict int; pre-existing validation gap in `backend/app/integrations/gemini.py`
+- `_FIDELITY_PROMPT` asks Gemini to count `<h2>` tags in the blog HTML — LLMs are unreliable HTML parsers; deterministic counting from the actual HTML (already done in `generate_blog`) would be more accurate; pre-existing design decision in `backend/app/integrations/gemini.py`
+
 ## Deferred from: code review of 3-6-image-generation-quality (2026-07-08)
 
 - Blog title with apostrophe/single-quote formats awkwardly inside wrapping quotes in `_build_image_prompt` (`backend/app/services/image.py:49`) — pre-existing in both old and new prompt formats
