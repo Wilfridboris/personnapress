@@ -13,7 +13,16 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-_BUCKET_CONTENT_TYPE = "application/octet-stream"
+def _content_type_for_path(path: str) -> str:
+    """Return the correct MIME type for a storage path based on its extension."""
+    lower = path.lower()
+    if lower.endswith(".txt"):
+        return "text/plain"
+    if lower.endswith(".md"):
+        return "text/markdown"
+    if lower.endswith(".docx"):
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    return "application/octet-stream"
 
 
 def _headers() -> dict[str, str]:
@@ -28,22 +37,56 @@ def _storage_url(path: str) -> str:
     return f"{base}/storage/v1{path}"
 
 
+async def _ensure_bucket(client: httpx.AsyncClient, bucket: str, public: bool = False) -> None:
+    """Create bucket if it does not already exist (409 = already exists, ignored)."""
+    url = _storage_url("/bucket")
+    resp = await client.post(
+        url,
+        json={"id": bucket, "name": bucket, "public": public},
+        headers=_headers(),
+    )
+    if resp.status_code not in (200, 201, 409):
+        logger.warning("_ensure_bucket: %s → %d %s", bucket, resp.status_code, resp.text)
+
+
 async def upload_file(bucket: str, path: str, file_bytes: bytes) -> None:
     """Upload file_bytes to Supabase Storage at bucket/path.
 
+    Auto-creates the bucket on first use if it doesn't exist.
     Raises httpx.HTTPStatusError on failure.
     """
     url = _storage_url(f"/object/{bucket}/{path}")
+    content_type = _content_type_for_path(path)
     async with httpx.AsyncClient(timeout=60.0) as client:
         resp = await client.post(
             url,
             content=file_bytes,
             headers={
                 **_headers(),
-                "Content-Type": _BUCKET_CONTENT_TYPE,
+                "Content-Type": content_type,
                 "x-upsert": "true",  # overwrite if exists
             },
         )
+        if resp.status_code == 400 and "Bucket not found" in resp.text:
+            logger.info("upload_file: bucket %r not found — creating it", bucket)
+            await _ensure_bucket(client, bucket, public=False)
+            resp = await client.post(
+                url,
+                content=file_bytes,
+                headers={
+                    **_headers(),
+                    "Content-Type": content_type,
+                    "x-upsert": "true",
+                },
+            )
+        if not resp.is_success:
+            logger.error(
+                "upload_file: Supabase Storage %d for %s/%s — %s",
+                resp.status_code,
+                bucket,
+                path,
+                resp.text,
+            )
         resp.raise_for_status()
 
 

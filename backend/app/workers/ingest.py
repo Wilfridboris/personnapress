@@ -78,7 +78,7 @@ async def _run_ingestion(db: AsyncSession, job_id: uuid.UUID, client_id: uuid.UU
             logger.warning("ingest_worker: scraping failed for job %s: %s", job_id, exc)
             # Continue with file text only
         except Exception as exc:
-            logger.warning(
+            logger.exception(
                 "ingest_worker: unexpected scraping error for job %s: %s", job_id, exc
             )
             # Continue with file text only

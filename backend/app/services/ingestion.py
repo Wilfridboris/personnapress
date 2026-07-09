@@ -64,9 +64,15 @@ def extract_clean_text(html_content: str) -> str:
     for tag in soup.find_all(_STRIP_TAGS):
         tag.decompose()
 
-    # Remove elements whose class attribute contains noise patterns
+    # Remove elements whose class attribute contains noise patterns.
+    # Guard against detached Tag objects (parent already decomposed above) whose
+    # .get() raises AttributeError in some BeautifulSoup versions.
     for tag in soup.find_all(class_=True):
-        classes = " ".join(tag.get("class", []))
+        try:
+            tag_classes = tag.get("class") or []
+        except AttributeError:
+            continue
+        classes = " ".join(tag_classes)
         if _STRIP_CLASS_PATTERNS.search(classes):
             tag.decompose()
 
@@ -185,7 +191,7 @@ async def scrape_website(url: str) -> str:
                     resp = await client.get(post_url)
                     if resp.status_code == 200:
                         return extract_clean_text(resp.text)
-                except (httpx.TimeoutException, httpx.ConnectError, httpx.RequestError):
+                except Exception:
                     logger.warning("Failed to fetch post: %s", post_url)
                 return ""
 

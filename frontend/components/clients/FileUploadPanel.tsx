@@ -64,6 +64,28 @@ export function FileUploadPanel({ clientId }: Props) {
 
         xhr.onload = () => {
           if (xhr.status < 400) {
+            // The backend returns HTTP 200 even when Supabase storage fails,
+            // so parse the body to detect server-side errors.
+            try {
+              const body = JSON.parse(xhr.responseText) as {
+                uploaded: Array<{ filename: string }>;
+                errors: Array<{ filename: string; error: string }>;
+              };
+              const uploadError = body.errors?.find((e) => e.filename === file.name);
+              if (uploadError) {
+                setUploading((prev) =>
+                  prev.map((p) =>
+                    p.filename === file.name
+                      ? { ...p, status: "error", error: uploadError.error }
+                      : p,
+                  ),
+                );
+                reject(new Error(uploadError.error));
+                return;
+              }
+            } catch {
+              // Non-JSON response — treat as success based on status code
+            }
             setUploading((prev) =>
               prev.map((p) =>
                 p.filename === file.name
