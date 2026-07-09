@@ -572,3 +572,81 @@ async def test_generate_social_uses_default_voice_when_bvp_is_none(mock_client):
     mock_client.aio.models.generate_content = _mock_aio_generate(_VALID_SOCIAL_JSON)
     result = await generate_social("brain dump", "Title", None)
     assert "x_post" in result
+
+
+# ── Story 3-8: GEO & E-E-A-T prompt improvements ─────────────────────────────
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_prompt_retains_eeat_signals(mock_client):
+    """AC #1, #2: Brain dump label and REQUIREMENTS must retain E-E-A-T first-person signals."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("I tested this and found conversion went from 1% to 3%", _VALID_BVP)
+
+    prompt_text = captured_prompt[0]
+    assert "first-person" in prompt_text.lower() or "E-E-A-T" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_prompt_includes_information_gain_instruction(mock_client):
+    """AC #3: REQUIREMENTS must include an Information Gain instruction."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("My brain dump with proprietary data", _VALID_BVP)
+
+    prompt_text = captured_prompt[0]
+    assert "proprietary" in prompt_text.lower() or "Information Gain" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_prompt_includes_geo_answer_block_rule(mock_client):
+    """AC #4, #5: MANDATORY STRUCTURE must include the conditional GEO answer block rule."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("My brain dump", _VALID_BVP)
+
+    prompt_text = captured_prompt[0]
+    assert "implies a direct question" in prompt_text.lower() or "AI Overview" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_social_prompt_includes_linkedin_first_person_hook(mock_client):
+    """AC #6: _SOCIAL_PROMPT must instruct Gemini to open LinkedIn posts with a first-person hook."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_SOCIAL_JSON)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_social("My brain dump", "Test Title", _VALID_BVP)
+
+    prompt_text = captured_prompt[0]
+    assert "first-person" in prompt_text.lower()
