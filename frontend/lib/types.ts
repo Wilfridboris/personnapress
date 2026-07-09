@@ -179,7 +179,7 @@ export interface PlanLimits {
 }
 
 export interface PlatformConnectionStatus {
-  platform: "wordpress" | "webflow" | "x" | "linkedin";
+  platform: "wordpress" | "webflow" | "x" | "linkedin" | "github_pages";
   connected: boolean;
   account_identifier?: string;
   connected_via?: "wordpress-com";  // only present on wordpress card when connected via WordPress.com OAuth

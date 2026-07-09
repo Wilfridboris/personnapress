@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
+import { GitHubConnect } from "@/components/publishing/GitHubConnect";
 import { publishingApi } from "@/lib/api";
 import type { PlatformConnectionStatus, ConnectionCreatePayload } from "@/lib/types";
 
@@ -18,6 +19,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   webflow: "Webflow",
   x: "X (Twitter)",
   linkedin: "LinkedIn",
+  github_pages: "GitHub Pages",
 };
 
 
@@ -46,6 +48,11 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
 
   const label = PLATFORM_LABELS[connection.platform] ?? connection.platform;
   const isOAuth = connection.platform === "x" || connection.platform === "linkedin";
+  const isGitHub = connection.platform === "github_pages";
+
+  if (isGitHub) {
+    return <GitHubConnect clientId={clientId} connection={connection} />;
+  }
 
   function handleCancel() {
     setShowForm(false);

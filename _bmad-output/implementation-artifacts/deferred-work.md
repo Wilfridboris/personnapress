@@ -1,5 +1,17 @@
 # Deferred Work
 
+## Deferred from: code review of 8-3-github-app-oauth-repository-connection (2026-07-09)
+
+- `get_installation_repositories` uses `per_page=100` with no pagination — installations with >100 repos silently truncated; add Link header pagination when needed. [backend/app/integrations/github.py]
+- Stale installation token remains in DB if `upsert_connection` fails during token refresh in `list_github_repos` — next call will re-refresh; low probability. [backend/app/routers/publishing.py:list_github_repos]
+- CSRF cookie-stuffing via subdomain takeover with `SameSite=Lax` on `github_oauth_state` cookie — existing pattern across all OAuth flows; subdomain takeover is a separate concern. [frontend/app/api/auth/github/route.ts]
+- Architecture: `decrypt_credential` called in router for connection management endpoints — spec rule "decrypt only in service layer" targets the publish path; existing `_extract_identifier` already does this. [backend/app/routers/publishing.py]
+- No "Change repository" CTA when `connected-with-repo` state — user must disconnect and reconnect to change repo; spec is ambiguous; acceptable UX for MVP. [frontend/components/publishing/GitHubConnect.tsx]
+- Token auto-refresh only in `list_github_repos`, not in publish path — must be added in story 8.5 when `services/publishing.py` GitHub publish handler is implemented. [backend/app/routers/publishing.py]
+- `_check_github_ownership` returns 403 for non-existent client (vs 404 in other endpoints) — intentional security-by-obscurity; consistent with `test_connect_github_404_client_not_found` asserting 403. [backend/app/routers/publishing.py]
+- `httpx.RequestError`/`TimeoutException` not caught in `github.py` — pre-existing pattern across all integrations (linkedin, twitter, webflow also unguarded); address as cross-cutting concern. [backend/app/integrations/github.py]
+- No rate limiting / idempotency on `POST /clients/{id}/connections/github` — repeated calls silently overwrite existing connection; auth ownership check limits blast radius. [backend/app/routers/publishing.py:connect_github]
+
 ## Deferred from: deploy.sh status/log fix (2026-07-08)
 
 - `systemctl is-active` validates systemd process state only, not application-level readiness (e.g., HTTP server fully bound). If the service type is `oneshot` or startup is async, the check may pass before traffic can be served — `deploy.sh:32`.

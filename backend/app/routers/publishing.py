@@ -22,6 +22,7 @@ from app.db.repositories.platform_connections import (
     get_connections_for_client,
     upsert_connection,
 )
+from app.integrations import github as github_integration
 from app.integrations import linkedin as linkedin_integration
 from app.integrations import twitter as twitter_integration
 from app.integrations import webflow as webflow_integration
@@ -34,7 +35,7 @@ from app.workers.publish_retry import run_publish_retry
 
 router = APIRouter(prefix="", tags=["publishing"])
 
-ALL_PLATFORMS = ["wordpress", "webflow", "x", "linkedin"]
+ALL_PLATFORMS = ["wordpress", "webflow", "x", "linkedin", "github_pages"]
 
 
 def _extract_identifier(platform: str, encrypted_credentials: str) -> Optional[str]:
@@ -46,6 +47,8 @@ def _extract_identifier(platform: str, encrypted_credentials: str) -> Optional[s
             return data.get("blog_url") or None
         if platform == "webflow":
             return data.get("collection_id") or None
+        if platform == "github_pages":
+            return data.get("repo_full_name") or None
         return data.get("handle") or data.get("name") or None
     except Exception:
         return None
@@ -320,6 +323,174 @@ async def wordpress_com_oauth_callback(
     if tokens.get("blog_url"):
         result["account_identifier"] = tokens["blog_url"]
     return result
+
+
+class GitHubConnectRequest(BaseModel):
+    installation_id: str
+
+    @field_validator("installation_id")
+    @classmethod
+    def validate_numeric(cls, v: str) -> str:
+        if not v.isdigit():
+            raise ValueError("installation_id must be numeric")
+        return v
+
+
+class GitHubRepoPatchRequest(BaseModel):
+    repo_full_name: str
+
+    @field_validator("repo_full_name")
+    @classmethod
+    def validate_repo_format(cls, v: str) -> str:
+        import re
+        if not re.match(r"^[a-zA-Z0-9._-]+/[a-zA-Z0-9._\-]+$", v):
+            raise ValueError("repo_full_name must be in 'owner/repo' format")
+        return v
+
+
+def _403_not_owner() -> HTTPException:
+    return HTTPException(
+        status_code=403,
+        detail={"error": {"code": "FORBIDDEN", "message": "You do not own this client.", "detail": {}}},
+    )
+
+
+def _check_github_ownership(client, user_id: uuid.UUID) -> None:
+    if not client or client.user_id != user_id:
+        raise _403_not_owner()
+
+
+@router.post("/clients/{client_id}/connections/github", status_code=201)
+async def connect_github(
+    client_id: uuid.UUID,
+    body: GitHubConnectRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+    client = await get_client(db, client_id)
+    _check_github_ownership(client, user_id)
+
+    try:
+        token_data = await github_integration.get_installation_token(body.installation_id)
+    except PlatformError as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "GITHUB_TOKEN_EXCHANGE_FAILED", "message": e.message, "detail": {}}},
+        )
+
+    cred_json = json.dumps({
+        "installation_id": body.installation_id,
+        "installation_token": token_data["token"],
+        "expires_at": token_data["expires_at"],
+        "repo_full_name": None,
+    })
+    encrypted = encrypt_credential(cred_json)
+    await upsert_connection(db, client_id, "github_pages", encrypted)
+
+    return {"platform": "github_pages", "connected": True, "account_identifier": None}
+
+
+@router.patch("/clients/{client_id}/connections/github/repo", status_code=200)
+async def select_github_repo(
+    client_id: uuid.UUID,
+    body: GitHubRepoPatchRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+    client = await get_client(db, client_id)
+    _check_github_ownership(client, user_id)
+
+    connections = await get_connections_for_client(db, client_id)
+    github_conn = next((c for c in connections if c.platform == "github_pages"), None)
+    if not github_conn:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "GitHub connection not found.", "detail": {}}},
+        )
+
+    try:
+        cred = json.loads(decrypt_credential(github_conn.encrypted_credentials))
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": {"code": "CREDENTIAL_ERROR", "message": "Failed to read GitHub credentials.", "detail": {}}},
+        )
+    cred["repo_full_name"] = body.repo_full_name
+    encrypted = encrypt_credential(json.dumps(cred))
+    await upsert_connection(db, client_id, "github_pages", encrypted)
+
+    return {"platform": "github_pages", "connected": True, "account_identifier": body.repo_full_name}
+
+
+@router.get("/clients/{client_id}/connections/github/repos")
+async def list_github_repos(
+    client_id: uuid.UUID,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    from datetime import datetime, timedelta, timezone
+
+    user_id = _parse_user_id(current_user)
+    client = await get_client(db, client_id)
+    _check_github_ownership(client, user_id)
+
+    connections = await get_connections_for_client(db, client_id)
+    github_conn = next((c for c in connections if c.platform == "github_pages"), None)
+    if not github_conn:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "GitHub connection not found.", "detail": {}}},
+        )
+
+    try:
+        cred = json.loads(decrypt_credential(github_conn.encrypted_credentials))
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": {"code": "CREDENTIAL_ERROR", "message": "Failed to read GitHub credentials.", "detail": {}}},
+        )
+
+    installation_id = cred.get("installation_id")
+    if not installation_id:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": {"code": "INVALID_CREDENTIAL", "message": "GitHub connection is missing installation_id.", "detail": {}}},
+        )
+
+    # Refresh token if within 5 minutes of expiry
+    expires_at = cred.get("expires_at", "")
+    needs_refresh = True
+    if expires_at:
+        try:
+            expiry = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            needs_refresh = datetime.now(timezone.utc) >= expiry - timedelta(minutes=5)
+        except ValueError:
+            pass
+
+    if needs_refresh:
+        try:
+            token_data = await github_integration.get_installation_token(installation_id)
+        except PlatformError as e:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": {"code": "GITHUB_TOKEN_REFRESH_FAILED", "message": e.message, "detail": {}}},
+            )
+        cred["installation_token"] = token_data["token"]
+        cred["expires_at"] = token_data["expires_at"]
+        encrypted = encrypt_credential(json.dumps(cred))
+        await upsert_connection(db, client_id, "github_pages", encrypted)
+
+    try:
+        repos = await github_integration.get_installation_repositories(cred["installation_token"])
+    except PlatformError as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "GITHUB_REPOS_FETCH_FAILED", "message": e.message, "detail": {}}},
+        )
+
+    return {"repos": repos}
 
 
 @router.post("/campaigns/{campaign_id}/publish", status_code=202)

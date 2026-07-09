@@ -10,7 +10,7 @@ interface Props {
   clientId: string;
 }
 
-const ALL_PLATFORMS = ["wordpress", "webflow", "x", "linkedin"] as const;
+const ALL_PLATFORMS = ["wordpress", "webflow", "x", "linkedin", "github_pages"] as const;
 
 export function PlatformConnectionsClient({ clientId }: Props) {
   const addToast = useUIStore((s) => s.addToast);
@@ -30,6 +30,7 @@ export function PlatformConnectionsClient({ clientId }: Props) {
         success === "x" ? "Connected to X." :
         success === "linkedin" ? "Connected to LinkedIn." :
         success === "wordpress-com" ? "WordPress.com connected." :
+        success === "github" ? "GitHub connected. Select a repository to publish to." :
         `Connected to ${success}.`;
       addToast(message, "success");
     }

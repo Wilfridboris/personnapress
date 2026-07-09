@@ -46,5 +46,11 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_SERVICE_ROLE_KEY: str = ""
 
+    # GitHub App (required in production — register at github.com/settings/apps)
+    GITHUB_APP_ID: str = ""
+    GITHUB_APP_CLIENT_ID: str = ""
+    GITHUB_APP_PRIVATE_KEY: str = ""
+    GITHUB_APP_WEBHOOK_SECRET: str = ""
+
 
 settings = Settings()

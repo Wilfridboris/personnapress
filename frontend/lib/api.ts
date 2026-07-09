@@ -175,4 +175,13 @@ export const publishingApi = {
     apiFetch<{ collections: { id: string; name: string }[] }>(
       `/clients/${clientId}/webflow/collections?token=${encodeURIComponent(token)}`
     ),
+  listGitHubRepos: (clientId: string) =>
+    apiFetch<{ repos: { full_name: string; private: boolean }[] }>(
+      `/clients/${clientId}/connections/github/repos`
+    ),
+  selectGitHubRepo: (clientId: string, repoFullName: string) =>
+    apiFetch<{ platform: string; connected: boolean; account_identifier: string }>(
+      `/clients/${clientId}/connections/github/repo`,
+      { method: "PATCH", body: JSON.stringify({ repo_full_name: repoFullName }) }
+    ),
 };

@@ -30,6 +30,7 @@ replicate==1.0.7
 
 # Publishing integrations
 stripe
+PyJWT[crypto]>=2.8.0
 
 # Email
 resend
