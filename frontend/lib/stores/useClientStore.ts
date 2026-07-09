@@ -10,6 +10,7 @@ interface ClientStore {
   setActiveClientId: (id: string) => void;
   setInitialized: () => void;
   addClient: (client: ClientListItem) => void;
+  updateClient: (id: string, data: Partial<ClientListItem>) => void;
   updateClientName: (id: string, name: string) => void;
   removeClient: (id: string) => void;
 }
@@ -25,6 +26,10 @@ export const useClientStore = create<ClientStore>()(
       setInitialized: () => set({ isInitialized: true }),
       addClient: (client) =>
         set((state) => ({ clients: [...state.clients, client] })),
+      updateClient: (id, data) =>
+        set((state) => ({
+          clients: state.clients.map((c) => (c.id === id ? { ...c, ...data } : c)),
+        })),
       updateClientName: (id, name) =>
         set((state) => ({
           clients: state.clients.map((c) => (c.id === id ? { ...c, name } : c)),

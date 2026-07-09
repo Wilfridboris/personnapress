@@ -52,19 +52,23 @@ export function ClientDetail({ client }: Props) {
   // ── Ensure current client is registered in the store ─────────────────────
   useEffect(() => {
     const store = useClientStore.getState();
+    const bvpStatus = client.job_id
+      ? "analyzing"
+      : client.brand_voice_profile
+        ? "ready"
+        : "incomplete";
+    const clientData = {
+      id: client.id,
+      name: client.name,
+      website_url: client.website_url,
+      brand_voice_profile_status: bvpStatus,
+      campaign_count: client.campaign_count,
+      brand_voice_profile: client.brand_voice_profile,
+    };
     if (!store.clients.some((c) => c.id === client.id)) {
-      const bvpStatus = client.job_id
-        ? "analyzing"
-        : client.brand_voice_profile
-          ? "ready"
-          : "incomplete";
-      store.addClient({
-        id: client.id,
-        name: client.name,
-        website_url: client.website_url,
-        brand_voice_profile_status: bvpStatus,
-        campaign_count: client.campaign_count,
-      });
+      store.addClient(clientData);
+    } else {
+      store.updateClient(client.id, clientData);
     }
     store.setActiveClientId(client.id);
   }, [client.id, client.name, client.website_url, client.brand_voice_profile, client.job_id, client.campaign_count]);
@@ -75,12 +79,23 @@ export function ClientDetail({ client }: Props) {
   // ── React Query polling via useJobStatus ─────────────────────────────────
   const { job } = useJobStatus(jobId);
 
-  // When job completes: refresh client data to reload voice profile
+  // When job completes: refresh client data and update store with BVP
   useEffect(() => {
     if (!job) return;
     if (job.status === "completed" || job.status === "complete") {
       queryClient.invalidateQueries({ queryKey: ["client", client.id] });
       setHasVoiceProfile(true);
+      clientsApi.get(client.id).then((updated) => {
+        useClientStore.getState().updateClient(client.id, {
+          brand_voice_profile_status: "ready",
+          brand_voice_profile: updated.brand_voice_profile,
+        });
+      }).catch(() => {
+        // At minimum mark the status ready so campaigns/new shows correctly
+        useClientStore.getState().updateClient(client.id, {
+          brand_voice_profile_status: "ready",
+        });
+      });
     }
   }, [job, client.id, queryClient]);
 
