@@ -18,6 +18,7 @@ class Platform(str, Enum):
     webflow = "webflow"
     x = "x"
     linkedin = "linkedin"
+    github_pages = "github_pages"
 
 
 class CampaignStatus(str, Enum):
