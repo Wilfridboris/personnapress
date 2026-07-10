@@ -178,11 +178,20 @@ export interface PlanLimits {
   image_gens: number;
 }
 
+export interface GitHubDetectionResult {
+  detected_framework: string;
+  publish_path: string;
+  confidence: "high" | "medium" | "low";
+  signals: string[];
+  candidates: Array<{ framework: string; publish_path: string; signals: string[] }>;
+}
+
 export interface PlatformConnectionStatus {
   platform: "wordpress" | "webflow" | "x" | "linkedin" | "github_pages";
   connected: boolean;
   account_identifier?: string;
   connected_via?: "wordpress-com";  // only present on wordpress card when connected via WordPress.com OAuth
+  github_detection?: GitHubDetectionResult | null;  // only present on github_pages connections
 }
 
 export interface ConnectionCreatePayload {

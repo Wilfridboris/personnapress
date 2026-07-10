@@ -1,4 +1,4 @@
-import type { BrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, FileListResponse, Job, PlatformConnectionStatus, QuestionnairePayload, SubscriptionInfo } from "./types";
+import type { BrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, FileListResponse, GitHubDetectionResult, Job, PlatformConnectionStatus, QuestionnairePayload, SubscriptionInfo } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -183,5 +183,12 @@ export const publishingApi = {
     apiFetch<{ platform: string; connected: boolean; account_identifier: string }>(
       `/clients/${clientId}/connections/github/repo`,
       { method: "PATCH", body: JSON.stringify({ repo_full_name: repoFullName }) }
+    ),
+  detectFramework: (clientId: string) =>
+    apiFetch<GitHubDetectionResult>(`/clients/${clientId}/connections/github/detect`, { method: "POST" }),
+  setFramework: (clientId: string, framework: string) =>
+    apiFetch<GitHubDetectionResult>(
+      `/clients/${clientId}/connections/github/framework`,
+      { method: "PATCH", body: JSON.stringify({ detected_framework: framework }) }
     ),
 };

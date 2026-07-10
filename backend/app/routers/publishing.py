@@ -1,7 +1,10 @@
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.triggers.date import DateTrigger
@@ -24,6 +27,7 @@ from app.db.repositories.platform_connections import (
 )
 from app.integrations import github as github_integration
 from app.integrations import linkedin as linkedin_integration
+from app.services import repo_detection
 from app.integrations import twitter as twitter_integration
 from app.integrations import webflow as webflow_integration
 from app.integrations import wordpress as wordpress_integration
@@ -51,6 +55,24 @@ def _extract_identifier(platform: str, encrypted_credentials: str) -> Optional[s
             return data.get("repo_full_name") or None
         return data.get("handle") or data.get("name") or None
     except Exception:
+        return None
+
+
+def _extract_github_detection(encrypted_credentials: str) -> Optional[dict]:
+    try:
+        data = json.loads(decrypt_credential(encrypted_credentials))
+        detected_framework = data.get("detected_framework")
+        if not detected_framework:
+            return None
+        return {
+            "detected_framework": detected_framework,
+            "publish_path": data.get("publish_path", ""),
+            "confidence": data.get("confidence", "low"),
+            "signals": data.get("signals", []),
+            "candidates": data.get("candidates", []),
+        }
+    except Exception:
+        logger.warning("Failed to extract github detection from credentials", exc_info=True)
         return None
 
 
@@ -89,11 +111,14 @@ async def list_platform_connections(
     for platform in ALL_PLATFORMS:
         if platform in connected_map:
             pc = connected_map[platform]
-            items.append({
+            item: dict = {
                 "platform": platform,
                 "connected": True,
                 "account_identifier": _extract_identifier(platform, pc.encrypted_credentials),
-            })
+            }
+            if platform == "github_pages":
+                item["github_detection"] = _extract_github_detection(pc.encrypted_credentials)
+            items.append(item)
         elif platform == "wordpress" and "wordpress-com" in connected_map:
             # WordPress.com connection shown under the wordpress card
             pc = connected_map["wordpress-com"]
@@ -424,14 +449,47 @@ async def select_github_repo(
     return {"platform": "github_pages", "connected": True, "account_identifier": body.repo_full_name}
 
 
+async def _refresh_github_token_if_needed(cred: dict, db: AsyncSession, client_id: uuid.UUID) -> dict:
+    """Refresh the GitHub installation token if within 5 minutes of expiry. Returns updated cred."""
+    from datetime import datetime, timedelta, timezone
+
+    expires_at = cred.get("expires_at", "")
+    needs_refresh = True
+    if expires_at:
+        try:
+            expiry = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            needs_refresh = datetime.now(timezone.utc) >= expiry - timedelta(minutes=5)
+        except ValueError:
+            pass
+
+    if needs_refresh:
+        installation_id = cred.get("installation_id")
+        if not installation_id:
+            raise HTTPException(
+                status_code=409,
+                detail={"error": {"code": "INVALID_CREDENTIAL", "message": "GitHub connection is missing installation_id.", "detail": {}}},
+            )
+        try:
+            token_data = await github_integration.get_installation_token(installation_id)
+        except PlatformError as e:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": {"code": "GITHUB_TOKEN_REFRESH_FAILED", "message": e.message, "detail": {}}},
+            )
+        cred["installation_token"] = token_data["token"]
+        cred["expires_at"] = token_data["expires_at"]
+        encrypted = encrypt_credential(json.dumps(cred))
+        await upsert_connection(db, client_id, "github_pages", encrypted)
+
+    return cred
+
+
 @router.get("/clients/{client_id}/connections/github/repos")
 async def list_github_repos(
     client_id: uuid.UUID,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict:
-    from datetime import datetime, timedelta, timezone
-
     user_id = _parse_user_id(current_user)
     client = await get_client(db, client_id)
     _check_github_ownership(client, user_id)
@@ -452,35 +510,13 @@ async def list_github_repos(
             detail={"error": {"code": "CREDENTIAL_ERROR", "message": "Failed to read GitHub credentials.", "detail": {}}},
         )
 
-    installation_id = cred.get("installation_id")
-    if not installation_id:
+    if not cred.get("installation_id"):
         raise HTTPException(
             status_code=409,
             detail={"error": {"code": "INVALID_CREDENTIAL", "message": "GitHub connection is missing installation_id.", "detail": {}}},
         )
 
-    # Refresh token if within 5 minutes of expiry
-    expires_at = cred.get("expires_at", "")
-    needs_refresh = True
-    if expires_at:
-        try:
-            expiry = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-            needs_refresh = datetime.now(timezone.utc) >= expiry - timedelta(minutes=5)
-        except ValueError:
-            pass
-
-    if needs_refresh:
-        try:
-            token_data = await github_integration.get_installation_token(installation_id)
-        except PlatformError as e:
-            raise HTTPException(
-                status_code=400,
-                detail={"error": {"code": "GITHUB_TOKEN_REFRESH_FAILED", "message": e.message, "detail": {}}},
-            )
-        cred["installation_token"] = token_data["token"]
-        cred["expires_at"] = token_data["expires_at"]
-        encrypted = encrypt_credential(json.dumps(cred))
-        await upsert_connection(db, client_id, "github_pages", encrypted)
+    cred = await _refresh_github_token_if_needed(cred, db, client_id)
 
     try:
         repos = await github_integration.get_installation_repositories(cred["installation_token"])
@@ -491,6 +527,130 @@ async def list_github_repos(
         )
 
     return {"repos": repos}
+
+
+@router.post("/clients/{client_id}/connections/github/detect", status_code=200)
+async def detect_github_framework(
+    client_id: uuid.UUID,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+    client = await get_client(db, client_id)
+    _check_github_ownership(client, user_id)
+
+    connections = await get_connections_for_client(db, client_id)
+    github_conn = next((c for c in connections if c.platform == "github_pages"), None)
+    if not github_conn:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "GitHub connection not found.", "detail": {}}},
+        )
+
+    try:
+        cred = json.loads(decrypt_credential(github_conn.encrypted_credentials))
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": {"code": "CREDENTIAL_ERROR", "message": "Failed to read GitHub credentials.", "detail": {}}},
+        )
+
+    repo_full_name = cred.get("repo_full_name")
+    if not repo_full_name:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": {"code": "NO_REPO_SELECTED", "message": "No repository selected. Select a repository first.", "detail": {}}},
+        )
+
+    cred = await _refresh_github_token_if_needed(cred, db, client_id)
+
+    if not cred.get("installation_token"):
+        raise HTTPException(
+            status_code=409,
+            detail={"error": {"code": "INVALID_CREDENTIAL", "message": "GitHub connection is missing installation_token.", "detail": {}}},
+        )
+
+    try:
+        result = await repo_detection.detect_framework(cred["installation_token"], repo_full_name)
+    except PlatformError as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "GITHUB_DETECTION_FAILED", "message": e.message, "detail": {}}},
+        )
+
+    cred["detected_framework"] = result["detected_framework"]
+    cred["publish_path"] = result["publish_path"]
+    cred["confidence"] = result["confidence"]
+    cred["signals"] = result["signals"]
+    cred["candidates"] = result["candidates"]
+    encrypted = encrypt_credential(json.dumps(cred))
+    await upsert_connection(db, client_id, "github_pages", encrypted)
+
+    return result
+
+
+class FrameworkSelectRequest(BaseModel):
+    detected_framework: str
+
+    @field_validator("detected_framework")
+    @classmethod
+    def validate_framework(cls, v: str) -> str:
+        from app.services.repo_detection import SELECTABLE_FRAMEWORKS
+        if v not in SELECTABLE_FRAMEWORKS:
+            raise ValueError(f"detected_framework must be one of {sorted(SELECTABLE_FRAMEWORKS)}")
+        return v
+
+
+@router.patch("/clients/{client_id}/connections/github/framework", status_code=200)
+async def select_github_framework(
+    client_id: uuid.UUID,
+    body: FrameworkSelectRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+    client = await get_client(db, client_id)
+    _check_github_ownership(client, user_id)
+
+    connections = await get_connections_for_client(db, client_id)
+    github_conn = next((c for c in connections if c.platform == "github_pages"), None)
+    if not github_conn:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "GitHub connection not found.", "detail": {}}},
+        )
+
+    try:
+        cred = json.loads(decrypt_credential(github_conn.encrypted_credentials))
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": {"code": "CREDENTIAL_ERROR", "message": "Failed to read GitHub credentials.", "detail": {}}},
+        )
+
+    if not cred.get("repo_full_name"):
+        raise HTTPException(
+            status_code=409,
+            detail={"error": {"code": "NO_REPO_SELECTED", "message": "No repository selected. Select a repository first.", "detail": {}}},
+        )
+
+    from app.services.repo_detection import FRAMEWORK_PUBLISH_PATHS
+    framework = body.detected_framework
+    cred["detected_framework"] = framework
+    cred["publish_path"] = FRAMEWORK_PUBLISH_PATHS[framework]
+    cred["confidence"] = "high"
+    cred["signals"] = []
+    cred["candidates"] = []
+    encrypted = encrypt_credential(json.dumps(cred))
+    await upsert_connection(db, client_id, "github_pages", encrypted)
+
+    return {
+        "detected_framework": framework,
+        "publish_path": FRAMEWORK_PUBLISH_PATHS[framework],
+        "confidence": "high",
+        "signals": [],
+        "candidates": [],
+    }
 
 
 @router.post("/campaigns/{campaign_id}/publish", status_code=202)

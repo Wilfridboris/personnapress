@@ -1,5 +1,15 @@
 # Deferred Work
 
+## Deferred from: code review of 8-4-repo-framework-detection-engine (2026-07-09)
+
+- Token refresh race condition under concurrent requests — two tasks can both observe an expiring token, refresh independently, and overwrite each other's DB writes. [backend/app/routers/publishing.py:_refresh_github_token_if_needed]
+- No rate limiting or cooldown on POST /detect endpoint — each call issues up to 10 GitHub API requests; add per-client cooldown when abuse becomes a concern. [backend/app/routers/publishing.py:detect_github_framework]
+- `detect_framework` makes up to 9 sequential GitHub API calls with no retry-after logic on rate limit — add retry/backoff when GitHub secondary rate limiting triggers. [backend/app/services/repo_detection.py:detect_framework]
+- Case-sensitive filename matching in `_find()` — repos with mixed-case config files (e.g., `_Config.yml`) won't match; inherent to git, acceptable for now. [backend/app/services/repo_detection.py:_find]
+- `get_repo_root_contents` doesn't handle 301/302 redirects for renamed repos or >1000-entry roots — add pagination/redirect handling when needed. [backend/app/integrations/github.py:get_repo_root_contents]
+- `_refresh_github_token_if_needed` raises HTTPException from a utility function, coupling it to the HTTP layer — refactor to PlatformError + router translation if reused outside routers. [backend/app/routers/publishing.py:_refresh_github_token_if_needed]
+- DB write failure during token refresh leaves in-memory and persisted creds out of sync — next request will re-refresh; low probability, pre-existing pattern. [backend/app/routers/publishing.py:_refresh_github_token_if_needed]
+
 ## Deferred from: code review of 8-3-github-app-oauth-repository-connection (2026-07-09)
 
 - `get_installation_repositories` uses `per_page=100` with no pagination — installations with >100 repos silently truncated; add Link header pagination when needed. [backend/app/integrations/github.py]
