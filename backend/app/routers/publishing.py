@@ -591,6 +591,7 @@ async def detect_github_framework(
 
 class FrameworkSelectRequest(BaseModel):
     detected_framework: str
+    publish_path: str | None = None
 
     @field_validator("detected_framework")
     @classmethod
@@ -636,8 +637,15 @@ async def select_github_framework(
 
     from app.services.repo_detection import FRAMEWORK_PUBLISH_PATHS
     framework = body.detected_framework
+    if body.publish_path is not None:
+        if ".." in body.publish_path or body.publish_path.startswith("/"):
+            raise HTTPException(
+                status_code=400,
+                detail={"error": {"code": "INVALID_PATH", "message": "publish_path must not contain '..' or a leading '/'.", "detail": {}}},
+            )
+    resolved_path = body.publish_path or FRAMEWORK_PUBLISH_PATHS[framework]
     cred["detected_framework"] = framework
-    cred["publish_path"] = FRAMEWORK_PUBLISH_PATHS[framework]
+    cred["publish_path"] = resolved_path
     cred["confidence"] = "high"
     cred["signals"] = []
     cred["candidates"] = []
@@ -646,7 +654,7 @@ async def select_github_framework(
 
     return {
         "detected_framework": framework,
-        "publish_path": FRAMEWORK_PUBLISH_PATHS[framework],
+        "publish_path": resolved_path,
         "confidence": "high",
         "signals": [],
         "candidates": [],

@@ -6,6 +6,7 @@ Dispatches publish tasks to each connected platform integration.
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -150,6 +151,263 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
 
         file_content = html5_shell
 
+    elif detected_framework == "astro":
+        body_md = github_integration.html_to_markdown(blog_html)
+
+        # Determine extension: use .mdx if any .mdx files exist in src/content/blog
+        mdx_files = await github_integration.list_files_in_directory(
+            installation_token, repo_full_name, "src/content/blog", ".mdx"
+        )
+        ext = ".mdx" if mdx_files else ".md"
+
+        # Attempt to parse content.config for required fields
+        config_content = await github_integration.get_file_contents(
+            installation_token, repo_full_name, "content.config.ts"
+        ) or await github_integration.get_file_contents(
+            installation_token, repo_full_name, "content.config.js"
+        )
+
+        description = ""
+        if campaign.voice_score:
+            description = campaign.voice_score.get("meta_description", "") or ""
+        image_url = campaign.image_url if hasattr(campaign, "image_url") and campaign.image_url else ""
+
+        extra_required_fields: list[str] = []
+        if config_content:
+            # Find field names that appear to be required (no .optional())
+            required_pattern = re.compile(r'(\w+)\s*:\s*z\.[a-zA-Z]+\(\)[^,\n]*(?<!\.optional\(\))')
+            optional_pattern = re.compile(r'(\w+)\s*:\s*z\.[a-zA-Z]+\(\).*?\.optional\(\)', re.DOTALL)
+            optional_fields = {m.group(1) for m in optional_pattern.finditer(config_content)}
+            known = {"title", "description", "pubDate", "heroImage"}
+            for m in required_pattern.finditer(config_content):
+                field = m.group(1)
+                if field not in known and field not in optional_fields:
+                    # Cross-check with DOTALL to catch multi-line chained .optional()
+                    if not re.search(rf'\b{re.escape(field)}\b.*?\.optional\(\)', config_content, re.DOTALL):
+                        extra_required_fields.append(field)
+
+        title_escaped = title.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+        desc_escaped = description.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+
+        fm_lines = [
+            "---",
+            f'title: "{title_escaped}"',
+            f'description: "{desc_escaped}"',
+            f'pubDate: "{publish_datetime}"',
+            f'heroImage: "{image_url}"',
+        ]
+        for field in extra_required_fields:
+            fm_lines.append(f'{field}: ""  # TODO: fill in')
+        fm_lines.append("---")
+
+        front_matter = "\n".join(fm_lines) + "\n\n"
+        file_content = front_matter + body_md
+        file_path = f"src/content/blog/{slug}{ext}"
+        commit_message = f"Add blog post: {title}"
+
+    elif detected_framework == "nextjs":
+        body_md = github_integration.html_to_markdown(blog_html)
+
+        description = ""
+        if campaign.voice_score:
+            description = campaign.voice_score.get("meta_description", "") or ""
+
+        # Determine target directory and extension
+        if publish_path:
+            # User already confirmed path
+            file_path = f"{publish_path.rstrip('/')}/{slug}.md"
+        else:
+            md_files = await github_integration.list_files_in_directory(
+                installation_token, repo_full_name, "posts", ".md"
+            )
+            if md_files:
+                target_dir = "posts"
+                file_ext = ".md"
+            else:
+                mdx_files = await github_integration.list_files_in_directory(
+                    installation_token, repo_full_name, "content", ".mdx"
+                )
+                if mdx_files:
+                    target_dir = "content"
+                    file_ext = ".mdx"
+                else:
+                    # Low confidence — update credential and return early
+                    cred["confidence"] = "low"
+                    encrypted = encrypt_credential(json.dumps(cred))
+                    await upsert_connection(db, campaign.client_id, "github_pages", encrypted)
+                    return {"status": "low_confidence", "message": "Content folder not detected"}
+            file_path = f"{target_dir}/{slug}{file_ext}"
+
+        # Infer front matter from existing post in target dir
+        infer_dir = file_path.rsplit("/", 1)[0] if "/" in file_path else ""
+        template_posts = await github_integration.get_first_post_files(
+            installation_token, repo_full_name, infer_dir, max=3
+        ) if infer_dir else []
+        template_keys: set[str] = set()
+        if template_posts:
+            # Parse YAML front matter keys from first post
+            fm_match = re.search(r"^---\s*\n(.*?)\n---", template_posts[0], re.DOTALL)
+            if fm_match:
+                template_keys = {line.split(":")[0].strip() for line in fm_match.group(1).splitlines() if ":" in line}
+
+        title_escaped = title.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+        desc_escaped = description.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+
+        fm_lines = [
+            "---",
+            f'title: "{title_escaped}"',
+            f"date: {publish_datetime}",
+            f'description: "{desc_escaped}"',
+        ]
+        if "tags" in template_keys and campaign.voice_score and campaign.voice_score.get("tags"):
+            tags_list = campaign.voice_score["tags"]
+            if isinstance(tags_list, list) and tags_list:
+                tags_yaml = ", ".join(f'"{t.replace(chr(92), chr(92)+chr(92)).replace(chr(34), chr(92)+chr(34))}"' for t in tags_list)
+                fm_lines.append(f"tags: [{tags_yaml}]")
+        fm_lines.append("---")
+
+        front_matter = "\n".join(fm_lines) + "\n\n"
+        file_content = front_matter + body_md
+        commit_message = f"Add blog post: {title}"
+
+    elif detected_framework == "hugo":
+        body_md = github_integration.html_to_markdown(blog_html)
+
+        description = ""
+        if campaign.voice_score:
+            description = campaign.voice_score.get("meta_description", "") or ""
+        image_url = campaign.image_url if hasattr(campaign, "image_url") and campaign.image_url else ""
+
+        # Get existing post to detect format and naming pattern
+        existing_posts = await github_integration.get_first_post_files(
+            installation_token, repo_full_name, "content/posts", max=1
+        )
+        fm_format = github_integration.detect_front_matter_format(existing_posts[0]) if existing_posts else "yaml"
+
+        # Detect naming convention (date-prefix vs directory)
+        dir_items = await github_integration.get_directory_contents(
+            installation_token, repo_full_name, "content/posts"
+        )
+        uses_date_prefix = any(
+            item.get("name", "").startswith(today) or re.match(r"^\d{4}-\d{2}-\d{2}-", item.get("name", ""))
+            for item in dir_items
+            if item.get("type") == "file"
+        )
+        file_name = f"{today}-{slug}.md" if uses_date_prefix else f"{slug}.md"
+        file_path = f"content/posts/{file_name}"
+
+        tags_list = []
+        if campaign.voice_score and campaign.voice_score.get("tags"):
+            raw = campaign.voice_score["tags"]
+            if isinstance(raw, list):
+                tags_list = raw
+
+        title_escaped = title.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+        desc_escaped = description.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+        image_url_escaped = image_url.replace("\\", "\\\\").replace('"', '\\"')
+
+        if fm_format == "toml":
+            tags_toml = ", ".join(f'"{t.replace(chr(92), chr(92)+chr(92)).replace(chr(34), chr(92)+chr(34))}"' for t in tags_list) if tags_list else ""
+            fm_lines = [
+                "+++",
+                f'title = "{title_escaped}"',
+                f'date = "{publish_datetime}"',
+                f'description = "{desc_escaped}"',
+                "draft = false",
+            ]
+            if tags_list:
+                fm_lines.append(f"tags = [{tags_toml}]")
+            if image_url_escaped:
+                fm_lines.append(f'[cover]\n  image = "{image_url_escaped}"')
+            fm_lines.append("+++")
+            front_matter = "\n".join(fm_lines) + "\n\n"
+        else:
+            fm_lines = [
+                "---",
+                f'title: "{title_escaped}"',
+                f"date: {publish_datetime}",
+                f'description: "{desc_escaped}"',
+                "draft: false",
+            ]
+            if tags_list:
+                tags_yaml = ", ".join(f'"{t.replace(chr(92), chr(92)+chr(92)).replace(chr(34), chr(92)+chr(34))}"' for t in tags_list)
+                fm_lines.append(f"tags: [{tags_yaml}]")
+            if image_url_escaped:
+                fm_lines.append(f"cover:\n  image: \"{image_url_escaped}\"")
+            fm_lines.append("---")
+            front_matter = "\n".join(fm_lines) + "\n\n"
+
+        file_content = front_matter + body_md
+        commit_message = f"Add blog post: {title}"
+
+    elif detected_framework == "eleventy":
+        body_md = github_integration.html_to_markdown(blog_html)
+
+        description = ""
+        if campaign.voice_score:
+            description = campaign.voice_score.get("meta_description", "") or ""
+
+        # Resolve input directory from .eleventy.js / .eleventy.cjs
+        eleventy_config = await github_integration.get_file_contents(
+            installation_token, repo_full_name, ".eleventy.js"
+        ) or await github_integration.get_file_contents(
+            installation_token, repo_full_name, ".eleventy.cjs"
+        )
+        input_dir = "src"
+        if eleventy_config:
+            match = re.search(r"input[\"']?\s*:\s*[\"']([^\"']+)[\"']", eleventy_config)
+            if match:
+                input_dir = match.group(1)
+
+        # Check if posts/ subdir exists
+        posts_items = await github_integration.get_directory_contents(
+            installation_token, repo_full_name, f"{input_dir}/posts"
+        )
+        if posts_items:
+            target_path = f"{input_dir}/posts/{slug}.md"
+            infer_dir = f"{input_dir}/posts"
+        else:
+            target_path = f"{input_dir}/{slug}.md"
+            infer_dir = input_dir
+
+        # Infer layout from existing posts
+        existing = await github_integration.get_first_post_files(
+            installation_token, repo_full_name, infer_dir, max=1
+        )
+        inferred_layout: str | None = None
+        template_keys: set[str] = set()
+        if existing:
+            fm_match = re.search(r"^---\s*\n(.*?)\n---", existing[0], re.DOTALL)
+            if fm_match:
+                fm_body = fm_match.group(1)
+                template_keys = {line.split(":")[0].strip() for line in fm_body.splitlines() if ":" in line}
+                layout_m = re.search(r"^layout\s*:\s*(.+)$", fm_body, re.MULTILINE)
+                if layout_m:
+                    inferred_layout = layout_m.group(1).strip().strip('"').strip("'")
+
+        title_escaped = title.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+        desc_escaped = description.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+
+        fm_lines = [
+            "---",
+            f'title: "{title_escaped}"',
+            f"date: {publish_datetime}",
+            f'description: "{desc_escaped}"',
+        ]
+        if "tags" in template_keys and campaign.voice_score and campaign.voice_score.get("tags"):
+            tags_list = campaign.voice_score["tags"]
+            if isinstance(tags_list, list) and tags_list:
+                tags_yaml = ", ".join(f'"{t.replace(chr(92), chr(92)+chr(92)).replace(chr(34), chr(92)+chr(34))}"' for t in tags_list)
+                fm_lines.append(f"tags: [{tags_yaml}]")
+        if inferred_layout:
+            fm_lines.append(f"layout: {inferred_layout}")
+        fm_lines.append("---")
+
+        front_matter = "\n".join(fm_lines) + "\n\n"
+        file_content = front_matter + body_md
+        file_path = target_path
+        commit_message = f"Add blog post: {title}"
+
     else:
         raise PlatformError("github", 0, f"Unsupported framework for GitHub publish: {detected_framework}")
 
@@ -275,7 +533,15 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID) ->
                 last_linkedin_publish_time = asyncio.get_running_loop().time()
 
             elif platform == "github_pages":
-                await _publish_github(campaign, creds, db)
+                github_result = await _publish_github(campaign, creds, db)
+                if isinstance(github_result, dict) and github_result.get("status") == "low_confidence":
+                    logger.warning(
+                        "GitHub publish skipped — low confidence path for campaign=%s: %s",
+                        campaign_id,
+                        github_result.get("message", ""),
+                    )
+                    results[platform] = "low_confidence"
+                    continue
 
             results[platform] = "success"
 

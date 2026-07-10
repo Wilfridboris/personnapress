@@ -186,9 +186,9 @@ export const publishingApi = {
     ),
   detectFramework: (clientId: string) =>
     apiFetch<GitHubDetectionResult>(`/clients/${clientId}/connections/github/detect`, { method: "POST" }),
-  setFramework: (clientId: string, framework: string) =>
+  setFramework: (clientId: string, framework: string, publishPath?: string) =>
     apiFetch<GitHubDetectionResult>(
       `/clients/${clientId}/connections/github/framework`,
-      { method: "PATCH", body: JSON.stringify({ detected_framework: framework }) }
+      { method: "PATCH", body: JSON.stringify({ detected_framework: framework, ...(publishPath !== undefined ? { publish_path: publishPath } : {}) }) }
     ),
 };

@@ -12,6 +12,8 @@ import type { Campaign, CampaignStatus } from "@/lib/types";
 import type { BlogEditorHandle } from "@/components/campaigns/BlogEditor";
 import type { SocialPostEditorsHandle } from "@/components/campaigns/SocialPostEditors";
 
+const GITHUB_SUPPORTED_FRAMEWORKS = ["jekyll", "plain_static", "astro", "nextjs", "hugo", "eleventy"];
+
 interface ApprovalPanelProps {
   campaign: Campaign;
   blogEditorRef?: RefObject<BlogEditorHandle | null>;
@@ -55,7 +57,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           const framework = ghConn?.github_detection?.detected_framework ?? "";
           setGithubPublishReady(
             !!ghConn?.account_identifier &&
-            (framework === "jekyll" || framework === "plain_static")
+            GITHUB_SUPPORTED_FRAMEWORKS.includes(framework)
           );
         })
         .catch(() => {

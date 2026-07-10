@@ -53,6 +53,7 @@ export function GitHubConnect({ clientId, connection }: Props) {
   const [detectionResult, setDetectionResult] = useState<GitHubDetectionResult | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
   const [unknownFramework, setUnknownFramework] = useState<string>("jekyll");
+  const [manualPublishPath, setManualPublishPath] = useState<string>("");
   const disconnectTriggerRef = useRef<HTMLButtonElement>(null);
 
   const isConnectedNoRepo = connection.connected && !connection.account_identifier;
@@ -78,9 +79,11 @@ export function GitHubConnect({ clientId, connection }: Props) {
   });
 
   const frameworkMutation = useMutation({
-    mutationFn: (framework: string) => publishingApi.setFramework(clientId, framework),
+    mutationFn: ({ framework, publishPath }: { framework: string; publishPath?: string }) =>
+      publishingApi.setFramework(clientId, framework, publishPath),
     onSuccess: (data) => {
       setDetectionResult(data);
+      setManualPublishPath("");
       queryClient.invalidateQueries({ queryKey: ["platform-connections", clientId] });
     },
   });
@@ -121,11 +124,18 @@ export function GitHubConnect({ clientId, connection }: Props) {
 
   function handleConfirmCandidate() {
     const fw = selectedCandidate ?? activeDetection?.candidates[0]?.framework;
-    if (fw) frameworkMutation.mutate(fw);
+    if (fw) frameworkMutation.mutate({ framework: fw });
   }
 
   function handleConfirmUnknown() {
-    frameworkMutation.mutate(unknownFramework);
+    frameworkMutation.mutate({ framework: unknownFramework });
+  }
+
+  function handleConfirmPublishPath() {
+    const fw = activeDetection?.detected_framework ?? "nextjs";
+    if (manualPublishPath.trim()) {
+      frameworkMutation.mutate({ framework: fw, publishPath: manualPublishPath.trim() });
+    }
   }
 
   const isAmbiguous = !!activeDetection?.candidates?.length;
@@ -254,6 +264,28 @@ export function GitHubConnect({ clientId, connection }: Props) {
                 <p className="text-[12px] font-mono font-bold text-[#111111] mt-1">
                   {getPublishPathDisplay(activeDetection!.detected_framework, activeDetection!.publish_path)}
                 </p>
+                {activeDetection!.confidence === "low" && activeDetection!.detected_framework === "nextjs" && (
+                  <div className="mt-3 pt-3 border-t border-[#E5E5E5] space-y-2">
+                    <p className="text-[14px] text-[#555555]" style={{ fontFamily: "Inter, sans-serif" }}>
+                      Content folder not detected. Confirm your publish path before your first post.
+                    </p>
+                    <input
+                      type="text"
+                      value={manualPublishPath}
+                      onChange={(e) => setManualPublishPath(e.target.value)}
+                      placeholder="e.g. content/blog"
+                      className="w-full border-b border-[#111111] outline-none bg-transparent py-2 text-sm text-[#111111] font-mono"
+                      aria-label="Custom publish path"
+                    />
+                    <Button
+                      variant="primary"
+                      onClick={handleConfirmPublishPath}
+                      disabled={frameworkMutation.isPending || !manualPublishPath.trim()}
+                    >
+                      {frameworkMutation.isPending ? "Saving…" : "Confirm path"}
+                    </Button>
+                  </div>
+                )}
                 <button
                   onClick={handleRescan}
                   disabled={detectMutation.isPending}

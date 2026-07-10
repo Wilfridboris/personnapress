@@ -144,6 +144,52 @@ async def get_default_branch(installation_token: str, repo_full_name: str) -> st
     return resp.json().get("default_branch", "main")
 
 
+async def list_files_in_directory(
+    installation_token: str,
+    repo_full_name: str,
+    path: str,
+    extension: str | None = None,
+) -> list[str]:
+    """Return file names in a directory, optionally filtered by extension. Returns [] on 404."""
+    items = await get_directory_contents(installation_token, repo_full_name, path)
+    names = [
+        item.get("name", "")
+        for item in items
+        if item.get("type") == "file" and item.get("name")
+    ]
+    if extension:
+        names = [n for n in names if n.endswith(extension)]
+    return names
+
+
+async def get_first_post_files(
+    installation_token: str,
+    repo_full_name: str,
+    path: str,
+    max: int = 3,
+) -> list[str]:
+    """Return decoded content of up to `max` files from the given directory."""
+    items = await get_directory_contents(installation_token, repo_full_name, path)
+    file_paths = [
+        item.get("path", "")
+        for item in items
+        if item.get("type") == "file" and item.get("path")
+    ][:max]
+    contents = []
+    for fp in file_paths:
+        content = await get_file_contents(installation_token, repo_full_name, fp)
+        if content is not None:
+            contents.append(content)
+    return contents
+
+
+def detect_front_matter_format(content: str) -> str:
+    """Return 'toml' if front matter starts with +++, else 'yaml'."""
+    if content.lstrip().startswith("+++"):
+        return "toml"
+    return "yaml"
+
+
 async def create_file_commit(
     installation_token: str,
     repo_full_name: str,
