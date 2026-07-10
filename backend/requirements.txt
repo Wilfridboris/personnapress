@@ -42,6 +42,9 @@ psycopg2-binary>=2.9,<3
 # HTML sanitization
 nh3==0.3.6
 
+# Markdown conversion (GitHub publish pipeline)
+markdownify>=0.13.1
+
 # Web scraping
 beautifulsoup4==4.13.4
 lxml==6.1.1

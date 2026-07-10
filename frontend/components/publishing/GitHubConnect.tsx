@@ -54,6 +54,7 @@ export function GitHubConnect({ clientId, connection }: Props) {
   const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
   const [unknownFramework, setUnknownFramework] = useState<string>("jekyll");
   const [manualPublishPath, setManualPublishPath] = useState<string>("");
+  const [directCommitDefault, setDirectCommitDefault] = useState<boolean>(connection.direct_commit_default ?? false);
   const disconnectTriggerRef = useRef<HTMLButtonElement>(null);
 
   const isConnectedNoRepo = connection.connected && !connection.account_identifier;
@@ -84,6 +85,14 @@ export function GitHubConnect({ clientId, connection }: Props) {
     onSuccess: (data) => {
       setDetectionResult(data);
       setManualPublishPath("");
+      queryClient.invalidateQueries({ queryKey: ["platform-connections", clientId] });
+    },
+  });
+
+  const settingsMutation = useMutation({
+    mutationFn: (directCommit: boolean) => publishingApi.updateGitHubSettings(clientId, directCommit),
+    onSuccess: (_, directCommit) => {
+      setDirectCommitDefault(directCommit);
       queryClient.invalidateQueries({ queryKey: ["platform-connections", clientId] });
     },
   });
@@ -286,14 +295,24 @@ export function GitHubConnect({ clientId, connection }: Props) {
                     </Button>
                   </div>
                 )}
-                <button
-                  onClick={handleRescan}
-                  disabled={detectMutation.isPending}
-                  className="mt-3 px-4 py-1.5 border border-[#111111] bg-transparent text-[#111111] text-xs font-medium hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
-                  aria-label="Re-scan repository for framework"
-                >
-                  Re-scan
-                </button>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button
+                    onClick={handleRescan}
+                    disabled={detectMutation.isPending}
+                    className="px-4 py-1.5 border border-[#111111] bg-transparent text-[#111111] text-xs font-medium hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
+                    aria-label="Re-scan repository for framework"
+                  >
+                    Re-scan
+                  </button>
+                  <button
+                    onClick={() => settingsMutation.mutate(!directCommitDefault)}
+                    disabled={settingsMutation.isPending}
+                    aria-pressed={directCommitDefault}
+                    className="px-4 py-1.5 border border-[#555555] bg-transparent text-[#555555] text-xs font-medium hover:border-[#111111] hover:text-[#111111] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 disabled:opacity-50"
+                  >
+                    {directCommitDefault ? "Default to direct commit: on" : "Default to direct commit"}
+                  </button>
+                </div>
               </div>
             ) : isAmbiguous ? (
               /* Ambiguous result — radio-style cards */

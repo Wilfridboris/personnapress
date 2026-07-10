@@ -191,4 +191,14 @@ export const publishingApi = {
       `/clients/${clientId}/connections/github/framework`,
       { method: "PATCH", body: JSON.stringify({ detected_framework: framework, ...(publishPath !== undefined ? { publish_path: publishPath } : {}) }) }
     ),
+  publishGitHub: (campaignId: string, body: { mode: "pr" | "commit" }) =>
+    apiFetch<{ job_id: string }>(`/campaigns/${campaignId}/publish/github`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateGitHubSettings: (clientId: string, directCommitDefault: boolean) =>
+    apiFetch<{ direct_commit_default: boolean }>(
+      `/clients/${clientId}/connections/github/settings`,
+      { method: "PATCH", body: JSON.stringify({ direct_commit_default: directCommitDefault }) }
+    ),
 };

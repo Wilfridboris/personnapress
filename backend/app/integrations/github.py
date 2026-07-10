@@ -190,6 +190,58 @@ def detect_front_matter_format(content: str) -> str:
     return "yaml"
 
 
+async def get_branch_sha(installation_token: str, repo: str, branch: str) -> str:
+    """Return the SHA of the branch tip."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            f"https://api.github.com/repos/{repo}/git/ref/heads/{branch}",
+            headers={**GITHUB_HEADERS, "Authorization": f"Bearer {installation_token}"},
+        )
+    if resp.status_code != 200:
+        raise PlatformError("github", resp.status_code, resp.text[:300])
+    sha = resp.json().get("object", {}).get("sha")
+    if not sha:
+        raise PlatformError("github", 200, "Branch SHA missing from GitHub response")
+    return sha
+
+
+async def create_branch(installation_token: str, repo: str, branch_name: str, from_sha: str) -> None:
+    """Create a new branch from the given commit SHA. Idempotent — no-ops if branch already exists."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            f"https://api.github.com/repos/{repo}/git/refs",
+            headers={**GITHUB_HEADERS, "Authorization": f"Bearer {installation_token}"},
+            json={"ref": f"refs/heads/{branch_name}", "sha": from_sha},
+        )
+    if resp.status_code == 422 and "already exists" in resp.text:
+        return
+    if resp.status_code not in (200, 201):
+        raise PlatformError("github", resp.status_code, resp.text[:300])
+
+
+async def create_pull_request(
+    installation_token: str,
+    repo: str,
+    head: str,
+    base: str,
+    title: str,
+    body: str,
+) -> str:
+    """Create a PR and return its html_url."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"https://api.github.com/repos/{repo}/pulls",
+            headers={**GITHUB_HEADERS, "Authorization": f"Bearer {installation_token}"},
+            json={"title": title, "head": head, "base": base, "body": body},
+        )
+    if resp.status_code not in (200, 201):
+        raise PlatformError("github", resp.status_code, resp.text[:300])
+    html_url = resp.json().get("html_url")
+    if not html_url:
+        raise PlatformError("github", resp.status_code, "PR html_url missing from GitHub response")
+    return html_url
+
+
 async def create_file_commit(
     installation_token: str,
     repo_full_name: str,

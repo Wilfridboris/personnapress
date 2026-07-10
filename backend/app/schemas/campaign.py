@@ -59,6 +59,7 @@ class CampaignResponse(BaseModel):
     rejection_reason: Optional[str]
     scheduled_at: Optional[datetime]
     image_regen_count: int
+    github_pr_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

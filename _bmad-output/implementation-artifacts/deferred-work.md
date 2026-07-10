@@ -10,6 +10,11 @@
 - `_refresh_github_token_if_needed` raises HTTPException from a utility function, coupling it to the HTTP layer — refactor to PlatformError + router translation if reused outside routers. [backend/app/routers/publishing.py:_refresh_github_token_if_needed]
 - DB write failure during token refresh leaves in-memory and persisted creds out of sync — next request will re-refresh; low probability, pre-existing pattern. [backend/app/routers/publishing.py:_refresh_github_token_if_needed]
 
+## Deferred from: code review of 8-7-pr-first-workflow-preview-direct-commit (2026-07-10)
+
+- BackgroundTask durability — `publish_github_job` is fire-and-forget with no retry if worker crashes mid-job; pre-existing pattern shared with `run_publish`. [backend/app/workers/publish.py]
+- Preferences stored in encrypted credential blob — `direct_commit_default` in same envelope as installation token; coupling will cause preference loss on token rotation; refactor to separate user-settings table when warranted. [backend/app/routers/publishing.py]
+
 ## Deferred from: code review of 8-3-github-app-oauth-repository-connection (2026-07-09)
 
 - `get_installation_repositories` uses `per_page=100` with no pagination — installations with >100 repos silently truncated; add Link header pagination when needed. [backend/app/integrations/github.py]

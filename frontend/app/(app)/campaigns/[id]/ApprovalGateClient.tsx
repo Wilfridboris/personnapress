@@ -9,6 +9,7 @@ import { VoiceFidelityBadge } from "@/components/campaigns/VoiceFidelityBadge";
 import { useRouter } from "next/navigation";
 import { ApprovalPanel } from "./approval-panel";
 import { RetryPanel } from "@/components/publishing/RetryPanel";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { Campaign, CampaignStatus } from "@/lib/types";
 import type { BlogEditorHandle } from "@/components/campaigns/BlogEditor";
 import type { SocialPostEditorsHandle } from "@/components/campaigns/SocialPostEditors";
@@ -55,9 +56,14 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
           <h1 className="font-display text-3xl font-bold text-ink text-balance leading-tight">
             {campaign.blog_html ? "Campaign" : "Generating..."}
           </h1>
-          <span className={`text-xs font-mono border px-3 py-1 shrink-0 mt-1 ${statusConfig.className}`}>
-            {statusConfig.label}
-          </span>
+          <div className="flex items-center gap-2 shrink-0 mt-1">
+            {displayStatus === "approved" && campaign.github_pr_url && (
+              <StatusBadge status="pr_open" />
+            )}
+            <span className={`text-xs font-mono border px-3 py-1 ${statusConfig.className}`}>
+              {statusConfig.label}
+            </span>
+          </div>
         </div>
         <p className="text-sm text-graphite font-mono">
           Created{" "}

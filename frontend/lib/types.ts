@@ -102,6 +102,7 @@ export interface Campaign {
   rejection_reason: string | null;
   scheduled_at: string | null;
   image_regen_count: number;
+  github_pr_url: string | null;
   created_at: string;
   updated_at: string;
   publish_job?: PublishJobInfo | null;
@@ -190,8 +191,9 @@ export interface PlatformConnectionStatus {
   platform: "wordpress" | "webflow" | "x" | "linkedin" | "github_pages";
   connected: boolean;
   account_identifier?: string;
-  connected_via?: "wordpress-com";  // only present on wordpress card when connected via WordPress.com OAuth
-  github_detection?: GitHubDetectionResult | null;  // only present on github_pages connections
+  connected_via?: "wordpress-com";
+  github_detection?: GitHubDetectionResult | null;
+  direct_commit_default?: boolean;
 }
 
 export interface ConnectionCreatePayload {

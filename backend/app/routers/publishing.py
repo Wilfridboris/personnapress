@@ -34,7 +34,7 @@ from app.integrations import wordpress as wordpress_integration
 from app.integrations import wordpress_com as wordpress_com_integration
 from app.scheduler.scheduler import scheduler
 from app.services.subscription_service import check_trial_not_expired
-from app.workers.publish import run_publish
+from app.workers.publish import publish_github_job, run_publish
 from app.workers.publish_retry import run_publish_retry
 
 router = APIRouter(prefix="", tags=["publishing"])
@@ -74,6 +74,15 @@ def _extract_github_detection(encrypted_credentials: str) -> Optional[dict]:
     except Exception:
         logger.warning("Failed to extract github detection from credentials", exc_info=True)
         return None
+
+
+def _extract_direct_commit_default(encrypted_credentials: str) -> bool:
+    try:
+        data = json.loads(decrypt_credential(encrypted_credentials))
+        return bool(data.get("direct_commit_default", False))
+    except Exception:
+        logger.warning("Failed to extract direct_commit_default from GitHub credentials", exc_info=True)
+        return False
 
 
 def _check_ownership(client, user_id: uuid.UUID) -> None:
@@ -118,6 +127,7 @@ async def list_platform_connections(
             }
             if platform == "github_pages":
                 item["github_detection"] = _extract_github_detection(pc.encrypted_credentials)
+                item["direct_commit_default"] = _extract_direct_commit_default(pc.encrypted_credentials)
             items.append(item)
         elif platform == "wordpress" and "wordpress-com" in connected_map:
             # WordPress.com connection shown under the wordpress card
@@ -659,6 +669,121 @@ async def select_github_framework(
         "signals": [],
         "candidates": [],
     }
+
+
+class GitHubPublishRequest(BaseModel):
+    mode: str
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        if v not in ("pr", "commit"):
+            raise ValueError("mode must be 'pr' or 'commit'")
+        return v
+
+
+@router.post("/campaigns/{campaign_id}/publish/github", status_code=202)
+async def publish_campaign_github(
+    campaign_id: uuid.UUID,
+    body: GitHubPublishRequest,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+
+    campaign = await get_campaign(db, campaign_id)
+    if not campaign:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
+        )
+
+    client = await get_client(db, campaign.client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": {"code": "FORBIDDEN", "message": "You do not own this campaign.", "detail": {}}},
+        )
+
+    if campaign.status != "approved":
+        raise HTTPException(
+            status_code=409,
+            detail={"error": {"code": "INVALID_STATUS", "message": "Only approved campaigns can be published to GitHub.", "detail": {}}},
+        )
+
+    if body.mode == "pr" and campaign.github_pr_url:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": {"code": "PR_ALREADY_OPEN", "message": "A pull request is already open for this campaign.", "detail": {"pr_url": campaign.github_pr_url}}},
+        )
+
+    connections = await get_connections_for_client(db, campaign.client_id)
+    github_conn = next((c for c in connections if c.platform == "github_pages"), None)
+    if not github_conn:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": {"code": "NO_GITHUB_CONNECTION", "message": "No GitHub connection found for this client.", "detail": {}}},
+        )
+
+    try:
+        cred = json.loads(decrypt_credential(github_conn.encrypted_credentials))
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": {"code": "CREDENTIAL_ERROR", "message": "Failed to read GitHub credentials.", "detail": {}}},
+        )
+
+    if not cred.get("repo_full_name") or not cred.get("detected_framework"):
+        raise HTTPException(
+            status_code=409,
+            detail={"error": {"code": "INCOMPLETE_GITHUB_SETUP", "message": "Repository and framework must be configured before publishing.", "detail": {}}},
+        )
+
+    job = await create_job(db, job_type="github_publish", status="pending", campaign_id=campaign_id)
+    await db.commit()
+
+    background_tasks.add_task(publish_github_job, job.id, campaign_id, body.mode)
+
+    return {"job_id": str(job.id)}
+
+
+class GitHubSettingsRequest(BaseModel):
+    direct_commit_default: bool
+
+
+@router.patch("/clients/{client_id}/connections/github/settings", status_code=200)
+async def update_github_settings(
+    client_id: uuid.UUID,
+    body: GitHubSettingsRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+    client = await get_client(db, client_id)
+    _check_github_ownership(client, user_id)
+
+    connections = await get_connections_for_client(db, client_id)
+    github_conn = next((c for c in connections if c.platform == "github_pages"), None)
+    if not github_conn:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "GitHub connection not found.", "detail": {}}},
+        )
+
+    try:
+        cred = json.loads(decrypt_credential(github_conn.encrypted_credentials))
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": {"code": "CREDENTIAL_ERROR", "message": "Failed to read GitHub credentials.", "detail": {}}},
+        )
+
+    cred["direct_commit_default"] = body.direct_commit_default
+    encrypted = encrypt_credential(json.dumps(cred))
+    await upsert_connection(db, client_id, "github_pages", encrypted)
+
+    return {"direct_commit_default": body.direct_commit_default}
 
 
 @router.post("/campaigns/{campaign_id}/publish", status_code=202)

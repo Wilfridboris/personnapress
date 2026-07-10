@@ -4,15 +4,57 @@ import { useState, useRef, useCallback, useEffect, RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { GitBranch, Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
-import { campaignsApi, jobsApi, fetchAPI, APIError } from "@/lib/api";
+import { campaignsApi, jobsApi, publishingApi, fetchAPI, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { Modal } from "@/components/ui/Modal";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { cn } from "@/lib/utils";
 import type { Campaign, CampaignStatus } from "@/lib/types";
 import type { BlogEditorHandle } from "@/components/campaigns/BlogEditor";
 import type { SocialPostEditorsHandle } from "@/components/campaigns/SocialPostEditors";
 
 const GITHUB_SUPPORTED_FRAMEWORKS = ["jekyll", "plain_static", "astro", "nextjs", "hugo", "eleventy"];
+
+type GitHubResult =
+  | { type: "pr"; prUrl: string; title: string }
+  | { type: "commit"; commitSha: string; repoName: string };
+
+function slugFromTitle(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").slice(0, 60).replace(/-$/, "") || "untitled";
+}
+
+function buildTargetFilePath(framework: string, publishPath: string, title: string): string {
+  const slug = slugFromTitle(title);
+  const today = new Date().toISOString().slice(0, 10);
+  if (framework === "jekyll") return `_posts/${today}-${slug}.md`;
+  if (framework === "plain_static") {
+    const base = publishPath?.replace(/\/$/, "");
+    return base ? `${base}/${slug}.html` : `${slug}.html`;
+  }
+  if (framework === "astro") return `src/content/blog/${slug}.md`;
+  if (framework === "hugo") return `content/posts/${slug}.md`;
+  if (framework === "eleventy") return `src/posts/${slug}.md`;
+  if (framework === "nextjs") {
+    const base = publishPath?.replace(/\/$/, "");
+    return base ? `${base}/${slug}.md` : `posts/${slug}.md`;
+  }
+  return `${slug}.md`;
+}
+
+function buildFrontMatterPreview(framework: string, title: string): string {
+  const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+  const safe = title.replace(/"/g, '\\"');
+  if (framework === "jekyll") {
+    return `---\nlayout: post\ntitle: "${safe}"\ndate: ${now}\ndescription: ""\n---`;
+  }
+  if (framework === "astro") {
+    return `---\ntitle: "${safe}"\ndescription: ""\npubDate: "${now}"\nheroImage: ""\n---`;
+  }
+  if (framework === "hugo") {
+    return `---\ntitle: "${safe}"\ndate: ${now}\ndescription: ""\ndraft: false\n---`;
+  }
+  return `---\ntitle: "${safe}"\ndate: ${now}\ndescription: ""\n---`;
+}
 
 interface ApprovalPanelProps {
   campaign: Campaign;
@@ -36,29 +78,55 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
   const [rejectionReason, setRejectionReason] = useState("");
   const [clientHasPlatforms, setClientHasPlatforms] = useState<boolean | null>(null);
   const [githubPublishReady, setGithubPublishReady] = useState(false);
-  const [isPublishingGitHub, setIsPublishingGitHub] = useState(false);
   const [showSchedulePicker, setShowSchedulePicker] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<string>("");
   const [isScheduling, setIsScheduling] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+
+  // GitHub pre-publish panel state
+  const [showGitHubPanel, setShowGitHubPanel] = useState(false);
+  const [publishMode, setPublishMode] = useState<"pr" | "commit">("pr");
+  const [showFrontMatter, setShowFrontMatter] = useState(false);
+  const [activeGitHubJobId, setActiveGitHubJobId] = useState<string | null>(null);
+  const [isGitHubPublishing, setIsGitHubPublishing] = useState(false);
+  const [githubResult, setGithubResult] = useState<GitHubResult | null>(null);
+  const [repoName, setRepoName] = useState<string | null>(null);
+  const [directCommitDefault, setDirectCommitDefault] = useState(false);
+  const [detectedFramework, setDetectedFramework] = useState<string>("");
+  const [publishPath, setPublishPath] = useState<string>("");
 
   const rejectBtnRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const effectiveStatus = campaign.status;
 
+  // Extract H1 title from blog HTML for previews
+  const blogTitle = (() => {
+    if (!campaign.blog_html) return "Untitled";
+    if (typeof document === "undefined") return "Untitled";
+    const tmp = document.createElement("div");
+    tmp.innerHTML = campaign.blog_html;
+    return tmp.querySelector("h1")?.textContent?.trim() || "Untitled";
+  })();
+
   useEffect(() => {
     if (effectiveStatus === "approved" && clientHasPlatforms === null) {
-      fetchAPI<{ items: Array<{ platform: string; connected: boolean; account_identifier?: string; github_detection?: { detected_framework: string } | null }> }>(`/clients/${campaign.client_id}/connections`)
+      fetchAPI<{ items: Array<{ platform: string; connected: boolean; account_identifier?: string; github_detection?: { detected_framework: string; publish_path?: string } | null; direct_commit_default?: boolean }> }>(`/clients/${campaign.client_id}/connections`)
         .then((connections) => {
           const items = connections?.items ?? [];
           setClientHasPlatforms(items.length > 0);
           const ghConn = items.find((c) => c.platform === "github_pages" && c.connected);
           const framework = ghConn?.github_detection?.detected_framework ?? "";
-          setGithubPublishReady(
-            !!ghConn?.account_identifier &&
-            GITHUB_SUPPORTED_FRAMEWORKS.includes(framework)
-          );
+          const ready = !!ghConn?.account_identifier && GITHUB_SUPPORTED_FRAMEWORKS.includes(framework);
+          setGithubPublishReady(ready);
+          if (ghConn) {
+            setRepoName(ghConn.account_identifier ?? null);
+            setDetectedFramework(framework);
+            setPublishPath(ghConn.github_detection?.publish_path ?? "");
+            const defaultCommit = ghConn.direct_commit_default ?? false;
+            setDirectCommitDefault(defaultCommit);
+            if (defaultCommit) setPublishMode("commit");
+          }
         })
         .catch(() => {
           setClientHasPlatforms(false);
@@ -149,25 +217,20 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     }
   }, [campaign.id, addToast, showUpgradePrompt]);
 
-  const handlePublishGitHub = useCallback(async () => {
-    setIsPublishingGitHub(true);
+  const handleConfirmGitHubPublish = useCallback(async () => {
+    setIsGitHubPublishing(true);
     try {
-      const { job_id } = await campaignsApi.publishNow(campaign.id);
-      if (!job_id) {
-        addToast("Publish started but job tracking unavailable.", "warning");
-        setIsPublishingGitHub(false);
-        return;
-      }
-      setActiveJobId(job_id);
+      const { job_id } = await publishingApi.publishGitHub(campaign.id, { mode: publishMode });
+      setActiveGitHubJobId(job_id);
     } catch (err) {
       if (err instanceof APIError && err.code === "TRIAL_EXPIRED") {
         showUpgradePrompt(err.message);
       } else {
         addToast(err instanceof APIError ? err.message : "GitHub publish failed.", "error");
       }
-      setIsPublishingGitHub(false);
+      setIsGitHubPublishing(false);
     }
-  }, [campaign.id, addToast, showUpgradePrompt]);
+  }, [campaign.id, publishMode, addToast, showUpgradePrompt]);
 
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const isPastTime = Boolean(scheduledAt && new Date(scheduledAt) <= new Date());
@@ -201,7 +264,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     }
   }, [campaign.id, router, addToast]);
 
-  // Poll publish job every 2s while in-flight
+  // Poll regular publish job every 2s while in-flight
   useEffect(() => {
     if (!activeJobId) return;
     const interval = setInterval(async () => {
@@ -210,13 +273,11 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
         if (job.status === "complete") {
           clearInterval(interval);
           setIsPublishing(false);
-          setIsPublishingGitHub(false);
           setActiveJobId(null);
           router.refresh();
         } else if (job.status === "failed") {
           clearInterval(interval);
           setIsPublishing(false);
-          setIsPublishingGitHub(false);
           setActiveJobId(null);
           addToast(
             job.error_details
@@ -232,6 +293,42 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     }, 2000);
     return () => clearInterval(interval);
   }, [activeJobId, router, addToast]);
+
+  // Poll GitHub publish job every 2s while in-flight
+  useEffect(() => {
+    if (!activeGitHubJobId) return;
+    const interval = setInterval(async () => {
+      try {
+        const job = await jobsApi.get(activeGitHubJobId);
+        if (job.status === "complete") {
+          clearInterval(interval);
+          setActiveGitHubJobId(null);
+          setIsGitHubPublishing(false);
+          setShowGitHubPanel(false);
+          try {
+            const details = job.error_details ? JSON.parse(job.error_details) : {};
+            if (publishMode === "pr" && details.pr_url) {
+              setGithubResult({ type: "pr", prUrl: details.pr_url, title: details.title ?? "" });
+            } else if (publishMode === "commit" && details.commit_sha) {
+              setGithubResult({ type: "commit", commitSha: details.commit_sha, repoName: details.repo_full_name ?? repoName ?? "" });
+            }
+          } catch {
+            // parse error — just refresh
+          }
+          router.refresh();
+        } else if (job.status === "failed") {
+          clearInterval(interval);
+          setActiveGitHubJobId(null);
+          setIsGitHubPublishing(false);
+          const details = (() => { try { return JSON.parse(job.error_details ?? "{}"); } catch { return {}; } })();
+          addToast(details.message ?? "GitHub publish failed.", "error");
+        }
+      } catch {
+        // polling errors are transient — keep polling
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [activeGitHubJobId, publishMode, repoName, router, addToast]);
 
   // Post-approved state
   if (effectiveStatus === "approved") {
@@ -271,34 +368,43 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
       );
     }
 
+    const targetFilePath = buildTargetFilePath(detectedFramework, publishPath, blogTitle);
+    const frontMatterPreview = buildFrontMatterPreview(detectedFramework, blogTitle);
+    const hasPrOpen = !!campaign.github_pr_url && !githubResult;
+    const prDisplayUrl = githubResult?.type === "pr" ? githubResult.prUrl : campaign.github_pr_url ?? "";
+
     return (
-      <div className="fixed bottom-0 left-0 md:left-14 lg:left-[240px] right-0 z-10 bg-paper border-t border-border px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
-        <p className="font-mono text-xs text-graphite uppercase tracking-wider">
-          Campaign approved
-        </p>
-        {clientHasPlatforms === null ? (
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-24 bg-border animate-pulse" />
-            <div className="h-8 w-20 bg-border animate-pulse" />
+      <div className="fixed bottom-0 left-0 md:left-14 lg:left-[240px] right-0 z-10 bg-paper border-t border-border">
+        {/* Main action row */}
+        <div className="px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <p className="font-mono text-xs text-graphite uppercase tracking-wider">
+              Campaign approved
+            </p>
+            {hasPrOpen && <StatusBadge status="pr_open" />}
           </div>
-        ) : clientHasPlatforms === false ? (
-          <div className="flex items-center gap-4 flex-wrap">
-            <p className="text-sm text-ink">Connect a platform to publish. Your campaign is approved and ready.</p>
-            <Link
-              href={`/clients/${campaign.client_id}/connections`}
-              className="inline-flex items-center px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
-            >
-              Connect a platform
-            </Link>
-          </div>
-        ) : (
-          <div className="w-full">
-            <div className="flex items-center justify-end gap-3 flex-wrap">
+          {clientHasPlatforms === null ? (
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-24 bg-border animate-pulse" />
+              <div className="h-8 w-20 bg-border animate-pulse" />
+            </div>
+          ) : clientHasPlatforms === false ? (
+            <div className="flex items-center gap-4 flex-wrap">
+              <p className="text-sm text-ink">Connect a platform to publish. Your campaign is approved and ready.</p>
+              <Link
+                href={`/clients/${campaign.client_id}/connections`}
+                className="inline-flex items-center px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+              >
+                Connect a platform
+              </Link>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 flex-wrap">
               {githubPublishReady && (
                 <button
                   type="button"
-                  onClick={handlePublishGitHub}
-                  disabled={isPublishingGitHub || isPublishing}
+                  onClick={() => setShowGitHubPanel((v) => !v)}
+                  disabled={isPublishing || isGitHubPublishing}
                   className={cn(
                     "inline-flex items-center gap-2 px-5 py-2.5 border border-ink text-ink text-sm font-medium",
                     "hover:bg-ink hover:text-white transition-colors",
@@ -306,12 +412,8 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                     "disabled:opacity-50 disabled:cursor-not-allowed",
                   )}
                 >
-                  {isPublishingGitHub ? (
-                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <GitBranch className="size-4" aria-hidden="true" />
-                  )}
-                  {isPublishingGitHub ? "Publishing..." : "Publish to GitHub"}
+                  <GitBranch className="size-4" aria-hidden="true" />
+                  Publish to GitHub
                 </button>
               )}
               <button
@@ -324,7 +426,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
               <button
                 type="button"
                 onClick={handlePublishNow}
-                disabled={isPublishing || isPublishingGitHub}
+                disabled={isPublishing || isGitHubPublishing}
                 className={cn(
                   "inline-flex items-center gap-2 px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent",
                   "shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all",
@@ -332,58 +434,199 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                   "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none",
                 )}
               >
-                {isPublishing ? (
-                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                ) : null}
+                {isPublishing ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
                 {isPublishing ? "Publishing..." : "Publish now"}
               </button>
             </div>
-            {showSchedulePicker && (
-              <div className="mt-4 pt-4 border-t border-border space-y-3">
-                <div>
-                  <label
-                    htmlFor="schedule-datetime"
-                    className="block text-xs font-medium uppercase tracking-[0.06em] text-graphite mb-1"
-                  >
-                    Schedule date &amp; time
-                  </label>
-                  <input
-                    id="schedule-datetime"
-                    type="datetime-local"
-                    value={scheduledAt}
-                    onChange={(e) => setScheduledAt(e.target.value)}
-                    className="border-b border-ink focus:border-b-2 outline-none bg-transparent py-2 text-sm text-ink w-full"
-                  />
-                </div>
-                <p className="text-xs text-graphite">Schedules in {userTimezone}</p>
-                {isPastTime && (
-                  <p className="text-xs text-danger" role="alert">
-                    Scheduled time must be in the future.
-                  </p>
-                )}
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={handleConfirmSchedule}
-                    disabled={!scheduledAt || isPastTime || isScheduling}
-                    className="px-5 py-2.5 bg-ink text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white hover:text-ink hover:border hover:border-ink transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none"
-                  >
-                    {isScheduling ? (
-                      <span className="inline-block size-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
-                    ) : (
-                      "Confirm schedule"
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowSchedulePicker(false)}
-                    className="px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors rounded-none"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
+          )}
+        </div>
+
+        {/* Schedule picker */}
+        {showSchedulePicker && (
+          <div className="px-6 pt-0 pb-4 border-t border-border space-y-3">
+            <div>
+              <label
+                htmlFor="schedule-datetime"
+                className="block text-xs font-medium uppercase tracking-[0.06em] text-graphite mb-1"
+              >
+                Schedule date &amp; time
+              </label>
+              <input
+                id="schedule-datetime"
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+                className="border-b border-ink focus:border-b-2 outline-none bg-transparent py-2 text-sm text-ink w-full"
+              />
+            </div>
+            <p className="text-xs text-graphite">Schedules in {userTimezone}</p>
+            {isPastTime && (
+              <p className="text-xs text-danger" role="alert">
+                Scheduled time must be in the future.
+              </p>
             )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleConfirmSchedule}
+                disabled={!scheduledAt || isPastTime || isScheduling}
+                className="px-5 py-2.5 bg-ink text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white hover:text-ink hover:border hover:border-ink transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none"
+              >
+                {isScheduling ? (
+                  <span className="inline-block size-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                ) : (
+                  "Confirm schedule"
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSchedulePicker(false)}
+                className="px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors rounded-none"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* GitHub pre-publish confirmation panel */}
+        {showGitHubPanel && !githubResult && (
+          <div className="border-t border-[#E5E5E5] bg-[#F9F9F6] px-6 py-6 space-y-4">
+            {/* Target info */}
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#555555]">Publishing to</p>
+              <p className="text-sm font-medium text-ink">{repoName ?? "GitHub"}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#555555]">File</p>
+              <p
+                className="font-mono text-[13px] text-ink"
+                role="region"
+                aria-label="Publish target file path"
+              >
+                {targetFilePath}
+              </p>
+            </div>
+
+            {/* Front matter toggle */}
+            <div>
+              <button
+                type="button"
+                aria-expanded={showFrontMatter}
+                onClick={() => setShowFrontMatter((v) => !v)}
+                className="text-sm text-graphite hover:text-ink underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+              >
+                {showFrontMatter ? "Hide front matter" : "Show front matter"}
+              </button>
+              {showFrontMatter && (
+                <pre
+                  role="region"
+                  aria-label="Publish target file path"
+                  className="mt-2 font-mono text-[12px] bg-[#F9F9F6] border border-[#E5E5E5] p-3 overflow-x-auto text-ink"
+                >
+                  {frontMatterPreview}
+                </pre>
+              )}
+            </div>
+
+            {/* Mode selector */}
+            <div
+              role="radiogroup"
+              aria-label="Publish mode"
+              className="flex gap-3"
+            >
+              {(["pr", "commit"] as const).map((mode) => {
+                const isSelected = publishMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    onClick={() => setPublishMode(mode)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPublishMode(mode); } }}
+                    className={cn(
+                      "flex-1 text-left p-3 border transition-all focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2",
+                      isSelected
+                        ? "bg-[#FFF1B8] border-[#111111] shadow-[4px_4px_0px_#111111]"
+                        : "bg-white border-[#E5E5E5]"
+                    )}
+                  >
+                    <p className="text-sm font-medium text-ink">
+                      {mode === "pr" ? "Open Pull Request" : "Commit directly"}
+                    </p>
+                    <p className="text-[12px] text-graphite mt-0.5">
+                      {mode === "pr"
+                        ? "Creates a PR for review before going live"
+                        : "Commits straight to the default branch"}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={handleConfirmGitHubPublish}
+                disabled={isGitHubPublishing}
+                className={cn(
+                  "inline-flex items-center gap-2 px-5 py-2.5 bg-[#111111] text-white text-sm font-medium",
+                  "shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-[#111111] hover:border hover:border-[#111111] transition-all",
+                  "focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 rounded-none",
+                  "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none",
+                )}
+              >
+                {isGitHubPublishing && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                {isGitHubPublishing ? "Publishing..." : "Confirm and publish"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowGitHubPanel(false)}
+                className="text-sm text-[#555555] hover:text-[#111111] underline focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* PR result state */}
+        {(githubResult?.type === "pr" || hasPrOpen) && prDisplayUrl && (
+          <div className="border-t border-[#E5E5E5] px-6 py-3">
+            <p className="text-sm text-ink">
+              PR opened{" — "}
+              <a
+                href={prDisplayUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-ink underline hover:text-graphite"
+              >
+                {githubResult?.type === "pr"
+                  ? (githubResult.title.length > 45 ? githubResult.title.slice(0, 45) + "…" : githubResult.title)
+                  : "View PR"}
+              </a>
+            </p>
+          </div>
+        )}
+
+        {/* Commit result state */}
+        {githubResult?.type === "commit" && (
+          <div className="border-t border-[#E5E5E5] px-6 py-3">
+            <p className="text-sm text-ink">
+              {"Published to "}
+              {githubResult.repoName}
+              {" "}
+              <a
+                href={`https://github.com/${githubResult.repoName}/commit/${githubResult.commitSha}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-xs text-ink underline hover:text-graphite"
+              >
+                {githubResult.commitSha.slice(0, 7)}
+              </a>
+            </p>
           </div>
         )}
       </div>

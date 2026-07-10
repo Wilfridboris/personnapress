@@ -122,6 +122,7 @@ class Campaign(SQLModel, table=True):
     image_regen_count: int = Field(default=0)
     target_keyword: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     target_audience: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    github_pr_url: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True, index=True))
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

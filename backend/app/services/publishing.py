@@ -49,22 +49,24 @@ async def _refresh_token_if_needed(cred: dict, db: AsyncSession, client_id: UUID
     return cred
 
 
-async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
-    """Publish campaign blog post to a Jekyll or plain-static GitHub Pages repo."""
-    # Refresh token if needed (token must not outlive this function)
-    cred = await _refresh_token_if_needed(cred, db, campaign.client_id)
+async def generate_github_post_file(
+    campaign,
+    cred: dict,
+    db: AsyncSession,
+) -> tuple[str | None, str | None, str, str]:
+    """Generate post file content for any supported GitHub Pages framework.
+
+    Returns (file_path, file_content, commit_message, title).
+    Returns (None, None, "", title) for the Next.js low-confidence early-exit case.
+    Raises PlatformError for unsupported or misconfigured frameworks.
+    """
     installation_token: str = cred["installation_token"]
-
     repo_full_name: str = cred.get("repo_full_name", "")
-    if not repo_full_name:
-        raise PlatformError("github", 0, "No repository selected")
-
     detected_framework: str = cred.get("detected_framework", "")
     publish_path: str = cred.get("publish_path", "")
 
     blog_html: str = campaign.blog_html or ""
 
-    # Extract title from H1
     soup = BeautifulSoup(blog_html, "html.parser")
     h1_tag = soup.find("h1")
     title: str = h1_tag.get_text(strip=True) if h1_tag else "Untitled"
@@ -76,7 +78,6 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
     if detected_framework == "jekyll":
         body_md = github_integration.html_to_markdown(blog_html)
 
-        # Build categories from voice_score tags
         categories_line = ""
         if campaign.voice_score and campaign.voice_score.get("tags"):
             tags = campaign.voice_score["tags"]
@@ -84,7 +85,6 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
                 categories_value = ", ".join(f'"{t.replace(chr(92), chr(92)+chr(92)).replace(chr(34), chr(92)+chr(34))}"' for t in tags)
                 categories_line = f"categories: [{categories_value}]\n"
 
-        # meta description from voice_score or empty
         description = ""
         if campaign.voice_score:
             description = campaign.voice_score.get("meta_description", "") or ""
@@ -106,7 +106,6 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
         commit_message = f"Add blog post: {title}"
 
     elif detected_framework == "plain_static":
-        # Detect existing stylesheet from index.html
         style_link = ""
         index_html = await github_integration.get_file_contents(installation_token, repo_full_name, "index.html")
         if index_html:
@@ -132,7 +131,6 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
             "</html>\n"
         )
 
-        # Determine publish path
         if not publish_path:
             root_items = await github_integration.get_repo_root_contents(installation_token, repo_full_name)
             root_names = {item["name"] for item in root_items}
@@ -142,7 +140,6 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
         file_path = f"{base}/{slug}.html" if base else f"{slug}.html"
         commit_message = f"Add blog post: {title}"
 
-        # Create .nojekyll at repo root if it doesn't exist
         nojekyll = await github_integration.get_file_contents(installation_token, repo_full_name, ".nojekyll")
         if nojekyll is None:
             await github_integration.create_file_commit(
@@ -154,13 +151,11 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
     elif detected_framework == "astro":
         body_md = github_integration.html_to_markdown(blog_html)
 
-        # Determine extension: use .mdx if any .mdx files exist in src/content/blog
         mdx_files = await github_integration.list_files_in_directory(
             installation_token, repo_full_name, "src/content/blog", ".mdx"
         )
         ext = ".mdx" if mdx_files else ".md"
 
-        # Attempt to parse content.config for required fields
         config_content = await github_integration.get_file_contents(
             installation_token, repo_full_name, "content.config.ts"
         ) or await github_integration.get_file_contents(
@@ -174,7 +169,6 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
 
         extra_required_fields: list[str] = []
         if config_content:
-            # Find field names that appear to be required (no .optional())
             required_pattern = re.compile(r'(\w+)\s*:\s*z\.[a-zA-Z]+\(\)[^,\n]*(?<!\.optional\(\))')
             optional_pattern = re.compile(r'(\w+)\s*:\s*z\.[a-zA-Z]+\(\).*?\.optional\(\)', re.DOTALL)
             optional_fields = {m.group(1) for m in optional_pattern.finditer(config_content)}
@@ -182,7 +176,6 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
             for m in required_pattern.finditer(config_content):
                 field = m.group(1)
                 if field not in known and field not in optional_fields:
-                    # Cross-check with DOTALL to catch multi-line chained .optional()
                     if not re.search(rf'\b{re.escape(field)}\b.*?\.optional\(\)', config_content, re.DOTALL):
                         extra_required_fields.append(field)
 
@@ -212,9 +205,7 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
         if campaign.voice_score:
             description = campaign.voice_score.get("meta_description", "") or ""
 
-        # Determine target directory and extension
         if publish_path:
-            # User already confirmed path
             file_path = f"{publish_path.rstrip('/')}/{slug}.md"
         else:
             md_files = await github_integration.list_files_in_directory(
@@ -231,21 +222,18 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
                     target_dir = "content"
                     file_ext = ".mdx"
                 else:
-                    # Low confidence — update credential and return early
                     cred["confidence"] = "low"
                     encrypted = encrypt_credential(json.dumps(cred))
                     await upsert_connection(db, campaign.client_id, "github_pages", encrypted)
-                    return {"status": "low_confidence", "message": "Content folder not detected"}
+                    return None, None, "", title
             file_path = f"{target_dir}/{slug}{file_ext}"
 
-        # Infer front matter from existing post in target dir
         infer_dir = file_path.rsplit("/", 1)[0] if "/" in file_path else ""
         template_posts = await github_integration.get_first_post_files(
             installation_token, repo_full_name, infer_dir, max=3
         ) if infer_dir else []
         template_keys: set[str] = set()
         if template_posts:
-            # Parse YAML front matter keys from first post
             fm_match = re.search(r"^---\s*\n(.*?)\n---", template_posts[0], re.DOTALL)
             if fm_match:
                 template_keys = {line.split(":")[0].strip() for line in fm_match.group(1).splitlines() if ":" in line}
@@ -278,13 +266,11 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
             description = campaign.voice_score.get("meta_description", "") or ""
         image_url = campaign.image_url if hasattr(campaign, "image_url") and campaign.image_url else ""
 
-        # Get existing post to detect format and naming pattern
         existing_posts = await github_integration.get_first_post_files(
             installation_token, repo_full_name, "content/posts", max=1
         )
         fm_format = github_integration.detect_front_matter_format(existing_posts[0]) if existing_posts else "yaml"
 
-        # Detect naming convention (date-prefix vs directory)
         dir_items = await github_integration.get_directory_contents(
             installation_token, repo_full_name, "content/posts"
         )
@@ -347,7 +333,6 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
         if campaign.voice_score:
             description = campaign.voice_score.get("meta_description", "") or ""
 
-        # Resolve input directory from .eleventy.js / .eleventy.cjs
         eleventy_config = await github_integration.get_file_contents(
             installation_token, repo_full_name, ".eleventy.js"
         ) or await github_integration.get_file_contents(
@@ -359,7 +344,6 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
             if match:
                 input_dir = match.group(1)
 
-        # Check if posts/ subdir exists
         posts_items = await github_integration.get_directory_contents(
             installation_token, repo_full_name, f"{input_dir}/posts"
         )
@@ -370,17 +354,16 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
             target_path = f"{input_dir}/{slug}.md"
             infer_dir = input_dir
 
-        # Infer layout from existing posts
         existing = await github_integration.get_first_post_files(
             installation_token, repo_full_name, infer_dir, max=1
         )
         inferred_layout: str | None = None
-        template_keys: set[str] = set()
+        template_keys_e: set[str] = set()
         if existing:
             fm_match = re.search(r"^---\s*\n(.*?)\n---", existing[0], re.DOTALL)
             if fm_match:
                 fm_body = fm_match.group(1)
-                template_keys = {line.split(":")[0].strip() for line in fm_body.splitlines() if ":" in line}
+                template_keys_e = {line.split(":")[0].strip() for line in fm_body.splitlines() if ":" in line}
                 layout_m = re.search(r"^layout\s*:\s*(.+)$", fm_body, re.MULTILINE)
                 if layout_m:
                     inferred_layout = layout_m.group(1).strip().strip('"').strip("'")
@@ -394,7 +377,7 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
             f"date: {publish_datetime}",
             f'description: "{desc_escaped}"',
         ]
-        if "tags" in template_keys and campaign.voice_score and campaign.voice_score.get("tags"):
+        if "tags" in template_keys_e and campaign.voice_score and campaign.voice_score.get("tags"):
             tags_list = campaign.voice_score["tags"]
             if isinstance(tags_list, list) and tags_list:
                 tags_yaml = ", ".join(f'"{t.replace(chr(92), chr(92)+chr(92)).replace(chr(34), chr(92)+chr(34))}"' for t in tags_list)
@@ -411,11 +394,26 @@ async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
     else:
         raise PlatformError("github", 0, f"Unsupported framework for GitHub publish: {detected_framework}")
 
+    return file_path, file_content, commit_message, title
+
+
+async def _publish_github(campaign, cred: dict, db: AsyncSession) -> dict:
+    """Publish campaign blog post directly to the default branch."""
+    cred = await _refresh_token_if_needed(cred, db, campaign.client_id)
+    installation_token: str = cred["installation_token"]
+
+    repo_full_name: str = cred.get("repo_full_name", "")
+    if not repo_full_name:
+        raise PlatformError("github", 0, "No repository selected")
+
+    file_path, file_content, commit_message, _ = await generate_github_post_file(campaign, cred, db)
+    if file_path is None:
+        return {"status": "low_confidence", "message": "Content folder not detected"}
+
     commit_sha = await github_integration.create_file_commit(
         installation_token, repo_full_name, file_path, file_content, commit_message
     )
 
-    # Set github_pr_url to None for direct commit (PR url used by Story 8.7)
     campaign.github_pr_url = None
     db.add(campaign)
 

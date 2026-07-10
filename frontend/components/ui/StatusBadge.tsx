@@ -1,12 +1,14 @@
 import { clsx } from "clsx";
 import type { CampaignStatus } from "@/lib/types";
 
+type BadgeVariant = CampaignStatus | "pr_open";
+
 interface StatusBadgeProps {
-  status: CampaignStatus;
+  status: BadgeVariant;
   className?: string;
 }
 
-const STATUS_CONFIG: Record<CampaignStatus, { label: string; className: string }> = {
+const STATUS_CONFIG: Record<BadgeVariant, { label: string; className: string }> = {
   pending_approval: {
     label: "PENDING APPROVAL",
     className: "bg-highlighter border-ink text-ink",
@@ -26,6 +28,10 @@ const STATUS_CONFIG: Record<CampaignStatus, { label: string; className: string }
   failed: {
     label: "FAILED",
     className: "bg-danger border-transparent text-white",
+  },
+  pr_open: {
+    label: "PR OPEN",
+    className: "bg-white border-[#E5E5E5] text-graphite",
   },
 };
 

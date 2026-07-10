@@ -69,6 +69,7 @@ function makeCampaign(overrides: Partial<Campaign> = {}): Campaign {
     rejection_reason: null,
     scheduled_at: null,
     image_regen_count: 0,
+    github_pr_url: null,
     created_at: "2026-07-01T10:00:00Z",
     updated_at: "2026-07-01T10:00:00Z",
     ...overrides,
