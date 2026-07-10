@@ -1,7 +1,12 @@
+import base64
+import re
 import time
+
+from bs4 import BeautifulSoup
 
 import httpx
 import jwt
+from markdownify import markdownify as _md
 
 from app.core.config import settings
 from app.core.exceptions import PlatformError
@@ -12,6 +17,25 @@ GITHUB_HEADERS = {
     "Accept": "application/vnd.github+json",
     "X-GitHub-Api-Version": _GITHUB_API_VERSION,
 }
+
+
+def slug_from_title(title: str) -> str:
+    """Convert a post title to a URL-safe slug (max 60 chars)."""
+    slug = title.lower()
+    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
+    slug = re.sub(r"[\s]+", "-", slug.strip())
+    slug = re.sub(r"-+", "-", slug)
+    return slug[:60].rstrip("-") or "untitled"
+
+
+def html_to_markdown(html: str) -> str:
+    """Convert blog HTML to Markdown with H1 stripped from body."""
+    soup = BeautifulSoup(html, "html.parser")
+    h1 = soup.find("h1")
+    if h1:
+        h1.decompose()
+    clean_html = str(soup)
+    return _md(clean_html, heading_style="ATX", newline_style="backslash").strip()
 
 
 def generate_app_jwt() -> str:
@@ -90,3 +114,76 @@ async def get_directory_contents(installation_token: str, repo_full_name: str, p
         raise PlatformError("github", resp.status_code, "contents API error")
     data = resp.json()
     return data if isinstance(data, list) else []
+
+
+async def get_file_contents(installation_token: str, repo_full_name: str, file_path: str) -> str | None:
+    """Return decoded file content or None if the file does not exist (404)."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            f"https://api.github.com/repos/{repo_full_name}/contents/{file_path}",
+            headers={**GITHUB_HEADERS, "Authorization": f"Bearer {installation_token}"},
+        )
+    if resp.status_code == 404:
+        return None
+    if resp.status_code != 200:
+        raise PlatformError("github", resp.status_code, resp.text[:300])
+    data = resp.json()
+    encoded = data.get("content", "")
+    return base64.b64decode(encoded.replace("\n", "")).decode("utf-8", errors="replace")
+
+
+async def get_default_branch(installation_token: str, repo_full_name: str) -> str:
+    """Return the repository default branch name."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            f"https://api.github.com/repos/{repo_full_name}",
+            headers={**GITHUB_HEADERS, "Authorization": f"Bearer {installation_token}"},
+        )
+    if resp.status_code != 200:
+        raise PlatformError("github", resp.status_code, resp.text[:300])
+    return resp.json().get("default_branch", "main")
+
+
+async def create_file_commit(
+    installation_token: str,
+    repo_full_name: str,
+    file_path: str,
+    content: str,
+    commit_message: str,
+    branch: str = "HEAD",
+) -> str:
+    """Create or update a file via the GitHub Contents API. Returns the 7-char short commit SHA."""
+    headers = {**GITHUB_HEADERS, "Authorization": f"Bearer {installation_token}"}
+    encoded_content = base64.b64encode(content.encode("utf-8")).decode("ascii")
+
+    body: dict = {
+        "message": commit_message,
+        "content": encoded_content,
+    }
+    if branch != "HEAD":
+        body["branch"] = branch
+
+    # Check if file exists to get its SHA (required for updates)
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        check_resp = await client.get(
+            f"https://api.github.com/repos/{repo_full_name}/contents/{file_path}",
+            headers=headers,
+        )
+        if check_resp.status_code == 200:
+            existing_sha = check_resp.json().get("sha")
+            if existing_sha:
+                body["sha"] = existing_sha
+        elif check_resp.status_code != 404:
+            raise PlatformError("github", check_resp.status_code, check_resp.text[:300])
+
+        resp = await client.put(
+            f"https://api.github.com/repos/{repo_full_name}/contents/{file_path}",
+            headers=headers,
+            json=body,
+        )
+
+    if resp.status_code not in (200, 201):
+        raise PlatformError("github", resp.status_code, resp.text[:300])
+
+    commit_sha = resp.json().get("commit", {}).get("sha", "")
+    return commit_sha[:7] if commit_sha else ""

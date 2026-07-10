@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import { GitBranch, Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
 import { campaignsApi, jobsApi, fetchAPI, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { Modal } from "@/components/ui/Modal";
@@ -33,6 +33,8 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [clientHasPlatforms, setClientHasPlatforms] = useState<boolean | null>(null);
+  const [githubPublishReady, setGithubPublishReady] = useState(false);
+  const [isPublishingGitHub, setIsPublishingGitHub] = useState(false);
   const [showSchedulePicker, setShowSchedulePicker] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<string>("");
   const [isScheduling, setIsScheduling] = useState(false);
@@ -45,9 +47,21 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
 
   useEffect(() => {
     if (effectiveStatus === "approved" && clientHasPlatforms === null) {
-      fetchAPI<{ items: unknown[] }>(`/clients/${campaign.client_id}/connections`)
-        .then((connections) => setClientHasPlatforms((connections?.items?.length ?? 0) > 0))
-        .catch(() => setClientHasPlatforms(false));
+      fetchAPI<{ items: Array<{ platform: string; connected: boolean; account_identifier?: string; github_detection?: { detected_framework: string } | null }> }>(`/clients/${campaign.client_id}/connections`)
+        .then((connections) => {
+          const items = connections?.items ?? [];
+          setClientHasPlatforms(items.length > 0);
+          const ghConn = items.find((c) => c.platform === "github_pages" && c.connected);
+          const framework = ghConn?.github_detection?.detected_framework ?? "";
+          setGithubPublishReady(
+            !!ghConn?.account_identifier &&
+            (framework === "jekyll" || framework === "plain_static")
+          );
+        })
+        .catch(() => {
+          setClientHasPlatforms(false);
+          setGithubPublishReady(false);
+        });
     }
   }, [effectiveStatus, campaign.client_id, clientHasPlatforms]);
 
@@ -133,6 +147,26 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     }
   }, [campaign.id, addToast, showUpgradePrompt]);
 
+  const handlePublishGitHub = useCallback(async () => {
+    setIsPublishingGitHub(true);
+    try {
+      const { job_id } = await campaignsApi.publishNow(campaign.id);
+      if (!job_id) {
+        addToast("Publish started but job tracking unavailable.", "warning");
+        setIsPublishingGitHub(false);
+        return;
+      }
+      setActiveJobId(job_id);
+    } catch (err) {
+      if (err instanceof APIError && err.code === "TRIAL_EXPIRED") {
+        showUpgradePrompt(err.message);
+      } else {
+        addToast(err instanceof APIError ? err.message : "GitHub publish failed.", "error");
+      }
+      setIsPublishingGitHub(false);
+    }
+  }, [campaign.id, addToast, showUpgradePrompt]);
+
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const isPastTime = Boolean(scheduledAt && new Date(scheduledAt) <= new Date());
 
@@ -174,11 +208,13 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
         if (job.status === "complete") {
           clearInterval(interval);
           setIsPublishing(false);
+          setIsPublishingGitHub(false);
           setActiveJobId(null);
           router.refresh();
         } else if (job.status === "failed") {
           clearInterval(interval);
           setIsPublishing(false);
+          setIsPublishingGitHub(false);
           setActiveJobId(null);
           addToast(
             job.error_details
@@ -255,7 +291,27 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           </div>
         ) : (
           <div className="w-full">
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex items-center justify-end gap-3 flex-wrap">
+              {githubPublishReady && (
+                <button
+                  type="button"
+                  onClick={handlePublishGitHub}
+                  disabled={isPublishingGitHub || isPublishing}
+                  className={cn(
+                    "inline-flex items-center gap-2 px-5 py-2.5 border border-ink text-ink text-sm font-medium",
+                    "hover:bg-ink hover:text-white transition-colors",
+                    "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none",
+                    "disabled:opacity-50 disabled:cursor-not-allowed",
+                  )}
+                >
+                  {isPublishingGitHub ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <GitBranch className="size-4" aria-hidden="true" />
+                  )}
+                  {isPublishingGitHub ? "Publishing..." : "Publish to GitHub"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowSchedulePicker((v) => !v)}
@@ -266,7 +322,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
               <button
                 type="button"
                 onClick={handlePublishNow}
-                disabled={isPublishing}
+                disabled={isPublishing || isPublishingGitHub}
                 className={cn(
                   "inline-flex items-center gap-2 px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent",
                   "shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all",
