@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
 import {
   ArrowRight,
   Mic,
@@ -17,6 +16,8 @@ import {
   CalendarCheck,
 } from "lucide-react";
 import { FaqAccordion } from "./_components/FaqAccordion";
+import { PublicHeader } from "@/components/marketing/PublicHeader";
+import { PublicFooter } from "@/components/marketing/PublicFooter";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://personnapress.com";
 
@@ -354,51 +355,7 @@ export default function LandingPage() {
       />
 
       {/* Navigation */}
-      <header className="border-b border-border sticky top-0 bg-paper z-50">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Image
-            src="/images/PersonnaPress-logo.png"
-            alt="PersonnaPress"
-            width={128}
-            height={128}
-            priority
-            className="h-8 w-auto"
-          />
-          <nav className="flex items-center gap-8">
-            <a
-              href="#workflow"
-              className="text-sm text-graphite hover:text-ink transition-colors"
-            >
-              How it works
-            </a>
-            <a
-              href="#platforms"
-              className="text-sm text-graphite hover:text-ink transition-colors"
-            >
-              Platforms
-            </a>
-            <a
-              href="#pricing"
-              className="text-sm text-graphite hover:text-ink transition-colors"
-            >
-              Pricing
-            </a>
-            <a
-              href="#faq"
-              className="text-sm text-graphite hover:text-ink transition-colors"
-            >
-              FAQ
-            </a>
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 bg-ink text-paper text-sm font-medium px-5 py-2 hover:bg-graphite transition-colors"
-            >
-              Start Free Trial
-              <ArrowRight className="size-3.5" aria-hidden="true" />
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <PublicHeader />
 
       <main>
         {/* Hero */}
@@ -626,7 +583,13 @@ export default function LandingPage() {
               </span>
             ))}
           </div>
-          <p className="text-sm text-graphite mt-6 font-mono">
+          <p className="text-sm text-graphite mt-4 font-mono">
+            Publishing to GitHub Pages?{" "}
+            <Link href="/github-publisher" className="text-ink underline underline-offset-2 hover:text-graphite transition-colors">
+              See the dedicated integration
+            </Link>
+          </p>
+          <p className="text-sm text-graphite mt-2 font-mono">
             Meta / Instagram / Threads: architected, shipping in Phase 2.
           </p>
         </section>
@@ -765,41 +728,7 @@ export default function LandingPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border">
-        <div className="max-w-6xl mx-auto px-6 py-8">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <Image
-              src="/images/PersonnaPress-logo.png"
-              alt="PersonnaPress"
-              width={128}
-              height={128}
-              className="h-7 w-auto"
-            />
-            <nav className="flex flex-wrap gap-6">
-              <a href="#workflow" className="font-mono text-xs text-graphite hover:text-ink transition-colors">How it works</a>
-              <a href="#platforms" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Platforms</a>
-              <a href="#pricing" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Pricing</a>
-              <a href="#faq" className="font-mono text-xs text-graphite hover:text-ink transition-colors">FAQ</a>
-              <Link href="/dashboard" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Sign up</Link>
-              <Link href="/login" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Log in</Link>
-            </nav>
-          </div>
-          <div className="border-t border-border mt-6 pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <p className="font-mono text-xs text-graphite">
-              &copy; {new Date().getFullYear()} PersonnaPress. All rights reserved.
-            </p>
-            <nav className="flex items-center gap-4" aria-label="Legal">
-              <Link href="/terms" className="font-mono text-xs text-graphite hover:text-ink transition-colors">
-                Terms of Service
-              </Link>
-              <span className="font-mono text-xs text-graphite/40" aria-hidden="true">&middot;</span>
-              <Link href="/privacy" className="font-mono text-xs text-graphite hover:text-ink transition-colors">
-                Privacy Policy
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

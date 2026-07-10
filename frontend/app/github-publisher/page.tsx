@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ArrowRight, Check, X, GitBranch, Scan, FileCode, GitPullRequest } from "lucide-react";
 import { TerminalDemo } from "@/components/marketing/TerminalDemo";
+import { PublicHeader } from "@/components/marketing/PublicHeader";
+import { PublicFooter } from "@/components/marketing/PublicFooter";
 
 export const dynamic = "force-static";
 
@@ -120,6 +123,37 @@ const FRAMEWORKS = [
   },
 ];
 
+const HOW_IT_WORKS = [
+  {
+    step: "01",
+    icon: GitBranch,
+    title: "Connect your repo",
+    description:
+      "Install the PersonnaPress GitHub App on your account. Select which repository contains your site. No tokens, no SSH keys, no config files.",
+  },
+  {
+    step: "02",
+    icon: Scan,
+    title: "Auto-detection",
+    description:
+      "PersonnaPress scans your repo for framework signals — _config.yml, astro.config.*, hugo.toml — and resolves the correct publish path automatically.",
+  },
+  {
+    step: "03",
+    icon: FileCode,
+    title: "Write in your voice",
+    description:
+      "Drop your notes. PersonnaPress generates a full SEO blog post in your brand voice, formatted for your framework with correct front matter.",
+  },
+  {
+    step: "04",
+    icon: GitPullRequest,
+    title: "PR-first publish",
+    description:
+      "After you approve the draft, PersonnaPress opens a Pull Request to your repo. Merge it to publish. Direct commit is available for trusted workflows.",
+  },
+];
+
 const COMPARISON_ROWS = [
   {
     feature: "AI content generation",
@@ -153,22 +187,6 @@ const COMPARISON_ROWS = [
   },
 ];
 
-function Check() {
-  return (
-    <span className="text-success font-bold" aria-label="Yes">
-      &#10003;
-    </span>
-  );
-}
-
-function Cross() {
-  return (
-    <span className="text-danger font-bold" aria-label="No">
-      &#10007;
-    </span>
-  );
-}
-
 export default function GitHubPublisherPage() {
   return (
     <>
@@ -177,187 +195,243 @@ export default function GitHubPublisherPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      {/* Minimal top navigation */}
-      <nav
-        aria-label="Site navigation"
-        className="bg-paper border-b border-border"
-      >
-        <div className="max-w-[1200px] mx-auto px-6 py-4 flex items-center justify-between">
-          <Link
-            href="/"
-            className="font-display font-bold text-xl text-ink hover:text-graphite transition-colors"
-          >
-            PersonnaPress
-          </Link>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/login"
-              className="text-sm text-graphite hover:text-ink transition-colors focus-visible:outline-2 focus-visible:outline-ink focus-visible:outline-offset-2"
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/register"
-              className="bg-ink text-white text-sm px-4 py-2 shadow-brutal-sm hover:bg-white hover:text-ink border border-ink transition-colors focus-visible:outline-2 focus-visible:outline-ink focus-visible:outline-offset-2"
-              style={{ borderRadius: 0 }}
-            >
-              Start free
-            </Link>
+      {/* Navigation */}
+      <PublicHeader />
+
+      <main>
+        {/* Hero — light background, left-aligned, brutalist CTA */}
+        <section className="max-w-6xl mx-auto px-6 pt-24 pb-20" aria-label="Hero">
+          <div className="max-w-3xl">
+            <h1 className="font-display text-6xl lg:text-7xl font-bold text-ink leading-tight tracking-tight text-balance mb-8">
+              Publish your AI-written blog to GitHub.
+              <br />
+              <span className="relative">
+                In the right format, every time.
+                <span
+                  className="absolute -bottom-1 left-0 w-full h-0.5 bg-highlight"
+                  aria-hidden="true"
+                />
+              </span>
+            </h1>
+            <p className="text-xl text-graphite leading-relaxed text-pretty mb-10 max-w-xl">
+              PersonnaPress detects your Jekyll, Astro, Hugo, or Next.js setup
+              and commits the post where it belongs &mdash; no config, no
+              copy-paste, no SSH keys.
+            </p>
+            <div className="flex items-center gap-4">
+              <Link
+                href="/register"
+                className="inline-flex items-center gap-2 bg-ink text-paper font-medium px-8 py-4 shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all focus-visible:outline-2 focus-visible:outline-ink focus-visible:outline-offset-2"
+              >
+                Connect your repo
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </Link>
+              <a
+                href="#how-it-works"
+                className="text-sm text-graphite underline underline-offset-4 hover:text-ink transition-colors"
+              >
+                See how it works
+              </a>
+            </div>
+            <p className="font-mono text-xs text-graphite mt-6">
+              Jekyll · Astro · Next.js · Hugo · Eleventy · Docusaurus · MkDocs
+            </p>
           </div>
-        </div>
-      </nav>
+        </section>
 
-      {/* Hero section */}
-      <section
-        aria-label="Hero"
-        className="bg-ink px-6 py-24 lg:py-32 text-center"
-      >
-        <h1 className="font-display font-bold text-5xl lg:text-7xl text-white text-balance leading-[1.15] tracking-[-0.01em] mb-6 max-w-[900px] mx-auto">
-          Publish your AI-written blog to GitHub. In the right format, to the
-          right file, every time.
-        </h1>
-        <p className="text-[18px] text-white/70 font-sans max-w-[600px] mx-auto mb-8 leading-[1.6]">
-          PersonnaPress detects your Jekyll, Astro, Hugo, or Next.js setup and
-          commits the post where it belongs, no config, no copy-paste.
-        </p>
-        <Link
-          href="/register"
-          className="inline-block bg-white text-ink font-sans font-medium px-6 py-3 border border-white shadow-[4px_4px_0px_white] hover:bg-ink hover:text-white hover:shadow-none transition-colors focus-visible:outline-2 focus-visible:outline-white focus-visible:outline-offset-2"
-          style={{ borderRadius: 0 }}
-        >
-          Connect your repo
-        </Link>
-        <p className="font-mono text-[13px] text-white/50 mt-6">
-          Jekyll · Astro · Next.js · Hugo · Eleventy · Docusaurus · MkDocs
-        </p>
-      </section>
+        <div className="border-t border-border" />
 
-      {/* Terminal demo section */}
-      <TerminalDemo />
+        {/* Terminal demo */}
+        <TerminalDemo />
 
-      {/* Framework support section */}
-      <section
-        aria-label="Supported frameworks"
-        className="bg-paper px-6 py-20"
-      >
-        <h2 className="font-display font-bold text-4xl text-ink text-center mb-4">
-          Works with your setup
-        </h2>
-        <p className="text-center text-graphite max-w-[520px] mx-auto mb-12 leading-[1.6]">
-          PersonnaPress automatically detects Jekyll, Astro, Next.js, Hugo,
-          Eleventy, Docusaurus, MkDocs, or plain static sites and writes your
-          post to the correct folder in the correct format.
-        </p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-[960px] mx-auto">
-          {FRAMEWORKS.map((fw) => (
-            <article
-              key={fw.name}
-              className="bg-white border border-border p-5 hover:shadow-brutal transition-shadow"
-              style={{ borderRadius: 0 }}
-            >
-              <h3 className="font-sans font-medium text-[15px] text-ink mb-2">
-                {fw.name}
-              </h3>
-              <p className="font-mono text-[12px] text-graphite">
-                {fw.signals}
-              </p>
-              <p className="font-mono text-[12px] font-bold text-ink mt-1">
-                {fw.publishPath}
-              </p>
-            </article>
-          ))}
-        </div>
-      </section>
+        <div className="border-t border-border" />
 
-      {/* Comparison table section */}
-      <section
-        aria-label="Comparison with alternatives"
-        className="bg-paper px-6 py-20"
-      >
-        <h2 className="font-display font-bold text-4xl text-ink text-center mb-4">
-          Not a CMS. A publishing layer.
-        </h2>
-        <div className="overflow-x-auto max-w-[720px] mx-auto mt-10">
-          <table className="w-full border-collapse">
-            <caption className="sr-only">
-              PersonnaPress vs Pages CMS vs Decap CMS feature comparison
-            </caption>
-            <thead>
-              <tr className="bg-ink">
-                <th
-                  scope="col"
-                  className="text-white font-sans text-[11px] uppercase tracking-[0.06em] px-4 py-3 border border-ink text-left"
-                >
-                  Feature
-                </th>
-                <th
-                  scope="col"
-                  className="text-white font-sans text-[11px] uppercase tracking-[0.06em] px-4 py-3 border border-ink text-center"
-                >
-                  PersonnaPress
-                </th>
-                <th
-                  scope="col"
-                  className="text-white font-sans text-[11px] uppercase tracking-[0.06em] px-4 py-3 border border-ink text-center"
-                >
-                  Pages CMS
-                </th>
-                <th
-                  scope="col"
-                  className="text-white font-sans text-[11px] uppercase tracking-[0.06em] px-4 py-3 border border-ink text-center"
-                >
-                  Decap CMS
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {COMPARISON_ROWS.map((row) => (
-                <tr key={row.feature}>
+        {/* How it works */}
+        <section id="how-it-works" className="max-w-6xl mx-auto px-6 py-20" aria-label="How it works">
+          <header className="mb-14">
+            <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-4">
+              How It Works
+            </p>
+            <h2 className="font-display text-4xl font-bold text-ink text-balance">
+              From notes to merged PR in minutes
+            </h2>
+          </header>
+          <ol className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-px border border-border bg-border list-none">
+            {HOW_IT_WORKS.map(({ step, icon: Icon, title, description }) => (
+              <li
+                key={step}
+                className="bg-paper p-8 group hover:bg-highlight transition-colors"
+              >
+                <div className="flex items-start justify-between mb-6">
+                  <span className="font-mono text-xs text-graphite">{step}</span>
+                  <Icon
+                    className="size-5 text-graphite group-hover:text-ink transition-colors"
+                    aria-hidden="true"
+                  />
+                </div>
+                <h3 className="font-display text-xl font-bold text-ink mb-3 text-balance">
+                  {title}
+                </h3>
+                <p className="text-sm text-graphite leading-relaxed text-pretty">
+                  {description}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <div className="border-t border-border" />
+
+        {/* Framework support */}
+        <section aria-label="Supported frameworks" className="max-w-6xl mx-auto px-6 py-20">
+          <header className="mb-14">
+            <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-4">
+              Framework Support
+            </p>
+            <h2 className="font-display text-4xl font-bold text-ink text-balance">
+              Works with your setup
+            </h2>
+            <p className="text-graphite max-w-xl mt-4 leading-relaxed text-pretty">
+              PersonnaPress automatically detects your framework from repo
+              signals and writes your post to the correct folder in the correct
+              format. No configuration file required.
+            </p>
+          </header>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px border border-border bg-border">
+            {FRAMEWORKS.map((fw) => (
+              <article
+                key={fw.name}
+                className="bg-paper p-8 group hover:bg-highlight transition-colors"
+              >
+                <h3 className="font-display text-lg font-bold text-ink mb-3">
+                  {fw.name}
+                </h3>
+                <p className="font-mono text-xs text-graphite mb-2">
+                  {fw.signals}
+                </p>
+                <p className="font-mono text-xs font-bold text-ink">
+                  {fw.publishPath}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <div className="border-t border-border" />
+
+        {/* Comparison */}
+        <section aria-label="Comparison with alternatives" className="max-w-6xl mx-auto px-6 py-20">
+          <header className="mb-14">
+            <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-4">
+              Why PersonnaPress
+            </p>
+            <h2 className="font-display text-4xl font-bold text-ink text-balance">
+              Not a CMS. A publishing layer.
+            </h2>
+          </header>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse border border-border max-w-2xl">
+              <caption className="sr-only">
+                PersonnaPress vs Pages CMS vs Decap CMS feature comparison
+              </caption>
+              <thead>
+                <tr className="bg-ink">
                   <th
-                    scope="row"
-                    className="font-sans text-sm text-ink px-4 py-3 border border-ink text-left font-normal"
+                    scope="col"
+                    className="text-paper font-mono text-[11px] uppercase tracking-[0.06em] px-6 py-4 border border-ink text-left"
                   >
-                    {row.feature}
+                    Feature
                   </th>
-                  <td className="border border-ink px-4 py-3 text-center">
-                    {row.personnapress ? <Check /> : <Cross />}
-                  </td>
-                  <td className="border border-ink px-4 py-3 text-center">
-                    {row.pagesCms ? <Check /> : <Cross />}
-                  </td>
-                  <td className="border border-ink px-4 py-3 text-center">
-                    {row.decapCms ? <Check /> : <Cross />}
-                  </td>
+                  <th
+                    scope="col"
+                    className="text-paper font-mono text-[11px] uppercase tracking-[0.06em] px-6 py-4 border border-ink text-center"
+                  >
+                    PersonnaPress
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-paper font-mono text-[11px] uppercase tracking-[0.06em] px-6 py-4 border border-ink text-center"
+                  >
+                    Pages CMS
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-paper font-mono text-[11px] uppercase tracking-[0.06em] px-6 py-4 border border-ink text-center"
+                  >
+                    Decap CMS
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {COMPARISON_ROWS.map((row) => (
+                  <tr key={row.feature} className="group hover:bg-highlight transition-colors">
+                    <th
+                      scope="row"
+                      className="font-body text-sm text-ink px-6 py-4 border border-border text-left font-normal"
+                    >
+                      {row.feature}
+                    </th>
+                    <td className="border border-border px-6 py-4 text-center">
+                      {row.personnapress ? (
+                        <Check className="size-4 text-success mx-auto" aria-label="Yes" />
+                      ) : (
+                        <X className="size-4 text-danger mx-auto" aria-label="No" />
+                      )}
+                    </td>
+                    <td className="border border-border px-6 py-4 text-center">
+                      {row.pagesCms ? (
+                        <Check className="size-4 text-success mx-auto" aria-label="Yes" />
+                      ) : (
+                        <X className="size-4 text-danger mx-auto" aria-label="No" />
+                      )}
+                    </td>
+                    <td className="border border-border px-6 py-4 text-center">
+                      {row.decapCms ? (
+                        <Check className="size-4 text-success mx-auto" aria-label="Yes" />
+                      ) : (
+                        <X className="size-4 text-danger mx-auto" aria-label="No" />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-      {/* CTA section */}
-      <section
-        aria-label="Call to action"
-        className="bg-highlighter px-6 py-24 text-center"
-      >
-        <h2 className="font-display font-bold text-4xl text-ink mb-4">
-          Your next post is one Brain Dump away.
-        </h2>
-        <p className="text-[16px] text-graphite max-w-[520px] mx-auto mb-8 leading-[1.6]">
-          Paste your raw notes. PersonnaPress writes the post in your voice and
-          commits it to your GitHub repo in the right format for your framework.
-        </p>
-        <Link
-          href="/register"
-          className="inline-block bg-ink text-white font-sans font-medium px-6 py-3 shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all focus-visible:outline-2 focus-visible:outline-ink focus-visible:outline-offset-2"
-          style={{ borderRadius: 0 }}
+        <div className="border-t border-border" />
+
+        {/* CTA */}
+        <section
+          aria-label="Call to action"
+          className="bg-highlighter px-6 py-24 text-center"
         >
-          Start free, no credit card
-        </Link>
-        <p className="text-[13px] text-graphite mt-4 font-sans">
-          14-day free trial · Supports 8 frameworks · PR-first by default.
-        </p>
-      </section>
+          <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-6">
+            Get Started
+          </p>
+          <h2 className="font-display font-bold text-4xl text-ink mb-4 text-balance">
+            Your next post is one Brain Dump away.
+          </h2>
+          <p className="text-graphite max-w-xl mx-auto mb-10 leading-relaxed text-pretty">
+            Paste your raw notes. PersonnaPress writes the post in your voice
+            and commits it to your GitHub repo in the right format for your
+            framework.
+          </p>
+          <Link
+            href="/register"
+            className="inline-flex items-center gap-2 bg-ink text-paper font-medium px-8 py-4 shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all focus-visible:outline-2 focus-visible:outline-ink focus-visible:outline-offset-2"
+          >
+            Start free, no credit card
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
+          <p className="font-mono text-xs text-graphite mt-6">
+            14-day free trial · 8 frameworks supported · PR-first by default
+          </p>
+        </section>
+      </main>
+
+      {/* Footer */}
+      <PublicFooter />
     </>
   );
 }

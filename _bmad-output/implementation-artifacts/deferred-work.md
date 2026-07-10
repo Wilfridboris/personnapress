@@ -58,3 +58,9 @@
 - Empty/whitespace-only blog title edge case: H1 containing only HTML tags not covered by tests — pre-existing (caller has `or "Untitled"` fallback)
 - `tone_list[:2]` on a non-list value (e.g. comma-separated string from DB) returns characters not tones (`backend/app/services/image.py:43`) — pre-existing
 - `_build_image_prompt` tested via direct private import rather than through the public service API surface (`backend/tests/services/test_image.py`) — pre-existing test pattern
+
+## Deferred from: code review of 11-1-public-nav-seo-links (2026-07-10)
+
+- No mobile/responsive navigation in PublicHeader — pre-existing, inline header had the same issue; add hamburger menu below md breakpoint when mobile nav is prioritized
+- Logo intrinsic dimensions `width={128} height={128}` are square for a wide logo — pre-existing, spec-prescribed extraction; update to match actual logo aspect ratio when image assets are audited
+- `priority` on logo image in PublicHeader applies to all public pages — logo is above fold on all pages (sticky header) so acceptable; revisit if CWV regression observed on inner pages
