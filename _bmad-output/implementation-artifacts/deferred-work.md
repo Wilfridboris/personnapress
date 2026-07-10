@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of 11-3-github-frontmatter-description-tags (2026-07-10)
+
+- Hugo TOML vs YAML mismatch in `buildFrontMatterPreview` — preview always shows YAML `---` delimiters even when actual published file uses TOML `+++`; pre-existing gap in the preview helper. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]
+- `detectedFramework` state may be empty on first render in the approved-state GitHub panel — `useEffect` timing; pre-existing state management issue not introduced by this story. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]
+
 ## Deferred from: code review of 8-4-repo-framework-detection-engine (2026-07-09)
 
 - Token refresh race condition under concurrent requests — two tasks can both observe an expiring token, refresh independently, and overwrite each other's DB writes. [backend/app/routers/publishing.py:_refresh_github_token_if_needed]

@@ -53,19 +53,34 @@ function buildTargetFilePath(framework: string, publishPath: string, title: stri
   return `${slug}.md`;
 }
 
-function buildFrontMatterPreview(framework: string, title: string): string {
+function extractMetaDescription(blogHtml: string | null): string {
+  if (!blogHtml) return "";
+  const match = blogHtml.match(/<!--\s*meta:\s*(.+?)\s*-->/i);
+  return match ? match[1].trim() : "";
+}
+
+function buildFrontMatterPreview(framework: string, title: string, description: string, tags: string[]): string {
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   const safe = title.replace(/"/g, '\\"');
+  const safeDesc = description.replace(/\r?\n/g, " ").replace(/"/g, '\\"');
+  const tagsYaml = tags.length > 0
+    ? `[${tags.map((t) => `"${t.replace(/\r?\n/g, " ").replace(/"/g, '\\"')}"`).join(", ")}]`
+    : "";
+
   if (framework === "jekyll") {
-    return `---\nlayout: post\ntitle: "${safe}"\ndate: ${now}\ndescription: ""\n---`;
+    const categoriesLine = tagsYaml ? `\ncategories: ${tagsYaml}` : "";
+    return `---\nlayout: post\ntitle: "${safe}"\ndate: ${now}\ndescription: "${safeDesc}"${categoriesLine}\n---`;
   }
   if (framework === "astro") {
-    return `---\ntitle: "${safe}"\ndescription: ""\npubDate: "${now}"\nheroImage: ""\n---`;
+    const tagsLine = tagsYaml ? `\ntags: ${tagsYaml}` : "";
+    return `---\ntitle: "${safe}"\ndescription: "${safeDesc}"\npubDate: "${now}"\nheroImage: ""${tagsLine}\n---`;
   }
   if (framework === "hugo") {
-    return `---\ntitle: "${safe}"\ndate: ${now}\ndescription: ""\ndraft: false\n---`;
+    const tagsLine = tagsYaml ? `\ntags: ${tagsYaml}` : "";
+    return `---\ntitle: "${safe}"\ndate: ${now}\ndescription: "${safeDesc}"\ndraft: false${tagsLine}\n---`;
   }
-  return `---\ntitle: "${safe}"\ndate: ${now}\ndescription: ""\n---`;
+  const tagsLine = tagsYaml ? `\ntags: ${tagsYaml}` : "";
+  return `---\ntitle: "${safe}"\ndate: ${now}\ndescription: "${safeDesc}"${tagsLine}\n---`;
 }
 
 interface ApprovalPanelProps {
@@ -410,7 +425,9 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     }
 
     const targetFilePath = buildTargetFilePath(detectedFramework, publishPath, blogTitle);
-    const frontMatterPreview = buildFrontMatterPreview(detectedFramework, blogTitle);
+    const metaDescription = extractMetaDescription(campaign.blog_html);
+    const frontMatterTags = campaign.voice_score?.tags ?? [];
+    const frontMatterPreview = buildFrontMatterPreview(detectedFramework, blogTitle, metaDescription, frontMatterTags);
     const hasPrOpen = !!campaign.github_pr_url && !githubResult;
     const prDisplayUrl = githubResult?.type === "pr" ? githubResult.prUrl : campaign.github_pr_url ?? "";
 
@@ -684,7 +701,9 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
       : "Published";
 
     const targetFilePath = buildTargetFilePath(detectedFramework, publishPath, blogTitle);
-    const frontMatterPreview = buildFrontMatterPreview(detectedFramework, blogTitle);
+    const metaDescription = extractMetaDescription(campaign.blog_html);
+    const frontMatterTags = campaign.voice_score?.tags ?? [];
+    const frontMatterPreview = buildFrontMatterPreview(detectedFramework, blogTitle, metaDescription, frontMatterTags);
 
     return (
       <div className="fixed bottom-0 left-0 md:left-14 lg:left-[240px] right-0 z-10 bg-paper border-t border-border">

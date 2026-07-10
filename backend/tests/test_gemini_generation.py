@@ -41,6 +41,7 @@ _VALID_FIDELITY_JSON = json.dumps({
     "seo_h2_count": 4,
     "seo_faq_present": True,
     "seo_fluff_detected": False,
+    "tags": ["content marketing", "ai writing", "brand voice"],
 })
 
 _VALID_SOCIAL_JSON = json.dumps({
@@ -348,6 +349,7 @@ async def test_check_fidelity_returns_7_key_bypass_when_no_bvp():
         "seo_h2_count": 3,
         "seo_faq_present": True,
         "seo_fluff_detected": False,
+        "tags": [],
     }
 
 
@@ -443,6 +445,53 @@ async def test_check_fidelity_strips_markdown_fences(mock_client):
     result = await check_fidelity(_VALID_BLOG_HTML, _VALID_BVP)
     assert "tone_score" in result
     assert "seo_bluf_present" in result
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_check_fidelity_returns_tags_when_present(mock_client):
+    """Tags field is returned and sanitized (max 5, strings only)."""
+    from app.integrations.gemini import check_fidelity
+
+    payload = json.dumps({
+        "tone_score": 8, "cadence_score": 7, "jargon_violations": 0,
+        "seo_bluf_present": True, "seo_h2_count": 3, "seo_faq_present": True, "seo_fluff_detected": False,
+        "tags": ["content marketing", "ai writing", "brand voice", "seo", "blogging", "extra"],
+    })
+    mock_client.aio.models.generate_content = _mock_aio_generate(payload)
+    result = await check_fidelity(_VALID_BLOG_HTML, _VALID_BVP)
+    assert result["tags"] == ["content marketing", "ai writing", "brand voice", "seo", "blogging"]
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_check_fidelity_tags_missing_is_ok(mock_client):
+    """Tags field is optional — missing tags does not raise."""
+    from app.integrations.gemini import check_fidelity
+
+    payload = json.dumps({
+        "tone_score": 8, "cadence_score": 7, "jargon_violations": 0,
+        "seo_bluf_present": True, "seo_h2_count": 3, "seo_faq_present": True, "seo_fluff_detected": False,
+    })
+    mock_client.aio.models.generate_content = _mock_aio_generate(payload)
+    result = await check_fidelity(_VALID_BLOG_HTML, _VALID_BVP)
+    assert "tags" not in result
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_check_fidelity_tags_non_list_coerced_to_empty(mock_client):
+    """If tags is not a list, it is coerced to [] instead of raising."""
+    from app.integrations.gemini import check_fidelity
+
+    payload = json.dumps({
+        "tone_score": 8, "cadence_score": 7, "jargon_violations": 0,
+        "seo_bluf_present": True, "seo_h2_count": 3, "seo_faq_present": True, "seo_fluff_detected": False,
+        "tags": "not-a-list",
+    })
+    mock_client.aio.models.generate_content = _mock_aio_generate(payload)
+    result = await check_fidelity(_VALID_BLOG_HTML, _VALID_BVP)
+    assert result["tags"] == []
 
 
 # ── extract_brand_voice ────────────────────────────────────────────────────────

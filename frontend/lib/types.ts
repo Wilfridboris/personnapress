@@ -116,6 +116,7 @@ export interface VoiceScore {
   seo_h2_count?: number;
   seo_faq_present?: boolean;
   seo_fluff_detected?: boolean;
+  tags?: string[];
 }
 
 export interface CampaignCreate {

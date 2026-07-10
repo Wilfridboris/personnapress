@@ -163,7 +163,8 @@ Return ONLY a valid JSON object (no markdown):
   "seo_bluf_present": <boolean: true if the first <p> tag starts with a specific fact, stat, or direct claim — NOT a general statement like "The landscape is..."; false otherwise>,
   "seo_h2_count": <integer: count of <h2> tags in the blog HTML>,
   "seo_faq_present": <boolean: true if a FAQ section with at least 3 Q&A pairs (as <dl> or similar) is present>,
-  "seo_fluff_detected": <boolean: true if any banned opener phrase like "In today's fast-paced world", "As we all know", "It's no secret that" appears anywhere in the content>
+  "seo_fluff_detected": <boolean: true if any banned opener phrase like "In today's fast-paced world", "As we all know", "It's no secret that" appears anywhere in the content>,
+  "tags": [<list of 3-5 concise lowercase SEO tags relevant to this specific post, e.g. ["brand voice", "content marketing", "ai tools"]>]
 }}
 """
 
@@ -310,6 +311,7 @@ async def check_fidelity(
             "seo_h2_count": 3,
             "seo_faq_present": True,
             "seo_fluff_detected": False,
+            "tags": [],
         }
 
     prompt = _FIDELITY_PROMPT.format(
@@ -352,6 +354,17 @@ async def check_fidelity(
         raise ValueError(
             f"check_fidelity: 'seo_h2_count' must be int, got {type(data['seo_h2_count']).__name__}"
         )
+
+    if "tags" in data:
+        if not isinstance(data["tags"], list):
+            logger.warning("check_fidelity: 'tags' is not a list (got %s), coercing to []", type(data["tags"]).__name__)
+            data["tags"] = []
+        else:
+            data["tags"] = [
+                re.sub(r"[\r\n]", " ", t).strip()
+                for t in data["tags"]
+                if isinstance(t, str)
+            ][:5]
 
     return data
 

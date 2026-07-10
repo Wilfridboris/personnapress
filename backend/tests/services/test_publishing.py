@@ -511,3 +511,186 @@ async def test_publish_github_astro_no_new_keys_introduced():
     assert "heroImage:" in content
     # No extra keys from a config parse that didn't happen
     assert "# TODO" not in content
+
+
+# ---------------------------------------------------------------------------
+# _extract_meta_description
+# ---------------------------------------------------------------------------
+
+def test_extract_meta_description_extracts_comment():
+    from app.services.publishing import _extract_meta_description
+
+    html = '<h1>Title</h1>\n<!-- meta: Great post about SEO -->\n<p>Body</p>'
+    assert _extract_meta_description(html) == "Great post about SEO"
+
+
+def test_extract_meta_description_case_insensitive():
+    from app.services.publishing import _extract_meta_description
+
+    html = '<h1>T</h1><!-- META: Uppercase tag --><p>Body</p>'
+    assert _extract_meta_description(html) == "Uppercase tag"
+
+
+def test_extract_meta_description_returns_empty_when_absent():
+    from app.services.publishing import _extract_meta_description
+
+    html = '<h1>My Post</h1><p>Body text here.</p>'
+    assert _extract_meta_description(html) == ""
+
+
+def test_extract_meta_description_strips_whitespace():
+    from app.services.publishing import _extract_meta_description
+
+    html = '<!-- meta:   Padded description   -->'
+    assert _extract_meta_description(html) == "Padded description"
+
+
+# ---------------------------------------------------------------------------
+# description extracted from blog HTML (not voice_score.meta_description)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_publish_github_jekyll_extracts_description_from_html():
+    """Jekyll path extracts description from <!-- meta: ... --> comment in blog_html."""
+    from app.services.publishing import _publish_github
+
+    campaign = _make_github_campaign(voice_score=None)
+    campaign.blog_html = '<h1>My Great Post</h1>\n<!-- meta: SEO description here -->\n<p>Body</p>'
+    cred = _github_cred("jekyll")
+    db = AsyncMock()
+    db.add = MagicMock()
+
+    captured_content = []
+
+    async def mock_create(token, repo, file_path, content, message, branch="HEAD"):
+        captured_content.append(content)
+        return "sha"
+
+    with (
+        patch("app.services.publishing.github_integration.create_file_commit", side_effect=mock_create),
+        patch("app.services.publishing.github_integration.get_file_contents", AsyncMock(return_value=None)),
+        patch("app.services.publishing.github_integration.get_repo_root_contents", AsyncMock(return_value=[])),
+        patch("app.services.publishing.github_integration.slug_from_title", return_value="my-great-post"),
+        patch("app.services.publishing.github_integration.html_to_markdown", return_value="Body"),
+    ):
+        await _publish_github(campaign, cred, db)
+
+    assert len(captured_content) >= 1, "create_file_commit was not called"
+    assert 'description: "SEO description here"' in captured_content[0]
+
+
+# ---------------------------------------------------------------------------
+# Astro tags — unconditional (AC 4)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_publish_github_astro_writes_tags_unconditionally():
+    """Astro path writes tags from voice_score without checking template keys."""
+    from app.services.publishing import _publish_github
+
+    campaign = _make_github_campaign(voice_score={"tags": ["astro", "ssg", "blog"]})
+    campaign.image_url = ""
+    cred = _github_cred("astro")
+    db = AsyncMock()
+    db.add = MagicMock()
+
+    captured_content = []
+
+    async def mock_create(token, repo, file_path, content, message, branch="HEAD"):
+        captured_content.append(content)
+        return "sha"
+
+    with (
+        patch("app.services.publishing.github_integration.create_file_commit", side_effect=mock_create),
+        patch("app.services.publishing.github_integration.list_files_in_directory", AsyncMock(return_value=[])),
+        patch("app.services.publishing.github_integration.get_file_contents", AsyncMock(return_value=None)),
+        patch("app.services.publishing.github_integration.get_first_post_files", AsyncMock(return_value=[])),
+        patch("app.services.publishing.github_integration.slug_from_title", return_value="my-great-post"),
+        patch("app.services.publishing.github_integration.html_to_markdown", return_value="Body."),
+    ):
+        await _publish_github(campaign, cred, db)
+
+    assert len(captured_content) >= 1, "create_file_commit was not called"
+    content = captured_content[0]
+    assert "tags:" in content
+    assert '"astro"' in content
+
+
+# ---------------------------------------------------------------------------
+# Next.js tags — unconditional (AC 5)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_publish_github_nextjs_writes_tags_without_template_key_gate():
+    """Next.js path writes tags even when template posts don't have a tags key."""
+    from app.services.publishing import _publish_github
+
+    campaign = _make_github_campaign(voice_score={"tags": ["nextjs", "blog"]})
+    cred = _github_cred("nextjs")
+    db = AsyncMock()
+    db.add = MagicMock()
+
+    captured_content = []
+
+    async def mock_create(token, repo, file_path, content, message, branch="HEAD"):
+        captured_content.append(content)
+        return "sha"
+
+    template_post_no_tags = "---\ntitle: Old Post\ndate: 2024-01-01\n---\nBody"
+
+    async def mock_list_files(token, repo, path, extension=None):
+        if path == "posts" and extension == ".md":
+            return ["old-post.md"]
+        return []
+
+    with (
+        patch("app.services.publishing.github_integration.create_file_commit", side_effect=mock_create),
+        patch("app.services.publishing.github_integration.list_files_in_directory", side_effect=mock_list_files),
+        patch("app.services.publishing.github_integration.get_first_post_files", AsyncMock(return_value=[template_post_no_tags])),
+        patch("app.services.publishing.github_integration.slug_from_title", return_value="my-great-post"),
+        patch("app.services.publishing.github_integration.html_to_markdown", return_value="Body."),
+    ):
+        await _publish_github(campaign, cred, db)
+
+    assert len(captured_content) >= 1, "create_file_commit was not called"
+    content = captured_content[0]
+    assert "tags:" in content
+    assert '"nextjs"' in content
+
+
+# ---------------------------------------------------------------------------
+# Eleventy tags — unconditional (AC 6)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_publish_github_eleventy_writes_tags_without_template_key_gate():
+    """Eleventy path writes tags even when template posts don't have a tags key."""
+    from app.services.publishing import _publish_github
+
+    campaign = _make_github_campaign(voice_score={"tags": ["eleventy", "jamstack"]})
+    cred = _github_cred("eleventy")
+    db = AsyncMock()
+    db.add = MagicMock()
+
+    captured_content = []
+
+    async def mock_create(token, repo, file_path, content, message, branch="HEAD"):
+        captured_content.append(content)
+        return "sha"
+
+    template_post_no_tags = "---\ntitle: Old Post\ndate: 2024-01-01\n---\nBody"
+
+    with (
+        patch("app.services.publishing.github_integration.create_file_commit", side_effect=mock_create),
+        patch("app.services.publishing.github_integration.get_file_contents", AsyncMock(return_value=None)),
+        patch("app.services.publishing.github_integration.get_directory_contents", AsyncMock(return_value=[{"type": "file", "name": "old.md"}])),
+        patch("app.services.publishing.github_integration.get_first_post_files", AsyncMock(return_value=[template_post_no_tags])),
+        patch("app.services.publishing.github_integration.slug_from_title", return_value="my-great-post"),
+        patch("app.services.publishing.github_integration.html_to_markdown", return_value="Body."),
+    ):
+        await _publish_github(campaign, cred, db)
+
+    assert len(captured_content) >= 1, "create_file_commit was not called"
+    content = captured_content[0]
+    assert "tags:" in content
+    assert '"eleventy"' in content
