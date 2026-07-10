@@ -23,7 +23,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://personnapress.com";
 export const metadata: Metadata = {
   title: "PersonnaPress - AI Blog Writer That Sounds Like You | Publish Everywhere",
   description:
-    "PersonnaPress is an AI blog writer that learns your voice and turns rough ideas into SEO-ranked blog posts and social campaigns. Schedule and publish to WordPress, Webflow, X, and LinkedIn — without sounding like AI.",
+    "PersonnaPress is an AI blog writer that learns your voice and turns your notes into SEO-ranked blog posts and social campaigns. Schedule and publish to WordPress, Webflow, X, and LinkedIn — without sounding like AI.",
   metadataBase: new URL(APP_URL),
   keywords: [
     "ai blog writer",
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "PersonnaPress - AI Blog Writer That Sounds Like You",
     description:
-      "Turn rough ideas into ranked blog posts and social campaigns in your own voice. Schedule and publish everywhere.",
+      "Turn your notes into ranked blog posts and social campaigns in your own voice. Schedule and publish everywhere.",
     url: APP_URL,
     type: "website",
     images: [
@@ -405,7 +405,7 @@ export default function LandingPage() {
         <section className="max-w-6xl mx-auto px-6 pt-24 pb-20">
           <div className="max-w-3xl">
             <h1 className="font-display text-6xl lg:text-7xl font-bold text-ink leading-tight tracking-tight text-balance mb-8">
-              Your Ideas.
+              Your Notes.
               <br />
               Published and Ranked.
               <br />
@@ -419,7 +419,7 @@ export default function LandingPage() {
             </h1>
             <p className="text-xl text-graphite leading-relaxed text-pretty mb-10 max-w-xl">
               Stop spending 6 hours on blog posts that sound like every other AI
-              blog writer. PersonaPress learns your voice, then turns rough notes
+              blog writer. PersonaPress learns your voice, then turns your notes
               into ranked articles and social campaigns &mdash; ready to publish
               or schedule across every platform.
             </p>
