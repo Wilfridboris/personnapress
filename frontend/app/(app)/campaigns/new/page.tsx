@@ -4,11 +4,24 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { useClientStore } from "@/lib/stores/useClientStore";
-import { campaignsApi, APIError } from "@/lib/api";
+import { campaignsApi, publishingApi, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
+
+function platformLabel(platform: string): string {
+  const MAP: Record<string, string> = {
+    wordpress: "WordPress",
+    "wordpress-com": "WordPress.com",
+    webflow: "Webflow",
+    x: "X",
+    linkedin: "LinkedIn",
+    github_pages: "GitHub Pages",
+  };
+  return MAP[platform] ?? platform;
+}
 
 const MAX_CHARS = 10000;
 const MIN_CHARS = 20;
@@ -42,6 +55,17 @@ export default function NewCampaignPage() {
       lastAutoFilledClientId.current = activeClientId ?? null;
     }
   }, [activeClientId, activeClient]);
+
+  const { data: connectionsData } = useQuery({
+    queryKey: ["platform-connections", activeClientId],
+    queryFn: () => publishingApi.listConnections(activeClientId!),
+    enabled: !!activeClientId,
+    staleTime: 2 * 60_000,
+  });
+
+  const connectedPlatforms = (connectionsData?.items ?? [])
+    .filter((c) => c.connected)
+    .map((c) => platformLabel(c.platform));
 
   const charCount = brainDump.length;
   const hasActiveClient = activeClient !== null;
@@ -121,11 +145,33 @@ export default function NewCampaignPage() {
       </header>
 
       {hasActiveClient ? (
-        <p className="text-xs font-mono text-graphite mb-6">
+        <p className="text-xs font-mono text-graphite mb-4">
           Writing for:{" "}
           <span className="text-ink font-medium">{activeClient.name}</span>
         </p>
       ) : null}
+
+      {hasActiveClient && connectedPlatforms.length > 0 && (
+        <p className="font-mono text-xs text-graphite mb-6">
+          Publishing to:{" "}
+          <span className="text-ink">{connectedPlatforms.join(" · ")}</span>
+        </p>
+      )}
+
+      {hasActiveClient && connectionsData !== undefined && connectedPlatforms.length === 0 && (
+        <div className="mb-6 border border-ink/10 bg-paper px-4 py-3">
+          <p className="text-sm font-mono text-graphite">
+            No platforms connected.{" "}
+            <Link
+              href={`/clients/${activeClient!.id}/connections`}
+              className="underline hover:text-ink"
+            >
+              Connect a platform
+            </Link>
+            {" "}to publish after approval.
+          </p>
+        </div>
+      )}
 
       {!hasActiveClient && (
         <div className="mb-6 border border-danger/20 bg-danger/5 px-4 py-3">

@@ -59,6 +59,10 @@
 - `tone_list[:2]` on a non-list value (e.g. comma-separated string from DB) returns characters not tones (`backend/app/services/image.py:43`) — pre-existing
 - `_build_image_prompt` tested via direct private import rather than through the public service API surface (`backend/tests/services/test_image.py`) — pre-existing test pattern
 
+## Deferred from: code review of 11-2-app-ux-campaign-connections-publishing (2026-07-10)
+
+- `platformLabel` helper duplicated verbatim in approval-panel.tsx and campaigns/new/page.tsx — extract to shared `lib/platformLabel.ts` utility when a third caller is added. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx, frontend/app/(app)/campaigns/new/page.tsx]
+
 ## Deferred from: code review of 11-1-public-nav-seo-links (2026-07-10)
 
 - No mobile/responsive navigation in PublicHeader — pre-existing, inline header had the same issue; add hamburger menu below md breakpoint when mobile nav is prioritized

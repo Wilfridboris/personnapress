@@ -11,6 +11,8 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FileUploadPanel } from "@/components/clients/FileUploadPanel";
+import { ClientDetailTabs } from "@/components/clients/ClientDetailTabs";
+import { PlatformConnectionsClient } from "@/components/publishing/PlatformConnectionsClient";
 import type { ClientResponse } from "@/lib/types";
 
 interface Props {
@@ -207,7 +209,7 @@ export function ClientDetail({ client }: Props) {
     }
   })();
 
-  return (
+  const profileContent = (
     <>
       {/* ── Edit client ─────────────────────────────────────────────────── */}
       <section aria-labelledby="edit-heading" className="mb-10">
@@ -261,6 +263,27 @@ export function ClientDetail({ client }: Props) {
 
       <hr className="border-border mb-10" />
 
+      {/* ── Danger zone ─────────────────────────────────────────────────── */}
+      <section aria-labelledby="danger-heading">
+        <p
+          id="danger-heading"
+          className="text-xs font-sans uppercase tracking-widest text-ink mb-4"
+        >
+          Danger zone
+        </p>
+        <Button
+          ref={deleteBtnRef}
+          variant="danger"
+          onClick={() => setShowDeleteModal(true)}
+        >
+          Delete client
+        </Button>
+      </section>
+    </>
+  );
+
+  const voiceContent = (
+    <>
       {/* ── Brand voice ────────────────────────────────────────────────── */}
       <section aria-labelledby="bvp-heading" className="mb-10">
         <p
@@ -271,12 +294,10 @@ export function ClientDetail({ client }: Props) {
         </p>
 
         {isIngesting ? (
-          /* Ingestion in progress — JetBrains Mono pulsing status (AC #7) */
           <p className="font-mono text-sm text-graphite animate-pulse">
             {ingestionMessage || `Scraping ${domain}...`}
           </p>
         ) : jobFailed ? (
-          /* Scraping failed — show error + questionnaire CTA (AC #3) */
           <div>
             <p className="text-sm text-graphite mb-4">
               {`Couldn't extract content from ${domain || "the website"}. Complete the voice questionnaire to set up your profile.`}
@@ -320,46 +341,20 @@ export function ClientDetail({ client }: Props) {
       <section className="mb-10">
         <FileUploadPanel clientId={client.id} />
       </section>
+    </>
+  );
 
-      <hr className="border-border mb-10" />
+  const connectionsContent = (
+    <PlatformConnectionsClient clientId={client.id} />
+  );
 
-      {/* ── Platform Connections ────────────────────────────────────────── */}
-      <section className="mb-10" aria-labelledby="platform-connections-heading">
-        <p
-          id="platform-connections-heading"
-          className="text-xs font-sans uppercase tracking-widest text-ink mb-4"
-        >
-          Platform Connections
-        </p>
-        <p className="text-sm text-[#555555] mb-4">
-          Connect your publishing platforms to automatically publish campaigns.
-        </p>
-        <Link
-          href={`/clients/${client.id}/connections`}
-          className={secondaryBtn}
-        >
-          Manage connections
-        </Link>
-      </section>
-
-      <hr className="border-border mb-10" />
-
-      {/* ── Danger zone ─────────────────────────────────────────────────── */}
-      <section aria-labelledby="danger-heading">
-        <p
-          id="danger-heading"
-          className="text-xs font-sans uppercase tracking-widest text-ink mb-4"
-        >
-          Danger zone
-        </p>
-        <Button
-          ref={deleteBtnRef}
-          variant="danger"
-          onClick={() => setShowDeleteModal(true)}
-        >
-          Delete client
-        </Button>
-      </section>
+  return (
+    <>
+      <ClientDetailTabs
+        profileContent={profileContent}
+        voiceContent={voiceContent}
+        connectionsContent={connectionsContent}
+      />
 
       {/* ── Re-analyze confirmation modal ────────────────────────────── */}
       <ConfirmModal
