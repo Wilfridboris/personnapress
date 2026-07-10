@@ -27,6 +27,18 @@
 - `httpx.RequestError`/`TimeoutException` not caught in `github.py` — pre-existing pattern across all integrations (linkedin, twitter, webflow also unguarded); address as cross-cutting concern. [backend/app/integrations/github.py]
 - No rate limiting / idempotency on `POST /clients/{id}/connections/github` — repeated calls silently overwrite existing connection; auth ownership check limits blast radius. [backend/app/routers/publishing.py:connect_github]
 
+## Deferred from: code review of 8-8-github-publisher-landing-page (2026-07-10)
+
+- Pricing in JSON-LD hardcoded ($29/$79/$199) — will silently go stale on pricing changes; no connection to config constants or DB. [frontend/app/github-publisher/page.tsx]
+- Comparison table competitor data (Pages CMS, Decap CMS) unsubstantiated booleans with no audit mechanism; acceptable for MVP. [frontend/app/github-publisher/page.tsx]
+- `lastModified: new Date()` in sitemap stamps all URLs as modified on every deploy — misleads crawlers; pre-existing pattern. [frontend/app/sitemap.ts]
+- `style={{ borderRadius: 0 }}` repeated as inline style on 6+ elements; should be a Tailwind class when design system is formalized. [frontend/app/github-publisher/page.tsx]
+- "See it work" terminal section heading is content-free; a keyword-rich heading would improve SEO. [frontend/components/marketing/TerminalDemo.tsx:64]
+- Two consecutive `bg-paper px-6 py-20` sections (terminal + frameworks) have no visual separator; renders as one continuous block. [frontend/app/github-publisher/page.tsx]
+- `dangerouslySetInnerHTML` + `JSON.stringify(jsonLd)` lacks `</script>`-sequence escaping; safe while data is static but unsafe if any field becomes dynamic. [frontend/app/github-publisher/page.tsx]
+- Terminal animation has no skip/complete-immediately affordance for users who scroll past mid-animation. [frontend/components/marketing/TerminalDemo.tsx]
+- `renderWithCheckmarks` splits on literal ✓ (U+2713); brittle if terminal text is copy-pasted with a look-alike codepoint. [frontend/components/marketing/TerminalDemo.tsx:17]
+
 ## Deferred from: deploy.sh status/log fix (2026-07-08)
 
 - `systemctl is-active` validates systemd process state only, not application-level readiness (e.g., HTTP server fully bound). If the service type is `oneshot` or startup is async, the check may pass before traffic can be served — `deploy.sh:32`.
