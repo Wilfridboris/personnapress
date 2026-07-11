@@ -57,6 +57,9 @@ export function GitHubConnect({ clientId, connection }: Props) {
   const [directCommitDefault, setDirectCommitDefault] = useState<boolean>(connection.direct_commit_default ?? false);
   const disconnectTriggerRef = useRef<HTMLButtonElement>(null);
 
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
+
   const isConnectedNoRepo = connection.connected && !connection.account_identifier;
   const isConnectedWithRepo = connection.connected && !!connection.account_identifier;
 
@@ -140,6 +143,26 @@ export function GitHubConnect({ clientId, connection }: Props) {
     frameworkMutation.mutate({ framework: unknownFramework });
   }
 
+  async function handleConnect() {
+    setConnectError(null);
+    setConnecting(true);
+    try {
+      const { installation_id } = await publishingApi.getExistingGithubInstallationId();
+      if (installation_id) {
+        await publishingApi.connectGithubDirect(clientId, installation_id);
+      } else {
+        window.location.href = `/api/auth/github?client_id=${clientId}`;
+        return;
+      }
+    } catch (e: unknown) {
+      setConnectError(e instanceof Error ? e.message : "GitHub connection failed.");
+      return;
+    } finally {
+      setConnecting(false);
+    }
+    await queryClient.invalidateQueries({ queryKey: ["platform-connections", clientId] });
+  }
+
   function handleConfirmPublishPath() {
     const fw = activeDetection?.detected_framework ?? "nextjs";
     if (manualPublishPath.trim()) {
@@ -184,13 +207,14 @@ export function GitHubConnect({ clientId, connection }: Props) {
 
           <div className="shrink-0">
             {!connection.connected ? (
-              <a
-                href={`/api/auth/github?client_id=${clientId}`}
-                className="inline-block px-5 py-2.5 border border-[#111111] text-[#111111] text-xs font-medium hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
+              <button
+                onClick={handleConnect}
+                disabled={connecting}
+                className="inline-block px-5 py-2.5 border border-[#111111] text-[#111111] text-xs font-medium hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 disabled:opacity-50"
                 aria-label="Connect GitHub"
               >
-                Connect GitHub
-              </a>
+                {connecting ? "Connecting…" : "Connect GitHub"}
+              </button>
             ) : (
               <button
                 ref={disconnectTriggerRef}
@@ -203,6 +227,10 @@ export function GitHubConnect({ clientId, connection }: Props) {
             )}
           </div>
         </div>
+
+        {connectError && (
+          <p className="text-xs text-[#C0392B] mt-2" role="alert">{connectError}</p>
+        )}
 
         {/* Repo selection — shown when connected but no repo chosen yet */}
         {isConnectedNoRepo && (

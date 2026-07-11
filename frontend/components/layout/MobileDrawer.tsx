@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { X } from "lucide-react";
+import { X, Plug } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/lib/stores/useUIStore";
+import { useClientStore } from "@/lib/stores/useClientStore";
 import { ClientSwitcher } from "./ClientSwitcher";
 import { NavItem } from "./NavItem";
 import { NAV_ITEMS, ACCOUNT_NAV_ITEM } from "./nav-items";
@@ -11,6 +12,8 @@ import { NAV_ITEMS, ACCOUNT_NAV_ITEM } from "./nav-items";
 export function MobileDrawer() {
   const isOpen = useUIStore((s) => s.isMobileDrawerOpen);
   const close = useUIStore((s) => s.closeMobileDrawer);
+  const { activeClientId } = useClientStore();
+  const calendarIdx = NAV_ITEMS.findIndex((item) => item.label === "Calendar");
 
   useEffect(() => {
     if (isOpen) {
@@ -69,7 +72,19 @@ export function MobileDrawer() {
         </div>
         <ClientSwitcher />
         <nav aria-label="Navigation" className="flex-1 overflow-y-auto py-2">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.slice(0, calendarIdx).map((item) => (
+            <NavItem key={item.href} {...item} onClick={close} forceLabel />
+          ))}
+          {activeClientId && (
+            <NavItem
+              href={`/clients/${activeClientId}/connections`}
+              label="Connections"
+              icon={Plug}
+              onClick={close}
+              forceLabel
+            />
+          )}
+          {NAV_ITEMS.slice(calendarIdx).map((item) => (
             <NavItem key={item.href} {...item} onClick={close} forceLabel />
           ))}
         </nav>

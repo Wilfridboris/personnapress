@@ -10,6 +10,7 @@ from apscheduler.jobstores.base import JobLookupError
 from apscheduler.triggers.date import DateTrigger
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, field_validator
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -19,6 +20,7 @@ from app.core.security import decrypt_credential, encrypt_credential
 from app.db.connection import get_session
 from app.db.repositories.campaigns import get_campaign, update_campaign_scheduled_at
 from app.db.repositories.clients import get_client
+from app.db.repositories.models import Client, PlatformConnection
 from app.db.repositories.jobs import create_job, get_publish_job_for_campaign, get_scheduled_job
 from app.db.repositories.platform_connections import (
     delete_connection,
@@ -395,6 +397,34 @@ def _check_github_ownership(client, user_id: uuid.UUID) -> None:
         raise _403_not_owner()
 
 
+@router.get("/connections/github/installation-id")
+async def get_existing_github_installation_id(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Return a GitHub App installation_id already stored for any of the user's clients.
+
+    Used by the frontend to skip the GitHub installation flow when the app is
+    already installed on the user's GitHub account (subsequent client connections).
+    """
+    user_id = _parse_user_id(current_user)
+    result = await db.execute(
+        select(PlatformConnection.encrypted_credentials)
+        .join(Client, PlatformConnection.client_id == Client.id)
+        .where(Client.user_id == user_id, PlatformConnection.platform == "github_pages")
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        return {"installation_id": None}
+    try:
+        cred = json.loads(decrypt_credential(row))
+        return {"installation_id": cred.get("installation_id")}
+    except Exception:
+        logger.warning("Failed to decrypt GitHub credential for installation-id lookup", exc_info=True)
+        return {"installation_id": None}
+
+
 @router.post("/clients/{client_id}/connections/github", status_code=201)
 async def connect_github(
     client_id: uuid.UUID,
@@ -673,12 +703,21 @@ async def select_github_framework(
 
 class GitHubPublishRequest(BaseModel):
     mode: str
+    author: str | None = None
+    categories: list[str] | None = None
 
     @field_validator("mode")
     @classmethod
     def validate_mode(cls, v: str) -> str:
         if v not in ("pr", "commit"):
             raise ValueError("mode must be 'pr' or 'commit'")
+        return v
+
+    @field_validator("author", mode="before")
+    @classmethod
+    def normalize_author(cls, v: object) -> object:
+        if isinstance(v, str) and not v.strip():
+            return None
         return v
 
 
@@ -743,7 +782,7 @@ async def publish_campaign_github(
     job = await create_job(db, job_type="github_publish", status="pending", campaign_id=campaign_id)
     await db.commit()
 
-    background_tasks.add_task(publish_github_job, job.id, campaign_id, body.mode)
+    background_tasks.add_task(publish_github_job, job.id, campaign_id, body.mode, body.author, body.categories)
 
     return {"job_id": str(job.id)}
 
