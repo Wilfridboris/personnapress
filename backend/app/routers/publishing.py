@@ -851,13 +851,13 @@ async def publish_campaign_now(
 
     await check_trial_not_expired(user_id, db, "publish")
 
-    if campaign.status != "approved":
+    if campaign.status not in ("approved", "published"):
         raise HTTPException(
             status_code=400,
             detail={
                 "error": {
                     "code": "INVALID_STATUS_TRANSITION",
-                    "message": "Only approved campaigns can be published.",
+                    "message": "Only approved or published campaigns can be re-published.",
                     "detail": {},
                 }
             },

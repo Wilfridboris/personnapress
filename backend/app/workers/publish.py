@@ -108,11 +108,11 @@ async def run_publish(job_id: UUID, campaign_id: UUID) -> None:
         await db.commit()
         try:
             results = await dispatch_publish(db, campaign_id, job_id)
-            all_success = all(v == "success" for v in results.values()) and bool(results)
+            all_success = all(v in ("success", "already_published") for v in results.values()) and bool(results)
             if all_success:
                 await update_campaign_status(db, campaign_id, "published")
                 await update_campaign_scheduled_at(db, campaign_id, None)
-                await update_job(db, job_id, status="complete", completed_at=utcnow())
+                await update_job(db, job_id, status="complete", error_details=json.dumps(results), completed_at=utcnow())
             else:
                 await update_campaign_status(db, campaign_id, "failed")
                 await update_campaign_scheduled_at(db, campaign_id, None)

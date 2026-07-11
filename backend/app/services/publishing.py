@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import decrypt_credential, encrypt_credential
 from app.core.exceptions import PlatformError
 from app.db.repositories.campaigns import get_campaign
+from app.db.repositories.jobs import get_published_platforms_for_campaign
 from app.db.repositories.platform_connections import get_connection_for_platform, get_connections_for_client, upsert_connection
 from bs4 import BeautifulSoup
 from app.integrations import github as github_integration
@@ -528,12 +529,21 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID) ->
     platform_names = {(c.platform if isinstance(c.platform, str) else c.platform.value) for c in connections}
     if "wordpress" in platform_names and "wordpress-com" in platform_names:
         connections = [c for c in connections if (c.platform if isinstance(c.platform, str) else c.platform.value) != "wordpress-com"]
+    # On re-publish (campaign already published), skip platforms already reached.
+    # On first publish (approved), publish to everything.
+    campaign_status = campaign.status if isinstance(campaign.status, str) else campaign.status.value
+    skip_platforms: set[str] = set()
+    if campaign_status == "published":
+        skip_platforms = await get_published_platforms_for_campaign(db, campaign_id)
     results: dict[str, str] = {}
     last_x_publish_time = 0.0
     last_linkedin_publish_time = 0.0
 
     for conn in connections:
         platform = conn.platform if isinstance(conn.platform, str) else conn.platform.value
+        if platform in skip_platforms:
+            logger.info("dispatch_publish: skipping %s (already published) campaign=%s", platform, campaign_id)
+            continue
         try:
             creds_json = decrypt_credential(conn.encrypted_credentials)
             creds = json.loads(creds_json)
@@ -590,4 +600,7 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID) ->
             )
             results[platform] = str(exc)
 
+    # If all platforms were already published (nothing dispatched), treat as success.
+    if not results and skip_platforms:
+        return {p: "already_published" for p in skip_platforms}
     return results

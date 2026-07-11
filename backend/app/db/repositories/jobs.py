@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -95,6 +96,37 @@ async def get_publish_job_for_campaign(
         .limit(1)
     )
     return result.scalar_one_or_none()
+
+
+async def get_published_platforms_for_campaign(
+    session: AsyncSession,
+    campaign_id: uuid.UUID,
+) -> set[str]:
+    """Return the set of platform names successfully published for this campaign.
+
+    Unions results across all complete publish/scheduled_publish jobs, so partial
+    successes on earlier attempts are captured correctly.
+    """
+    result = await session.execute(
+        select(Job)
+        .where(
+            Job.campaign_id == campaign_id,
+            Job.job_type.in_(["publish", "scheduled_publish"]),
+            Job.status == "complete",
+        )
+    )
+    jobs = result.scalars().all()
+    published: set[str] = set()
+    for job in jobs:
+        if job.error_details:
+            try:
+                details = json.loads(job.error_details)
+                for platform, status in details.items():
+                    if status in ("success", "already_published"):
+                        published.add(platform)
+            except (ValueError, AttributeError, TypeError):
+                pass
+    return published
 
 
 async def get_active_ingestion_job_for_client(

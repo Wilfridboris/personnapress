@@ -215,8 +215,16 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
       fetchAPI<{ items: Array<{ platform: string; connected: boolean; account_identifier?: string; github_detection?: { detected_framework: string; publish_path?: string } | null; direct_commit_default?: boolean }> }>(`/clients/${campaign.client_id}/connections`)
         .then((connections) => {
           const items = connections?.items ?? [];
-          const connected = items.filter((c) => c.connected).map((c) => platformLabel(c.platform));
-          setPublishedPlatforms(connected);
+          // Read actual published platforms from the job results.
+          // Falls back to connected-platform list for campaigns published before this fix
+          // (when error_details was null on success).
+          const jobDetails = (() => {
+            try { const p = JSON.parse(campaign.publish_job?.error_details ?? "{}"); return (p && typeof p === "object" && !Array.isArray(p)) ? p : {}; } catch { return {}; }
+          })();
+          const actualPublished = (Object.entries(jobDetails) as [string, string][])
+            .filter(([, v]) => v === "success" || v === "already_published")
+            .map(([p]) => platformLabel(p));
+          setPublishedPlatforms(actualPublished.length > 0 ? actualPublished : items.filter((c) => c.connected).map((c) => platformLabel(c.platform)));
           setClientHasPlatforms(items.length > 0);
           const ghConn = items.find((c) => c.platform === "github_pages" && c.connected);
           const framework = ghConn?.github_detection?.detected_framework ?? "";
@@ -890,7 +898,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                   {isPublishing ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
                   {isPublishing ? "Publishing..." : "Publish now"}
                 </button>
-                <p className="font-mono text-xs text-graphite">Publishes to all connected platforms</p>
+                <p className="font-mono text-xs text-graphite">Publishes to platforms not yet reached</p>
               </div>
             </div>
 

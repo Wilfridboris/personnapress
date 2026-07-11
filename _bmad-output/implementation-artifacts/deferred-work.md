@@ -1,5 +1,13 @@
 # Deferred Work
 
+## Deferred from: code review of 11-9-fix-publish-dedup-no-migration (2026-07-11)
+
+- `error_details` field name is semantically inverted — it now stores success data on complete jobs. Pre-existing design; rename to `result_details` would require a migration. [backend/app/workers/publish.py]
+- No concurrency guard before creating a new publish job — multiple simultaneous re-publish jobs possible for the same campaign. Pre-existing gap. [backend/app/routers/publishing.py]
+- `get_published_platforms_for_campaign` loads full ORM Job rows when only the `error_details` column is needed — minor I/O overhead for typical use. [backend/app/db/repositories/jobs.py]
+- No automated test coverage for new dedup paths: all-already-published, partial re-publish, legacy campaigns with null error_details, concurrent re-publish. Pre-existing project pattern.
+- `"already_published"` sentinel value appears in 4 locations with no shared constant or enum — any typo silently breaks the feature. Style concern; refactor when adding tests.
+
 ## Deferred from: code review of 11-8-fix-publish-toast-and-character-counter (2026-07-11)
 
 - Toast string "Published successfully." is hardcoded English with no translation key — no i18n system exists today; revisit if localization is added. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]
