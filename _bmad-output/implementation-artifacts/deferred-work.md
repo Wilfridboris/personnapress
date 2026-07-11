@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 11-8-fix-publish-toast-and-character-counter (2026-07-11)
+
+- Toast string "Published successfully." is hardcoded English with no translation key — no i18n system exists today; revisit if localization is added. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]
+- Toast system has no aria-live region for screen-reader announcement — pre-existing accessibility gap in `useUIStore` toast implementation. [frontend/lib/stores/useUIStore.ts]
+- No unit tests for polling state machine (complete/failed branches) or character counter colour logic — pre-existing pattern; covered by manual testing.
+- Unknown publish job status (not "complete" or "failed") leaves polling interval running indefinitely — pre-existing gap in polling logic. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]
+
 ## Deferred from: code review of 11-5-jekyll-frontmatter-author-categories (2026-07-10)
 
 - D1 (LOW): Preview date computed at render time (`new Date()`) vs actual job execution time — the Jekyll frontmatter preview shown to the user will have a slightly different timestamp than the published file. Pre-existing architectural choice; preview is inherently approximate. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]

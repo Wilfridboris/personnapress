@@ -381,6 +381,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           setIsPublishing(false);
           setActiveJobId(null);
           setClientHasPlatforms(null);
+          addToast("Published successfully.", "success");
           router.refresh();
         } else if (job.status === "failed") {
           clearInterval(interval);
