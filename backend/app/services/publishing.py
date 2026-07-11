@@ -59,6 +59,8 @@ async def generate_github_post_file(
     campaign,
     cred: dict,
     db: AsyncSession,
+    author: str | None = None,
+    categories: list[str] | None = None,
 ) -> tuple[str | None, str | None, str, str]:
     """Generate post file content for any supported GitHub Pages framework.
 
@@ -82,29 +84,42 @@ async def generate_github_post_file(
     publish_datetime: str = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     if detected_framework == "jekyll":
+        jekyll_date: str = now_utc.strftime("%Y-%m-%d %H:%M:%S +0000")
         body_md = github_integration.html_to_markdown(blog_html)
-
-        categories_line = ""
-        if campaign.voice_score and campaign.voice_score.get("tags"):
-            tags = campaign.voice_score["tags"]
-            if isinstance(tags, list) and tags:
-                categories_value = ", ".join(f'"{t.replace(chr(92), chr(92)+chr(92)).replace(chr(34), chr(92)+chr(34))}"' for t in tags)
-                categories_line = f"categories: [{categories_value}]\n"
-
         description = _extract_meta_description(blog_html)
-
         title_yaml = title.replace("\\", "\\\\").replace('"', '\\"')
         description_yaml = description.replace("\\", "\\\\").replace('"', '\\"')
 
-        front_matter = (
-            "---\n"
-            f"layout: post\n"
-            f"title: \"{title_yaml}\"\n"
-            f"date: {publish_datetime}\n"
-            f"description: \"{description_yaml}\"\n"
-            f"{categories_line}"
-            "---\n\n"
-        )
+        fm_lines = [
+            "---",
+            "layout: post",
+            f'title: "{title_yaml}"',
+            f"date: {jekyll_date}",
+            f'description: "{description_yaml}"',
+        ]
+        # User-provided categories (separate from voice tags)
+        if categories:
+            cats = [
+                c.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+                for c in categories if c.strip()
+            ]
+            if cats:
+                fm_lines.append(f"categories: [{', '.join(cats)}]")
+        # Voice score tags → tags: field (not categories:)
+        if campaign.voice_score and campaign.voice_score.get("tags"):
+            voice_tags = campaign.voice_score["tags"]
+            if isinstance(voice_tags, list) and voice_tags:
+                tags_yaml = ", ".join(
+                    f'"{t.replace(chr(92), chr(92)+chr(92)).replace(chr(34), chr(92)+chr(34))}"'
+                    for t in voice_tags
+                )
+                fm_lines.append(f"tags: [{tags_yaml}]")
+        # Optional author
+        if author and author.strip():
+            author_yaml = author.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+            fm_lines.append(f'author: "{author_yaml}"')
+        fm_lines.append("---")
+        front_matter = "\n".join(fm_lines) + "\n\n"
         file_content = front_matter + body_md
         file_path = f"_posts/{today}-{slug}.md"
         commit_message = f"Add blog post: {title}"
@@ -296,6 +311,17 @@ async def generate_github_post_file(
             ]
             if tags_list:
                 fm_lines.append(f"tags = [{tags_toml}]")
+            if categories:
+                cats = [
+                    c.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+                    for c in categories if c.strip()
+                ]
+                if cats:
+                    cats_toml = ", ".join('"' + c + '"' for c in cats)
+                    fm_lines.append(f"categories = [{cats_toml}]")
+            if author and author.strip():
+                author_toml = author.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+                fm_lines.append(f'author = "{author_toml}"')
             if image_url_escaped:
                 fm_lines.append(f'[cover]\n  image = "{image_url_escaped}"')
             fm_lines.append("+++")
@@ -311,6 +337,16 @@ async def generate_github_post_file(
             if tags_list:
                 tags_yaml = ", ".join(f'"{t.replace(chr(92), chr(92)+chr(92)).replace(chr(34), chr(92)+chr(34))}"' for t in tags_list)
                 fm_lines.append(f"tags: [{tags_yaml}]")
+            if categories:
+                cats = [
+                    c.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+                    for c in categories if c.strip()
+                ]
+                if cats:
+                    fm_lines.append(f"categories: [{', '.join(cats)}]")
+            if author and author.strip():
+                author_yaml = author.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", "")
+                fm_lines.append(f'author: "{author_yaml}"')
             if image_url_escaped:
                 fm_lines.append(f"cover:\n  image: \"{image_url_escaped}\"")
             fm_lines.append("---")

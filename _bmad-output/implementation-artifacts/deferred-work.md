@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of 11-5-jekyll-frontmatter-author-categories (2026-07-10)
+
+- D1 (LOW): Preview date computed at render time (`new Date()`) vs actual job execution time — the Jekyll frontmatter preview shown to the user will have a slightly different timestamp than the published file. Pre-existing architectural choice; preview is inherently approximate. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]
+- D2 (MEDIUM): Unquoted category items in YAML flow sequences (`categories: [guides, facebook]`) — a category containing `:`, `[`, `]`, or `#` would produce malformed YAML. Intentional per spec AC7 example format; mitigated by newline stripping applied in P1 and typical slug usage pattern. [backend/app/services/publishing.py]
+
 ## Deferred from: code review of 11-4-onboarding-platform-connection-step (2026-07-10)
 
 - No test coverage for OAuth return-path mount effect — the `useEffect` in `OnboardingFlow.tsx` that reads `?success`/`?error` and restores `createdClientId` from `sessionStorage` has no unit tests. Pre-existing pattern (OAuth callback flows are not unit-tested); manual test checklist covers it.

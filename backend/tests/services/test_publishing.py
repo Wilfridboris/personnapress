@@ -154,8 +154,9 @@ async def test_publish_github_jekyll_calls_create_file_commit_with_front_matter(
     content = captured_content[0]
     assert "layout: post" in content
     assert 'title: "My Great Post"' in content
-    assert "categories:" in content
+    assert "tags:" in content
     assert '"python"' in content
+    assert "categories:" not in content  # voice tags must NOT go to categories:
 
 
 @pytest.mark.asyncio
@@ -694,3 +695,165 @@ async def test_publish_github_eleventy_writes_tags_without_template_key_gate():
     content = captured_content[0]
     assert "tags:" in content
     assert '"eleventy"' in content
+
+
+# ---------------------------------------------------------------------------
+# Jekyll frontmatter: date format, tags field, author, categories (AC 1,2,5,6,7,10)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_jekyll_date_format_is_canonical():
+    """Jekyll date: field uses 'YYYY-MM-DD HH:MM:SS +0000', not ISO 8601 T/Z form (AC 1, 11)."""
+    import re
+    from app.services.publishing import generate_github_post_file
+
+    campaign = _make_github_campaign(voice_score=None)
+    cred = _github_cred("jekyll")
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.github_integration.slug_from_title", return_value="my-great-post"),
+        patch("app.services.publishing.github_integration.html_to_markdown", return_value="Body"),
+    ):
+        file_path, file_content, commit_message, title = await generate_github_post_file(campaign, cred, db)
+
+    assert file_content is not None
+    date_line = next(l for l in file_content.splitlines() if l.startswith("date: "))
+    assert re.match(r"date: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \+0000", date_line), f"Bad date format: {date_line}"
+    assert "T" not in date_line, "ISO 8601 T separator must not appear in Jekyll date"
+    assert date_line.endswith("+0000"), "Jekyll date must end with +0000, not Z"
+
+
+@pytest.mark.asyncio
+async def test_jekyll_voice_tags_go_to_tags_field_not_categories():
+    """Voice score tags → tags: field; categories: absent when no user categories (AC 2)."""
+    from app.services.publishing import generate_github_post_file
+
+    campaign = _make_github_campaign(voice_score={"tags": ["facebook business page", "social media"]})
+    cred = _github_cred("jekyll")
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.github_integration.slug_from_title", return_value="my-great-post"),
+        patch("app.services.publishing.github_integration.html_to_markdown", return_value="Body"),
+    ):
+        _, file_content, _, _ = await generate_github_post_file(campaign, cred, db)
+
+    assert file_content is not None
+    assert "tags:" in file_content
+    assert '"facebook business page"' in file_content
+    assert "categories:" not in file_content
+
+
+@pytest.mark.asyncio
+async def test_jekyll_author_absent_when_none():
+    """author: line absent when author param is None (AC 5)."""
+    from app.services.publishing import generate_github_post_file
+
+    campaign = _make_github_campaign(voice_score=None)
+    cred = _github_cred("jekyll")
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.github_integration.slug_from_title", return_value="my-great-post"),
+        patch("app.services.publishing.github_integration.html_to_markdown", return_value="Body"),
+    ):
+        _, file_content, _, _ = await generate_github_post_file(campaign, cred, db, author=None)
+
+    assert file_content is not None
+    assert "author:" not in file_content
+
+
+@pytest.mark.asyncio
+async def test_jekyll_author_written_when_provided():
+    """author: field is written when a non-empty author string is passed (AC 5)."""
+    from app.services.publishing import generate_github_post_file
+
+    campaign = _make_github_campaign(voice_score=None)
+    cred = _github_cred("jekyll")
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.github_integration.slug_from_title", return_value="my-great-post"),
+        patch("app.services.publishing.github_integration.html_to_markdown", return_value="Body"),
+    ):
+        _, file_content, _, _ = await generate_github_post_file(campaign, cred, db, author="Jane Smith")
+
+    assert file_content is not None
+    assert 'author: "Jane Smith"' in file_content
+
+
+@pytest.mark.asyncio
+async def test_jekyll_categories_absent_when_not_provided():
+    """categories: line absent when user provides no categories (AC 6)."""
+    from app.services.publishing import generate_github_post_file
+
+    campaign = _make_github_campaign(voice_score=None)
+    cred = _github_cred("jekyll")
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.github_integration.slug_from_title", return_value="my-great-post"),
+        patch("app.services.publishing.github_integration.html_to_markdown", return_value="Body"),
+    ):
+        _, file_content, _, _ = await generate_github_post_file(campaign, cred, db, categories=None)
+
+    assert file_content is not None
+    assert "categories:" not in file_content
+
+
+@pytest.mark.asyncio
+async def test_jekyll_categories_written_as_list():
+    """categories: [guides, facebook] when categories=["guides", "facebook"] (AC 7)."""
+    from app.services.publishing import generate_github_post_file
+
+    campaign = _make_github_campaign(voice_score=None)
+    cred = _github_cred("jekyll")
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.github_integration.slug_from_title", return_value="my-great-post"),
+        patch("app.services.publishing.github_integration.html_to_markdown", return_value="Body"),
+    ):
+        _, file_content, _, _ = await generate_github_post_file(campaign, cred, db, categories=["guides", "facebook"])
+
+    assert file_content is not None
+    assert "categories: [guides, facebook]" in file_content
+
+
+@pytest.mark.asyncio
+async def test_jekyll_double_quote_in_author_is_yaml_escaped():
+    """Double-quote in author value is escaped as \\\" to produce valid YAML (AC 10)."""
+    from app.services.publishing import generate_github_post_file
+
+    campaign = _make_github_campaign(voice_score=None)
+    cred = _github_cred("jekyll")
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.github_integration.slug_from_title", return_value="my-great-post"),
+        patch("app.services.publishing.github_integration.html_to_markdown", return_value="Body"),
+    ):
+        _, file_content, _, _ = await generate_github_post_file(campaign, cred, db, author='Say "Hello"')
+
+    assert file_content is not None
+    assert 'author: "Say \\"Hello\\""' in file_content
+
+
+@pytest.mark.asyncio
+async def test_jekyll_double_quote_in_category_is_yaml_escaped():
+    """Double-quote in category value is escaped as \\\" to produce valid YAML (AC 10)."""
+    from app.services.publishing import generate_github_post_file
+
+    campaign = _make_github_campaign(voice_score=None)
+    cred = _github_cred("jekyll")
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.github_integration.slug_from_title", return_value="my-great-post"),
+        patch("app.services.publishing.github_integration.html_to_markdown", return_value="Body"),
+    ):
+        _, file_content, _, _ = await generate_github_post_file(campaign, cred, db, categories=['say "hi"'])
+
+    assert file_content is not None
+    assert 'say \\"hi\\"' in file_content
