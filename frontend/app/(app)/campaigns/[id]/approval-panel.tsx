@@ -389,7 +389,9 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           setIsPublishing(false);
           setActiveJobId(null);
           setClientHasPlatforms(null);
-          addToast("Published successfully.", "success");
+          const jobResults = (() => { try { return JSON.parse(job.error_details ?? "{}"); } catch { return {}; } })();
+          const allAlready = Object.values(jobResults).length > 0 && (Object.values(jobResults) as string[]).every((v) => v === "already_published");
+          addToast(allAlready ? "Already published to all connected platforms." : "Published successfully.", "success");
           router.refresh();
         } else if (job.status === "failed") {
           clearInterval(interval);

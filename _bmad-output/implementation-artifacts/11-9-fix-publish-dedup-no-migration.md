@@ -244,6 +244,7 @@ _None._
 - [x] [Review][Patch] Move `import json as _json` to module level [backend/app/db/repositories/jobs.py:98]
 - [x] [Review][Patch] Add `TypeError` to except clause in `get_published_platforms_for_campaign` [backend/app/db/repositories/jobs.py:122]
 - [x] [Review][Patch] Validate jobDetails is a plain object before calling `Object.entries` [frontend/app/(app)/campaigns/[id]/approval-panel.tsx:221]
+- [x] [Review][Patch] Show "Already published to all connected platforms." toast when all platforms were skipped (all `already_published`) instead of misleading "Published successfully." [frontend/app/(app)/campaigns/[id]/approval-panel.tsx:392]
 - [x] [Review][Patch] `get_published_platforms_for_campaign` should also recognize `"already_published"` as a successfully-reached status [backend/app/db/repositories/jobs.py:117]
 - [x] [Review][Defer] `error_details` field name semantically inverted — stores success data on complete jobs [backend/app/workers/publish.py] — deferred, pre-existing design
 - [x] [Review][Defer] No concurrency guard before creating a new publish job — multiple simultaneous re-publish jobs possible [backend/app/routers/publishing.py] — deferred, pre-existing
