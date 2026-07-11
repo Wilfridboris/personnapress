@@ -38,7 +38,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "X OAuth is not configured" }, { status: 500 });
   }
 
-  const cookieValue = JSON.stringify({ state, codeVerifier, clientId });
+  const returnTo = searchParams.get("return_to") ?? undefined;
+  const cookieValue = JSON.stringify({ state, codeVerifier, clientId, ...(returnTo ? { returnTo } : {}) });
   const response = NextResponse.redirect(authUrl);
   response.cookies.set("oauth_state_x", cookieValue, {
     httpOnly: true,

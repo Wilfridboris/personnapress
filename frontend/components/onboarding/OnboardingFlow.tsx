@@ -9,35 +9,16 @@ import { Button } from "@/components/ui/Button";
 import { Input, BrainDumpInput } from "@/components/ui/Input";
 import { TagChip } from "@/components/ui/TagChip";
 import { VoiceQuestionnaire } from "@/components/clients/VoiceQuestionnaire";
+import { ProgressIndicator } from "./ProgressIndicator";
+import { SkipLink } from "./SkipLink";
+import { OnboardingPlatformStep } from "./OnboardingPlatformStep";
 import type { BrandVoiceProfile, BrandVoiceCadence } from "@/lib/types";
 
-type OnboardingStep = 1 | 2 | 3;
+type OnboardingStep = 1 | 2 | 3 | 4;
 type Step2View = "in-progress" | "questionnaire" | "review" | "failed";
 
 const MAX_BRAIN_DUMP = 10_000;
 const MIN_BRAIN_DUMP = 20;
-
-// ── Progress indicator ─────────────────────────────────────────────────────────
-function ProgressIndicator({ step, total }: { step: number; total: number }) {
-  return (
-    <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#555555] mb-6">
-      {step} of {total}
-    </p>
-  );
-}
-
-// ── Skip link ──────────────────────────────────────────────────────────────────
-function SkipLink({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="block w-full text-center text-sm text-[#555555] mt-4 hover:text-[#111111] underline underline-offset-2"
-    >
-      {children}
-    </button>
-  );
-}
 
 // ── Inline BVP Review for Step 2 ──────────────────────────────────────────────
 interface InlineProfileReviewProps {
@@ -254,10 +235,13 @@ export function OnboardingFlow() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [step2View, setStep2View] = useState<Step2View>("questionnaire");
 
-  // Step 3 state
+  // Step 3 state (platform connection)
+  const [oauthReturnError, setOauthReturnError] = useState<string | null>(null);
+
+  // Step 4 state (brain dump)
   const [brainDump, setBrainDump] = useState("");
-  const [step3Loading, setStep3Loading] = useState(false);
-  const [step3Error, setStep3Error] = useState<string | null>(null);
+  const [step4Loading, setStep4Loading] = useState(false);
+  const [step4Error, setStep4Error] = useState<string | null>(null);
 
   // Global complete-onboarding error
   const [completeError, setCompleteError] = useState<string | null>(null);
@@ -270,6 +254,36 @@ export function OnboardingFlow() {
   useEffect(() => {
     nameInputRef.current?.focus();
   }, []);
+
+  // OAuth return detection — runs once on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthSuccess = params.get("success");
+    const oauthError = params.get("error");
+    if (!oauthSuccess && !oauthError) return; // not an OAuth redirect
+    const savedClientId = sessionStorage.getItem("onboarding_client_id");
+    if (!savedClientId) return; // not from our OAuth flow
+    // Clean up
+    sessionStorage.removeItem("onboarding_client_id");
+    window.history.replaceState({}, "", "/onboarding");
+    setCreatedClientId(savedClientId);
+    setStep2View("questionnaire"); // safe default
+    // Prefer error over success when both are present (degenerate OAuth response)
+    if (oauthError) {
+      setOauthReturnError(oauthError); // URLSearchParams.get() already decodes
+      setStep(3); // back to platform step with error
+    } else {
+      setOauthReturnError(null); // clear any prior error from a previous attempt
+      setStep(4); // already connected — skip past step 3
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Guard: if step 3 but no client, skip to step 4
+  useEffect(() => {
+    if (step === 3 && !createdClientId && !activeClientId) {
+      setStep(4);
+    }
+  }, [step, createdClientId, activeClientId]);
 
   // ── Skip all ──────────────────────────────────────────────────────────────
   const handleSkipAll = useCallback(async () => {
@@ -324,10 +338,14 @@ export function OnboardingFlow() {
     setStep(3);
   };
 
-  // ── Step 3 submit ──────────────────────────────────────────────────────────
-  const handleStep3Submit = async () => {
-    setStep3Loading(true);
-    setStep3Error(null);
+  // ── Step 3 handlers (platform connection) ─────────────────────────────────
+  const handleStep3Continue = () => setStep(4);
+  const handleSkipStep3 = () => setStep(4);
+
+  // ── Step 4 submit (brain dump) ─────────────────────────────────────────────
+  const handleStep4Submit = async () => {
+    setStep4Loading(true);
+    setStep4Error(null);
 
     try {
       // Complete onboarding FIRST so JWT has onboarding_completed=true before navigation
@@ -335,7 +353,7 @@ export function OnboardingFlow() {
 
       const clientId = createdClientId ?? activeClientId;
       if (!clientId) {
-        setStep3Error("Create a client first. Go back to Step 1.");
+        setStep4Error("Create a client first. Go back to Step 1.");
         return;
       }
 
@@ -347,14 +365,14 @@ export function OnboardingFlow() {
       router.push(`/campaigns/${campaign_id}?job_id=${job_id}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong.";
-      setStep3Error(`Could not start generation: ${message}`);
+      setStep4Error(`Could not start generation: ${message}`);
     } finally {
-      setStep3Loading(false);
+      setStep4Loading(false);
     }
   };
 
-  // ── Step 3 skip ────────────────────────────────────────────────────────────
-  const handleSkipStep3 = async () => {
+  // ── Step 4 skip (brain dump) ───────────────────────────────────────────────
+  const handleSkipStep4 = async () => {
     setCompleteError(null);
     try {
       await authApi.completeOnboarding();
@@ -371,7 +389,7 @@ export function OnboardingFlow() {
     }
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
-      if (brainDump.length >= MIN_BRAIN_DUMP) handleStep3Submit();
+      if (brainDump.length >= MIN_BRAIN_DUMP) handleStep4Submit();
     }
   };
 
@@ -472,7 +490,7 @@ export function OnboardingFlow() {
   if (step === 2 && createdClientId) {
     return (
       <div className="w-full max-w-lg">
-        <ProgressIndicator step={2} total={3} />
+        <ProgressIndicator step={2} total={4} />
         <Card>
           <Step2Content
             view={step2View}
@@ -491,11 +509,36 @@ export function OnboardingFlow() {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // STEP 3
+  // STEP 3 — Platform connection
+  // ══════════════════════════════════════════════════════════════════════════
+  if (step === 3 && !createdClientId && !activeClientId) return null; // brief flash until guard effect fires
+
+  if (step === 3 && (createdClientId || activeClientId)) {
+    return (
+      <div className="w-full max-w-lg">
+        <ProgressIndicator step={3} total={4} />
+        <h2 className="font-['Playfair_Display'] text-[1.5rem] font-bold leading-[1.2] tracking-[-0.01em] text-[#111111] mb-3 text-center">
+          Where will you publish?
+        </h2>
+        <p className="text-[0.9375rem] text-[#555555] leading-[1.6] mb-6 text-center">
+          Connect a platform so you&apos;re ready to publish your first campaign in one click.
+        </p>
+        <OnboardingPlatformStep
+          clientId={(createdClientId ?? activeClientId)!}
+          oauthError={oauthReturnError}
+          onContinue={handleStep3Continue}
+          onSkip={handleSkipStep3}
+        />
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 4 — Brain dump
   // ══════════════════════════════════════════════════════════════════════════
   return (
     <div className="w-full max-w-lg">
-      <ProgressIndicator step={3} total={3} />
+      <ProgressIndicator step={4} total={4} />
 
       <h2 className="font-['Playfair_Display'] text-[1.5rem] font-bold leading-[1.2] tracking-[-0.01em] text-[#111111] mb-3 text-center">
         What&apos;s on your mind this week?
@@ -532,16 +575,16 @@ export function OnboardingFlow() {
           </p>
         </div>
 
-        {step3Error && (
+        {step4Error && (
           <div
             role="alert"
             className="border border-danger/30 bg-danger/5 p-4 mt-4"
           >
-            <p className="text-sm font-mono text-danger">{step3Error}</p>
+            <p className="text-sm font-mono text-danger">{step4Error}</p>
             <button
               type="button"
               className="text-sm font-mono text-danger underline hover:no-underline mt-1"
-              onClick={() => setStep3Error(null)}
+              onClick={() => setStep4Error(null)}
             >
               Try again
             </button>
@@ -556,18 +599,18 @@ export function OnboardingFlow() {
 
         <Button
           type="button"
-          onClick={handleStep3Submit}
+          onClick={handleStep4Submit}
           disabled={
             brainDump.length < MIN_BRAIN_DUMP ||
-            step3Loading ||
+            step4Loading ||
             (createdClientId === null && activeClientId === null)
           }
-          aria-busy={step3Loading}
+          aria-busy={step4Loading}
           className="w-full justify-center mt-4"
         >
-          {step3Loading ? "Generating..." : "Generate my first campaign"}
+          {step4Loading ? "Generating..." : "Generate my first campaign"}
         </Button>
-        <SkipLink onClick={handleSkipStep3}>
+        <SkipLink onClick={handleSkipStep4}>
           I&apos;ll write my first draft later.
         </SkipLink>
       </Card>

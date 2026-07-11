@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
   }
 
   const state = randomBytes(32).toString("hex");
+  const returnTo = searchParams.get("return_to") ?? undefined;
   const redirectUri = `${APP_URL}/api/auth/wordpress-com/callback`;
 
   const params = new URLSearchParams({
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
 
   const authUrl = `https://public-api.wordpress.com/oauth2/authorize?${params.toString()}`;
 
-  const cookieValue = JSON.stringify({ state, clientId });
+  const cookieValue = JSON.stringify({ state, clientId, ...(returnTo ? { returnTo } : {}) });
   const response = NextResponse.redirect(authUrl);
   response.cookies.set("oauth_state_wpcom", cookieValue, {
     httpOnly: true,

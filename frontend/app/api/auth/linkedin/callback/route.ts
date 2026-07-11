@@ -9,6 +9,8 @@ function clearCookieRedirect(url: string): NextResponse {
   return res;
 }
 
+type LinkedInOAuthState = { state: string; clientId: string; returnTo?: string };
+
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const code = searchParams.get("code");
@@ -17,10 +19,10 @@ export async function GET(request: NextRequest) {
   const errorDescription = searchParams.get("error_description");
 
   const cookieRaw = request.cookies.get("oauth_state_linkedin")?.value;
-  let oauthState: { state: string; clientId: string } | null = null;
+  let oauthState: LinkedInOAuthState | null = null;
   if (cookieRaw) {
     try {
-      oauthState = JSON.parse(cookieRaw) as { state: string; clientId: string };
+      oauthState = JSON.parse(cookieRaw) as LinkedInOAuthState;
     } catch {
       // malformed cookie — treat as missing
     }
@@ -30,6 +32,7 @@ export async function GET(request: NextRequest) {
     ? `${APP_URL}/clients/${oauthState.clientId}/connections`
     : `${APP_URL}/clients`;
 
+  // Handle provider error and CSRF check before trusting the cookie's returnTo field
   if (error) {
     return clearCookieRedirect(
       `${connectionsUrl}?error=${encodeURIComponent(`LinkedIn authorization failed — ${errorDescription ?? error}. Please try connecting again.`)}`
@@ -41,6 +44,11 @@ export async function GET(request: NextRequest) {
       `${connectionsUrl}?error=${encodeURIComponent("Authorization failed — the request was tampered with. Please try connecting again.")}`
     );
   }
+
+  // State validated — cookie is trusted; derive onboarding redirect targets
+  const isOnboarding = oauthState.returnTo === "onboarding";
+  const successUrl = isOnboarding ? `${APP_URL}/onboarding?success=linkedin` : `${connectionsUrl}?success=linkedin`;
+  const errorBase = isOnboarding ? `${APP_URL}/onboarding` : connectionsUrl;
 
   try {
     const backendResp = await fetch(
@@ -58,14 +66,14 @@ export async function GET(request: NextRequest) {
     if (!backendResp.ok) {
       const err = await backendResp.json().catch(() => ({})) as { error?: { message?: string } };
       return clearCookieRedirect(
-        `${connectionsUrl}?error=${encodeURIComponent(err?.error?.message ?? "LinkedIn connection failed. Please try again.")}`
+        `${errorBase}?error=${encodeURIComponent(err?.error?.message ?? "LinkedIn connection failed. Please try again.")}`
       );
     }
   } catch {
     return clearCookieRedirect(
-      `${connectionsUrl}?error=${encodeURIComponent("LinkedIn connection failed. Please try again.")}`
+      `${errorBase}?error=${encodeURIComponent("LinkedIn connection failed. Please try again.")}`
     );
   }
 
-  return clearCookieRedirect(`${connectionsUrl}?success=linkedin`);
+  return clearCookieRedirect(successUrl);
 }

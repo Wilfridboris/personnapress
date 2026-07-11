@@ -16,7 +16,8 @@ export async function GET(request: NextRequest) {
   }
 
   const state = randomBytes(32).toString("hex");
-  const cookieValue = JSON.stringify({ state, clientId });
+  const returnTo = searchParams.get("return_to") ?? undefined;
+  const cookieValue = JSON.stringify({ state, clientId, ...(returnTo ? { returnTo } : {}) });
 
   const authUrl = new URL("https://www.linkedin.com/oauth/v2/authorization");
   authUrl.searchParams.set("response_type", "code");

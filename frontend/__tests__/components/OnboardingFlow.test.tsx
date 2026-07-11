@@ -21,6 +21,9 @@ vi.mock("@/lib/api", () => ({
   campaignsApi: {
     create: vi.fn(),
   },
+  publishingApi: {
+    listConnections: vi.fn(),
+  },
 }));
 
 // Mock useClientStore — activeClientId is configurable per test
@@ -35,11 +38,17 @@ vi.mock("@/hooks/useJobStatus", () => ({
   useJobStatus: () => ({ job: null }),
 }));
 
+// Mock TanStack Query — OnboardingPlatformStep uses useQuery; PlatformConnectionCard uses useQueryClient
+vi.mock("@tanstack/react-query", () => ({
+  useQuery: vi.fn().mockReturnValue({ data: { items: [] }, isLoading: false }),
+  useQueryClient: vi.fn().mockReturnValue({ invalidateQueries: vi.fn() }),
+}));
+
 import { authApi, clientsApi, campaignsApi } from "@/lib/api";
 
 const BRAIN_DUMP_25 = "A".repeat(25);
 
-async function advanceToStep3() {
+async function advanceToStep4() {
   vi.mocked(clientsApi.create).mockResolvedValue({
     id: "client-1",
     name: "Test",
@@ -54,16 +63,22 @@ async function advanceToStep3() {
   fireEvent.click(screen.getByRole("button", { name: /create client/i }));
 
   // Wait for step 2
-  await waitFor(() => expect(screen.getByText("2 of 3")).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText("2 of 4")).toBeInTheDocument());
 
   // Skip step 2
   fireEvent.click(screen.getByRole("button", { name: /skip/i }));
 
-  // Wait for step 3
-  await waitFor(() => expect(screen.getByText("3 of 3")).toBeInTheDocument());
+  // Wait for step 3 (platform connection)
+  await waitFor(() => expect(screen.getByText("3 of 4")).toBeInTheDocument());
+
+  // Skip step 3
+  fireEvent.click(screen.getByRole("button", { name: /I'll connect a platform later/i }));
+
+  // Wait for step 4 (brain dump)
+  await waitFor(() => expect(screen.getByText("4 of 4")).toBeInTheDocument());
 }
 
-describe("OnboardingFlow — Step 3 submit", () => {
+describe("OnboardingFlow — Step 4 submit (brain dump)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     _activeClientId = null;
@@ -77,7 +92,7 @@ describe("OnboardingFlow — Step 3 submit", () => {
     } as never);
 
     render(<OnboardingFlow />);
-    await advanceToStep3();
+    await advanceToStep4();
 
     fireEvent.change(screen.getByLabelText(/brain dump/i), {
       target: { value: BRAIN_DUMP_25 },
@@ -106,7 +121,7 @@ describe("OnboardingFlow — Step 3 submit", () => {
     } as never);
 
     render(<OnboardingFlow />);
-    await advanceToStep3();
+    await advanceToStep4();
 
     fireEvent.change(screen.getByLabelText(/brain dump/i), {
       target: { value: BRAIN_DUMP_25 },
@@ -123,14 +138,14 @@ describe("OnboardingFlow — Step 3 submit", () => {
     });
   });
 
-  it("shows inline error and stays on step 3 when campaignsApi.create fails", async () => {
+  it("shows inline error and stays on step 4 when campaignsApi.create fails", async () => {
     vi.mocked(authApi.completeOnboarding).mockResolvedValue(undefined as never);
     vi.mocked(campaignsApi.create).mockRejectedValue(
       new Error("Campaign limit reached for this billing cycle.")
     );
 
     render(<OnboardingFlow />);
-    await advanceToStep3();
+    await advanceToStep4();
 
     fireEvent.change(screen.getByLabelText(/brain dump/i), {
       target: { value: BRAIN_DUMP_25 },
@@ -142,11 +157,11 @@ describe("OnboardingFlow — Step 3 submit", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(
-        /Could not start generation — Campaign limit reached/i
+        /Could not start generation.*Campaign limit reached/i
       );
     });
     expect(mockPush).not.toHaveBeenCalled();
-    expect(screen.getByText("3 of 3")).toBeInTheDocument();
+    expect(screen.getByText("4 of 4")).toBeInTheDocument();
   });
 
   it("clears error when Try again is clicked", async () => {
@@ -154,7 +169,7 @@ describe("OnboardingFlow — Step 3 submit", () => {
     vi.mocked(campaignsApi.create).mockRejectedValue(new Error("Server error"));
 
     render(<OnboardingFlow />);
-    await advanceToStep3();
+    await advanceToStep4();
 
     fireEvent.change(screen.getByLabelText(/brain dump/i), {
       target: { value: BRAIN_DUMP_25 },
@@ -172,7 +187,7 @@ describe("OnboardingFlow — Step 3 submit", () => {
 
   it("disables button when brain dump is below minimum length", async () => {
     render(<OnboardingFlow />);
-    await advanceToStep3();
+    await advanceToStep4();
 
     // Don't fill brain dump — button should be disabled
     const generateButton = screen.getByRole("button", { name: /generate my first campaign/i });
@@ -181,7 +196,7 @@ describe("OnboardingFlow — Step 3 submit", () => {
 
   it("does not show 'Create a client first.' when createdClientId is available", async () => {
     render(<OnboardingFlow />);
-    await advanceToStep3();
+    await advanceToStep4();
 
     // Step 1 sets createdClientId = "client-1", so the no-client guard must not appear
     expect(screen.queryByText(/create a client first/i)).toBeNull();
@@ -204,7 +219,7 @@ describe("OnboardingFlow — Step 3 submit", () => {
     } as never);
 
     render(<OnboardingFlow />);
-    await advanceToStep3();
+    await advanceToStep4();
 
     fireEvent.change(screen.getByLabelText(/brain dump/i), {
       target: { value: BRAIN_DUMP_25 },

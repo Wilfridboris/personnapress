@@ -9,6 +9,8 @@ function clearCookieRedirect(url: string): NextResponse {
   return res;
 }
 
+type WpComOAuthState = { state: string; clientId: string; returnTo?: string };
+
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const code = searchParams.get("code");
@@ -16,16 +18,16 @@ export async function GET(request: NextRequest) {
   const error = searchParams.get("error");
 
   const cookieRaw = request.cookies.get("oauth_state_wpcom")?.value;
-  let oauthState: { state: string; clientId: string } | null = null;
+  let oauthState: WpComOAuthState | null = null;
   if (cookieRaw) {
     try {
-      oauthState = JSON.parse(cookieRaw) as { state: string; clientId: string };
+      oauthState = JSON.parse(cookieRaw) as WpComOAuthState;
     } catch {
       // malformed cookie
     }
   }
 
-  // Handle OAuth provider error before state check
+  // Handle OAuth provider error before state check — returnTo not yet validated, use safe fallback
   if (error) {
     const errorUrl = oauthState?.clientId
       ? `${APP_URL}/clients/${oauthState.clientId}/connections`
@@ -42,13 +44,16 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // State validated — clientId from cookie is trusted
+  // State validated — clientId and returnTo from cookie are trusted
   const connectionsUrl = `${APP_URL}/clients/${oauthState.clientId}/connections`;
+  const isOnboarding = oauthState.returnTo === "onboarding";
+  const successUrl = isOnboarding ? `${APP_URL}/onboarding?success=wordpress` : `${connectionsUrl}?success=wordpress-com`;
+  const errorBase = isOnboarding ? `${APP_URL}/onboarding` : connectionsUrl;
 
   // Guard missing code (WP.com redirected without code and without error)
   if (!code) {
     return clearCookieRedirect(
-      `${connectionsUrl}?error=${encodeURIComponent("WordPress.com authorization failed — no authorization code received. Please try connecting again.")}`
+      `${errorBase}?error=${encodeURIComponent("WordPress.com authorization failed — no authorization code received. Please try connecting again.")}`
     );
   }
 
@@ -68,14 +73,14 @@ export async function GET(request: NextRequest) {
     if (!backendResp.ok) {
       const err = await backendResp.json().catch(() => ({})) as { error?: { message?: string } };
       return clearCookieRedirect(
-        `${connectionsUrl}?error=${encodeURIComponent(err?.error?.message ?? "WordPress.com connection failed. Please try again.")}`
+        `${errorBase}?error=${encodeURIComponent(err?.error?.message ?? "WordPress.com connection failed. Please try again.")}`
       );
     }
   } catch {
     return clearCookieRedirect(
-      `${connectionsUrl}?error=${encodeURIComponent("WordPress.com connection failed. Please try again.")}`
+      `${errorBase}?error=${encodeURIComponent("WordPress.com connection failed. Please try again.")}`
     );
   }
 
-  return clearCookieRedirect(`${connectionsUrl}?success=wordpress-com`);
+  return clearCookieRedirect(successUrl);
 }

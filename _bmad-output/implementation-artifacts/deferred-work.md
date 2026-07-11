@@ -1,5 +1,9 @@
 # Deferred Work
 
+## Deferred from: code review of 11-4-onboarding-platform-connection-step (2026-07-10)
+
+- No test coverage for OAuth return-path mount effect — the `useEffect` in `OnboardingFlow.tsx` that reads `?success`/`?error` and restores `createdClientId` from `sessionStorage` has no unit tests. Pre-existing pattern (OAuth callback flows are not unit-tested); manual test checklist covers it.
+
 ## Deferred from: code review of 11-3-github-frontmatter-description-tags (2026-07-10)
 
 - Hugo TOML vs YAML mismatch in `buildFrontMatterPreview` — preview always shows YAML `---` delimiters even when actual published file uses TOML `+++`; pre-existing gap in the preview helper. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]
