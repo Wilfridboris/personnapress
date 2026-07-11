@@ -586,7 +586,7 @@ export default function LandingPage() {
           <p className="text-sm text-graphite mt-4 font-mono">
             Publishing to GitHub Pages?{" "}
             <Link href="/github-publisher" className="text-ink underline underline-offset-2 hover:text-graphite transition-colors">
-              See the dedicated integration
+              See the GitHub blog publisher
             </Link>
           </p>
           <p className="text-sm text-graphite mt-2 font-mono">
