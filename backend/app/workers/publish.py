@@ -22,7 +22,13 @@ from app.services.publishing import dispatch_publish, generate_github_post_file,
 logger = logging.getLogger(__name__)
 
 
-async def publish_github_job(job_id: UUID, campaign_id: UUID, mode: str) -> None:
+async def publish_github_job(
+    job_id: UUID,
+    campaign_id: UUID,
+    mode: str,
+    author: str | None = None,
+    categories: list[str] | None = None,
+) -> None:
     """BackgroundTask entry point for GitHub PR or direct-commit publishing."""
     async with get_session_context() as db:
         await update_job(db, job_id, status="in_progress", started_at=utcnow())
@@ -44,7 +50,7 @@ async def publish_github_job(job_id: UUID, campaign_id: UUID, mode: str) -> None
             if not repo_full_name:
                 raise PlatformError("github", 0, "No repository selected")
 
-            file_path, file_content, commit_message, title = await generate_github_post_file(campaign, cred, db)
+            file_path, file_content, commit_message, title = await generate_github_post_file(campaign, cred, db, author=author, categories=categories)
             if file_path is None:
                 raise PlatformError("github", 0, "Content folder not detected; set publish path in connections first")
 

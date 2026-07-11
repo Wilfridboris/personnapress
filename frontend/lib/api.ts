@@ -34,10 +34,20 @@ export async function fetchAPI<T>(path: string, init?: RequestInit): Promise<T> 
   }
 
   if (!res.ok) {
-    const errShape = data?.error as { message?: string; code?: string } | undefined;
+    // FastAPI HTTPException wraps detail as: {"detail": {"error": {"code": "...", "message": "..."}}}
+    // Custom handlers (rate limiter) send: {"error": {"code": "...", "message": "..."}}
+    // Support both shapes.
+    const detail = data?.detail as Record<string, unknown> | string | undefined;
+    const nestedError =
+      typeof detail === "object" && detail !== null
+        ? (detail as Record<string, unknown>).error
+        : undefined;
+    const errShape = (nestedError ?? data?.error) as
+      | { message?: string; code?: string }
+      | undefined;
     const message =
       errShape?.message ??
-      (typeof data?.detail === "string" ? data.detail : undefined) ??
+      (typeof detail === "string" ? detail : undefined) ??
       "Something went wrong.";
     const code = errShape?.code ?? "UNKNOWN_ERROR";
     throw new APIError(message, code);
@@ -191,7 +201,7 @@ export const publishingApi = {
       `/clients/${clientId}/connections/github/framework`,
       { method: "PATCH", body: JSON.stringify({ detected_framework: framework, ...(publishPath !== undefined ? { publish_path: publishPath } : {}) }) }
     ),
-  publishGitHub: (campaignId: string, body: { mode: "pr" | "commit" }) =>
+  publishGitHub: (campaignId: string, body: { mode: "pr" | "commit"; author?: string; categories?: string[] }) =>
     apiFetch<{ job_id: string }>(`/campaigns/${campaignId}/publish/github`, {
       method: "POST",
       body: JSON.stringify(body),
@@ -200,5 +210,12 @@ export const publishingApi = {
     apiFetch<{ direct_commit_default: boolean }>(
       `/clients/${clientId}/connections/github/settings`,
       { method: "PATCH", body: JSON.stringify({ direct_commit_default: directCommitDefault }) }
+    ),
+  getExistingGithubInstallationId: () =>
+    apiFetch<{ installation_id: string | null }>("/connections/github/installation-id"),
+  connectGithubDirect: (clientId: string, installationId: string) =>
+    apiFetch<{ platform: string; connected: boolean }>(
+      `/clients/${clientId}/connections/github`,
+      { method: "POST", body: JSON.stringify({ installation_id: installationId }) }
     ),
 };

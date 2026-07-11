@@ -4,7 +4,8 @@ import { useState, useRef, useCallback, useEffect, RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { GitBranch, Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
-import { campaignsApi, jobsApi, publishingApi, fetchAPI, APIError } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { campaignsApi, clientsApi, jobsApi, publishingApi, fetchAPI, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { Modal } from "@/components/ui/Modal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -59,8 +60,19 @@ function extractMetaDescription(blogHtml: string | null): string {
   return match ? match[1].trim() : "";
 }
 
-function buildFrontMatterPreview(framework: string, title: string, description: string, tags: string[]): string {
-  const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+function buildFrontMatterPreview(
+  framework: string,
+  title: string,
+  description: string,
+  tags: string[],
+  author?: string,
+  categories?: string[],
+): string {
+  // Jekyll canonical date: "YYYY-MM-DD HH:MM:SS +0000"
+  const nowIso = new Date().toISOString();
+  const jekyllDate = nowIso.replace("T", " ").replace(/\.\d{3}Z$/, " +0000");
+  const isoDate = nowIso.replace(/\.\d{3}Z$/, "Z"); // all other frameworks
+
   const safe = title.replace(/"/g, '\\"');
   const safeDesc = description.replace(/\r?\n/g, " ").replace(/"/g, '\\"');
   const tagsYaml = tags.length > 0
@@ -68,19 +80,27 @@ function buildFrontMatterPreview(framework: string, title: string, description: 
     : "";
 
   if (framework === "jekyll") {
-    const categoriesLine = tagsYaml ? `\ncategories: ${tagsYaml}` : "";
-    return `---\nlayout: post\ntitle: "${safe}"\ndate: ${now}\ndescription: "${safeDesc}"${categoriesLine}\n---`;
+    const catsLine = categories && categories.length > 0
+      ? `\ncategories: [${categories.map((c) => c.replace(/"/g, '\\"')).join(", ")}]`
+      : "";
+    const tagsLine = tagsYaml ? `\ntags: ${tagsYaml}` : "";
+    const authorLine = author ? `\nauthor: "${author.replace(/"/g, '\\"')}"` : "";
+    return `---\nlayout: post\ntitle: "${safe}"\ndate: ${jekyllDate}\ndescription: "${safeDesc}"${catsLine}${tagsLine}${authorLine}\n---`;
   }
   if (framework === "astro") {
     const tagsLine = tagsYaml ? `\ntags: ${tagsYaml}` : "";
-    return `---\ntitle: "${safe}"\ndescription: "${safeDesc}"\npubDate: "${now}"\nheroImage: ""${tagsLine}\n---`;
+    return `---\ntitle: "${safe}"\ndescription: "${safeDesc}"\npubDate: "${isoDate}"\nheroImage: ""${tagsLine}\n---`;
   }
   if (framework === "hugo") {
+    const catsLine = categories && categories.length > 0
+      ? `\ncategories: [${categories.map((c) => c.replace(/"/g, '\\"')).join(", ")}]`
+      : "";
     const tagsLine = tagsYaml ? `\ntags: ${tagsYaml}` : "";
-    return `---\ntitle: "${safe}"\ndate: ${now}\ndescription: "${safeDesc}"\ndraft: false${tagsLine}\n---`;
+    const authorLine = author ? `\nauthor: "${author.replace(/"/g, '\\"')}"` : "";
+    return `---\ntitle: "${safe}"\ndate: ${isoDate}\ndescription: "${safeDesc}"\ndraft: false${tagsLine}${catsLine}${authorLine}\n---`;
   }
   const tagsLine = tagsYaml ? `\ntags: ${tagsYaml}` : "";
-  return `---\ntitle: "${safe}"\ndate: ${now}\ndescription: "${safeDesc}"${tagsLine}\n---`;
+  return `---\ntitle: "${safe}"\ndate: ${isoDate}\ndescription: "${safeDesc}"${tagsLine}\n---`;
 }
 
 interface ApprovalPanelProps {
@@ -123,6 +143,32 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
   const [directCommitDefault, setDirectCommitDefault] = useState(false);
   const [detectedFramework, setDetectedFramework] = useState<string>("");
   const [publishPath, setPublishPath] = useState<string>("");
+
+  // Author & Categories optional frontmatter inputs (Jekyll / Hugo only)
+  const [authorOverride, setAuthorOverride] = useState<string>("");
+  const [categoriesInput, setCategoriesInput] = useState<string>("");
+  const authorAutofilledRef = useRef(false);
+
+  // Fetch client to pre-fill author
+  const { data: clientData } = useQuery({
+    queryKey: ["client", campaign.client_id],
+    queryFn: () => clientsApi.get(campaign.client_id),
+    staleTime: 60_000,
+  });
+
+  // One-time autofill from client name once loaded
+  useEffect(() => {
+    if (clientData?.name && !authorAutofilledRef.current) {
+      setAuthorOverride(clientData.name);
+      authorAutofilledRef.current = true;
+    }
+  }, [clientData?.name]);
+
+  // Derived: parse comma-separated categories
+  const parsedCategories = categoriesInput
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   const rejectBtnRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -276,7 +322,11 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
   const handleConfirmGitHubPublish = useCallback(async () => {
     setIsGitHubPublishing(true);
     try {
-      const { job_id } = await publishingApi.publishGitHub(campaign.id, { mode: publishMode });
+      const { job_id } = await publishingApi.publishGitHub(campaign.id, {
+        mode: publishMode,
+        author: authorOverride.trim() || undefined,
+        categories: parsedCategories.length > 0 ? parsedCategories : undefined,
+      });
       setActiveGitHubJobId(job_id);
     } catch (err) {
       if (err instanceof APIError && err.code === "TRIAL_EXPIRED") {
@@ -330,6 +380,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           clearInterval(interval);
           setIsPublishing(false);
           setActiveJobId(null);
+          setClientHasPlatforms(null);
           router.refresh();
         } else if (job.status === "failed") {
           clearInterval(interval);
@@ -427,7 +478,14 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     const targetFilePath = buildTargetFilePath(detectedFramework, publishPath, blogTitle);
     const metaDescription = extractMetaDescription(campaign.blog_html);
     const frontMatterTags = campaign.voice_score?.tags ?? [];
-    const frontMatterPreview = buildFrontMatterPreview(detectedFramework, blogTitle, metaDescription, frontMatterTags);
+    const frontMatterPreview = buildFrontMatterPreview(
+      detectedFramework,
+      blogTitle,
+      metaDescription,
+      frontMatterTags,
+      authorOverride.trim() || undefined,
+      parsedCategories.length > 0 ? parsedCategories : undefined,
+    );
     const hasPrOpen = !!campaign.github_pr_url && !githubResult;
     const prDisplayUrl = githubResult?.type === "pr" ? githubResult.prUrl : campaign.github_pr_url ?? "";
 
@@ -569,6 +627,66 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
               </p>
             </div>
 
+            {/* Author & Categories — Jekyll and Hugo only */}
+            {(detectedFramework === "jekyll" || detectedFramework === "hugo") && (
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+
+                {/* Author */}
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="gh-fm-author"
+                    className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#555555]"
+                  >
+                    Author
+                    <span className="ml-1 normal-case font-normal text-[#999999]">optional</span>
+                  </label>
+                  <input
+                    id="gh-fm-author"
+                    type="text"
+                    value={authorOverride}
+                    onChange={(e) => setAuthorOverride(e.target.value)}
+                    placeholder="e.g. Jane Smith"
+                    aria-label="Post author written to frontmatter author field"
+                    className={cn(
+                      "w-full bg-transparent px-0 py-1.5",
+                      "border-0 border-b border-[#E5E5E5] text-sm text-[#111111]",
+                      "placeholder:text-[#BBBBBB]",
+                      "outline-none focus:border-b-2 focus:border-[#111111]",
+                      "transition-[border-color,border-width] duration-150",
+                    )}
+                  />
+                </div>
+
+                {/* Categories */}
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="gh-fm-categories"
+                    className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#555555]"
+                  >
+                    Categories
+                    <span className="ml-1 normal-case font-normal text-[#999999]">optional</span>
+                  </label>
+                  <input
+                    id="gh-fm-categories"
+                    type="text"
+                    value={categoriesInput}
+                    onChange={(e) => setCategoriesInput(e.target.value)}
+                    placeholder="guides, facebook"
+                    aria-label="Post categories for frontmatter, comma-separated slugs"
+                    className={cn(
+                      "w-full bg-transparent px-0 py-1.5",
+                      "border-0 border-b border-[#E5E5E5] text-sm text-[#111111]",
+                      "placeholder:text-[#BBBBBB]",
+                      "outline-none focus:border-b-2 focus:border-[#111111]",
+                      "transition-[border-color,border-width] duration-150",
+                    )}
+                  />
+                  <p className="text-[11px] text-[#999999]">Comma-separated slugs</p>
+                </div>
+
+              </div>
+            )}
+
             {/* Front matter toggle */}
             <div>
               <button
@@ -703,7 +821,14 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     const targetFilePath = buildTargetFilePath(detectedFramework, publishPath, blogTitle);
     const metaDescription = extractMetaDescription(campaign.blog_html);
     const frontMatterTags = campaign.voice_score?.tags ?? [];
-    const frontMatterPreview = buildFrontMatterPreview(detectedFramework, blogTitle, metaDescription, frontMatterTags);
+    const frontMatterPreview = buildFrontMatterPreview(
+      detectedFramework,
+      blogTitle,
+      metaDescription,
+      frontMatterTags,
+      authorOverride.trim() || undefined,
+      parsedCategories.length > 0 ? parsedCategories : undefined,
+    );
 
     return (
       <div className="fixed bottom-0 left-0 md:left-14 lg:left-[240px] right-0 z-10 bg-paper border-t border-border">
@@ -780,6 +905,67 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                     {targetFilePath}
                   </p>
                 </div>
+
+                {/* Author & Categories — Jekyll and Hugo only */}
+                {(detectedFramework === "jekyll" || detectedFramework === "hugo") && (
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+
+                    {/* Author */}
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor="gh-fm-author-republish"
+                        className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#555555]"
+                      >
+                        Author
+                        <span className="ml-1 normal-case font-normal text-[#999999]">optional</span>
+                      </label>
+                      <input
+                        id="gh-fm-author-republish"
+                        type="text"
+                        value={authorOverride}
+                        onChange={(e) => setAuthorOverride(e.target.value)}
+                        placeholder="e.g. Jane Smith"
+                        aria-label="Post author written to frontmatter author field"
+                        className={cn(
+                          "w-full bg-transparent px-0 py-1.5",
+                          "border-0 border-b border-[#E5E5E5] text-sm text-[#111111]",
+                          "placeholder:text-[#BBBBBB]",
+                          "outline-none focus:border-b-2 focus:border-[#111111]",
+                          "transition-[border-color,border-width] duration-150",
+                        )}
+                      />
+                    </div>
+
+                    {/* Categories */}
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor="gh-fm-categories-republish"
+                        className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#555555]"
+                      >
+                        Categories
+                        <span className="ml-1 normal-case font-normal text-[#999999]">optional</span>
+                      </label>
+                      <input
+                        id="gh-fm-categories-republish"
+                        type="text"
+                        value={categoriesInput}
+                        onChange={(e) => setCategoriesInput(e.target.value)}
+                        placeholder="guides, facebook"
+                        aria-label="Post categories for frontmatter, comma-separated slugs"
+                        className={cn(
+                          "w-full bg-transparent px-0 py-1.5",
+                          "border-0 border-b border-[#E5E5E5] text-sm text-[#111111]",
+                          "placeholder:text-[#BBBBBB]",
+                          "outline-none focus:border-b-2 focus:border-[#111111]",
+                          "transition-[border-color,border-width] duration-150",
+                        )}
+                      />
+                      <p className="text-[11px] text-[#999999]">Comma-separated slugs</p>
+                    </div>
+
+                  </div>
+                )}
+
                 <button
                   type="button"
                   aria-expanded={showFrontMatter}

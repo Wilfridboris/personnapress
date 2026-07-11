@@ -532,10 +532,17 @@ def test_extract_meta_description_case_insensitive():
     assert _extract_meta_description(html) == "Uppercase tag"
 
 
-def test_extract_meta_description_returns_empty_when_absent():
+def test_extract_meta_description_falls_back_to_first_paragraph():
     from app.services.publishing import _extract_meta_description
 
     html = '<h1>My Post</h1><p>Body text here.</p>'
+    assert _extract_meta_description(html) == "Body text here."
+
+
+def test_extract_meta_description_returns_empty_when_no_content():
+    from app.services.publishing import _extract_meta_description
+
+    html = '<h1>My Post</h1>'
     assert _extract_meta_description(html) == ""
 
 

@@ -72,6 +72,7 @@ async def list_clients(
             name=client.name,
             website_url=client.website_url,
             brand_voice_profile_status=bvp_status,
+            brand_voice_profile=client.brand_voice_profile,
             campaign_count=campaign_count or 0,
         ))
 

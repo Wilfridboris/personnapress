@@ -109,6 +109,7 @@ class ClientListItem(BaseModel):
     name: str
     website_url: Optional[str] = None
     brand_voice_profile_status: str  # "ready" | "analyzing" | "incomplete"
+    brand_voice_profile: Optional[dict] = None
     campaign_count: int = 0
 
     model_config = {"from_attributes": True}
