@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { jobsApi, clientsApi } from "@/lib/api";
 import { useJobStatus, isJobTerminal } from "@/hooks/useJobStatus";
 import { useClientStore } from "@/lib/stores/useClientStore";
+import type { BrandVoiceProfileStatus } from "@/lib/types";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -54,7 +55,7 @@ export function ClientDetail({ client }: Props) {
   // ── Ensure current client is registered in the store ─────────────────────
   useEffect(() => {
     const store = useClientStore.getState();
-    const bvpStatus = client.job_id
+    const bvpStatus: BrandVoiceProfileStatus = client.job_id
       ? "analyzing"
       : client.brand_voice_profile
         ? "ready"

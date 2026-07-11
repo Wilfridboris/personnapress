@@ -1401,3 +1401,363 @@ So that I have a final opportunity to retrieve my content or subscribe before it
 **Given** the `subscription_cleanup` job runs,
 **When** it executes any database delete operations,
 **Then** it processes at most 50 accounts per daily run to prevent long-running transactions; each deletion batch is wrapped in a try/except that logs failures to Sentry without stopping the rest of the batch.
+
+---
+
+## Epic 8: GitHub Blog Publishing (Phase 2)
+
+A user can install the PersonnaPress GitHub App on selected repositories, allowing the system to scan the repo and detect the static site generator in use (Jekyll, Astro, Next.js, Hugo, Eleventy, Docusaurus, MkDocs, or plain static). Once detected, the user can publish an approved Campaign blog post to the repo in the correct framework-native format — either via a Pull Request (default) or a direct commit. A dedicated marketing landing page targets developer bloggers searching for an AI-native publishing tool for their GitHub-hosted blog.
+
+**FRs covered:** FR-29, FR-30, FR-31, FR-32, FR-33, FR-34, FR-35
+
+### Story 8.1: GitHub App OAuth & Repository Connection
+
+As an authenticated user,
+I want to install the PersonnaPress GitHub App on my repositories and link one to my active Client,
+So that PersonnaPress can read my repo structure and publish blog posts on my behalf.
+
+**Acceptance Criteria:**
+
+**Given** a user navigates to `/clients/{id}/connections`,
+**When** the Platform Connections page loads,
+**Then** a GitHub connection card is shown alongside WordPress, Webflow, X, and LinkedIn cards;
+the card displays "Not connected" and a "Connect GitHub" CTA.
+
+**Given** a user clicks "Connect GitHub,"
+**When** the button is clicked,
+**Then** Next.js redirects the user to the GitHub App installation URL with a `state` parameter
+stored in a short-lived httpOnly cookie (SameSite=Lax, 10-minute expiry) for CSRF protection;
+the user selects which repositories to grant access to on the GitHub App consent screen.
+
+**Given** the user completes the GitHub App installation and is returned to the callback,
+**When** `/api/auth/github/callback` is hit with the installation `id` and `state`,
+**Then** Next.js verifies the `state` cookie matches; calls FastAPI
+`POST /api/v1/clients/{client_id}/connections/github` with the `installation_id`;
+FastAPI exchanges the installation ID for a GitHub App installation token via the GitHub App
+private key; the token is encrypted using AES-256-GCM and stored in `platform_connections`
+with `platform='github_pages'`; the connection card updates to "Connected" without a page reload.
+
+**Given** the GitHub connection card shows "Connected,"
+**When** the user clicks "Select repository,"
+**Then** a dropdown lists all repositories the GitHub App has access to (fetched via
+`GET /installation/repositories` using the installation token); the user selects one repo;
+the selection is stored on the `platform_connections` record as `repo_full_name`
+(e.g., `wilfridboris/my-blog`); the card label updates to "Connected — wilfridboris/my-blog."
+
+**Given** a user clicks "Disconnect" on the GitHub connection card,
+**When** confirmed,
+**Then** the `platform_connections` record for `platform='github_pages'` is deleted;
+the card reverts to "Not connected"; the GitHub App installation itself is NOT revoked
+(the user manages that on GitHub directly).
+
+**Given** the GitHub App installation token expires (tokens are short-lived, ~1 hour),
+**When** a subsequent API call is made requiring repo access,
+**Then** FastAPI automatically refreshes the token using the stored `installation_id` and
+the GitHub App private key — no user re-authentication required.
+
+**Given** a user attempts to connect GitHub on a Client they do not own,
+**When** any connection request is made,
+**Then** the API returns HTTP 403 — ownership is verified by comparing `clients.user_id`
+to the JWT `user_id`.
+
+---
+
+### Story 8.2: Repo Framework Detection Engine
+
+As an authenticated user,
+I want the system to scan my connected repository and tell me which blog framework it uses and where it will write my post,
+So that I can confirm the publish target before anything is committed.
+
+**Acceptance Criteria:**
+
+**Given** a user selects a repository on the GitHub connection card,
+**When** the repo is saved to `platform_connections`,
+**Then** FastAPI automatically triggers a detection scan via `POST /api/v1/clients/{client_id}/connections/github/detect`; the connection card shows "Scanning repository..." in JetBrains Mono 13px Graphite (matching the typewriter label pattern from UX-DR10) while detection runs; a Skeleton.tsx block (UX-DR17) fills the card's result area.
+
+**Given** the detection scan runs in `services/repo_detection.py`,
+**When** it executes,
+**Then** it fetches the root-level file listing and key subdirectory contents from the GitHub Contents API using the installation token; it checks for the following signals in priority order:
+
+| Framework    | Detection signals                                           |
+|--------------|-------------------------------------------------------------|
+| Jekyll       | `_config.yml` + `_posts/` directory                         |
+| Astro        | `astro.config.*` + `src/content/`                           |
+| Hugo         | `hugo.toml` OR `hugo.yaml` OR `hugo.json` + `content/`     |
+| Eleventy     | `.eleventy.js` OR `.eleventy.cjs`                           |
+| Docusaurus   | `docusaurus.config.*` + `blog/` directory                   |
+| MkDocs       | `mkdocs.yml` + `docs/` directory                            |
+| Next.js      | `next.config.*` + markdown/MDX files in `posts/` or `content/` |
+| Plain static | `index.html` OR `.nojekyll` with no other framework marker  |
+| Unknown      | No recognisable signals found                               |
+
+**Given** the detection scan completes with a confident match (single framework identified),
+**When** the result is stored,
+**Then** `platform_connections` is updated with `detected_framework` and `publish_path` stored in the `encrypted_credentials` JSON alongside the installation token (e.g., `{"detected_framework": "jekyll", "publish_path": "_posts/", "confidence": "high"}`); the connection card renders a Default Card (UX-DR5: White fill, 1px Border, no shadow) showing: framework name in Inter 500 Ink, detection signals in JetBrains Mono 12px Graphite (e.g., `_config.yml · _posts/`), publish path in JetBrains Mono 12px Ink (e.g., `_posts/YYYY-MM-DD-slug.md`); a "Re-scan" Secondary button (UX-DR3) sits below.
+
+**Given** the detection scan finds two or more plausible frameworks,
+**When** the result is ambiguous,
+**Then** the connection card shows the top 2–3 candidates as radio-style card options (Active Card variant — Highlighter fill, 1px Ink border, 4px 4px 0px Ink hard shadow — for the selected option; Default Card for unselected); each candidate shows framework name + publish path in JetBrains Mono; a "Confirm selection" Primary button saves the user's choice.
+
+**Given** the detection scan finds no recognisable signals (`detected_framework = 'unknown'`),
+**When** the card renders,
+**Then** a subdued message in Inter 14px Graphite reads: "Framework not detected. Choose your publish format manually."; a dropdown (bottom-border-only Input style, UX-DR4) lists all supported frameworks; user's manual selection is stored as the resolved `detected_framework`.
+
+**Given** the user clicks "Re-scan" on the connection card,
+**When** the scan runs again,
+**Then** a new detection call is made; the card returns to the "Scanning repository..." state; the stored `detected_framework` and `publish_path` are overwritten with the latest result.
+
+**Given** `services/repo_detection.py` executes detection,
+**When** it runs,
+**Then** it is the only location that calls the GitHub Contents API for file listing — detection logic does not live in routers or workers.
+
+---
+
+### Story 8.3: Publish Pipeline — Jekyll & Plain Static
+
+As an authenticated user,
+I want to publish my approved Campaign blog post to my Jekyll or plain static GitHub Pages repo,
+So that my post goes live in the correct format without me manually editing any files.
+
+**Acceptance Criteria:**
+
+**Given** the GitHub App is connected and `detected_framework` is `jekyll` or `plain_static`,
+**When** the user views an approved Campaign in the Approval Gate,
+**Then** a "Publish to GitHub" button appears in the sticky footer alongside "Publish now" and "Schedule"; the button uses the Secondary style (1px Ink border, transparent fill, UX-DR3) with a `Github` Lucide icon at 16px (aria-hidden="true") and the visible label "Publish to GitHub".
+
+**Given** a Jekyll repo connection is active and publish is triggered,
+**When** `services/publishing.py` executes the GitHub publish for `detected_framework='jekyll'`,
+**Then** `integrations/github.py` generates a markdown file at `_posts/{YYYY-MM-DD}-{slug}.md` where `slug` is derived from the blog post H1 (lowercased, spaces replaced with hyphens, non-alphanumeric characters stripped, max 60 chars); YAML front matter contains: `layout: post`, `title: "{H1}"`, `date: {ISO 8601}`, `description: "{meta description}"`, `categories: [{tags from voice profile}]`; the blog HTML is converted to clean Markdown (H1 used as title only in front matter, not repeated in body; H2/H3 preserved; featured image embedded as `![{alt}]({supabase_cdn_url})`).
+
+**Given** a plain static repo connection is active,
+**When** `services/publishing.py` executes the GitHub publish for `detected_framework='plain_static'`,
+**Then** `integrations/github.py` commits an HTML file at `{publish_path}/{slug}.html` (default publish_path: `docs/` if present, else repo root); the blog HTML from `campaigns.blog_html` is wrapped in a minimal HTML5 shell referencing the repo's existing stylesheet if a `<link>` tag is detectable in `index.html`; a `.nojekyll` file is created at the repo root if not already present.
+
+**Given** the GitHub publish completes successfully (either framework),
+**When** the commit or PR is created,
+**Then** `campaigns.status` transitions to `published` (direct commit mode) or a new `github_pr_url` field is set on the Campaign record (PR mode) and status remains `approved`; the `jobs` record is set to `status='complete'` with `completed_at=now()`.
+
+**Given** `integrations/github.py` is the execution context for all GitHub API write calls,
+**When** any commit, tree, blob, or PR operation is performed,
+**Then** `integrations/github.py` functions are called only from within `services/publishing.py` — never from routers or workers directly; decrypted installation tokens do not leave the scope of the calling function.
+
+**Given** a GitHub API error occurs during publish (rate limit 429, permissions 403, conflict 422),
+**When** the error is caught in `services/publishing.py`,
+**Then** `jobs.status` is set to `'failed'` with `error_details` containing the HTTP status code and GitHub API message; the Approval Gate Retry Panel (Story 5.5 pattern) lists the GitHub platform with its specific error; the retry button calls `POST /api/v1/campaigns/{id}/publish/retry` with `platform='github_pages'`.
+
+---
+
+### Story 8.4: Publish Pipeline — Astro, Next.js, Hugo, Eleventy
+
+As an authenticated user,
+I want to publish my blog post to my modern static site generator repo in the correct content format,
+So that my site rebuilds automatically with the new post without any manual file management.
+
+**Acceptance Criteria:**
+
+**Given** `detected_framework` is `astro`,
+**When** `integrations/github.py` generates the post file,
+**Then** the file is written to `src/content/blog/{slug}.mdx` (or `.md` if no `.mdx` files are found in the content directory); front matter uses the Astro content collection schema inferred from `content.config.*` — at minimum: `title`, `description`, `pubDate` (ISO format), `heroImage` (Supabase CDN URL); if the schema defines additional required fields they are set to empty strings with a `# TODO: fill in` comment so the PR is reviewable before merge.
+
+**Given** `detected_framework` is `nextjs`,
+**When** `integrations/github.py` resolves the publish path,
+**Then** the existing content strategy is inferred from the repo: if `posts/*.md` exists, write to `posts/{slug}.md`; if `content/*.mdx` exists, write to `content/{slug}.mdx`; if neither pattern is found, `confidence` is set to `"low"` on the connection record and the connection card prompts: "Content folder not detected. Confirm your publish path before your first post." with a manual path input (bottom-border Input, UX-DR4) and "Confirm path" Primary button.
+
+**Given** `detected_framework` is `hugo`,
+**When** `integrations/github.py` generates the post file,
+**Then** the file is written to `content/posts/{slug}.md`; front matter format (TOML vs YAML) is inferred by reading an existing post in the `content/posts/` directory; front matter contains: `title`, `date`, `description`, `draft = false` (TOML) or `draft: false` (YAML), `tags`, `cover.image` (Supabase CDN URL for the featured image).
+
+**Given** `detected_framework` is `eleventy`,
+**When** `integrations/github.py` generates the post file,
+**Then** the configured input directory is read from `.eleventy.js` (default `src/`); the post is written to `{input_dir}/posts/{slug}.md` if a `posts/` folder exists there, else `{input_dir}/{slug}.md`; YAML front matter contains: `title`, `date`, `description`, `tags`, `layout` (inferred from existing posts); if layout cannot be inferred, the field is omitted.
+
+**Given** any framework publish in this story runs,
+**When** the integration reads existing posts from the repo to infer front matter patterns,
+**Then** it fetches at most 3 existing post files from the content directory via the GitHub Contents API and uses the first as the front matter template — it does not introduce keys not already present in the repo's existing posts.
+
+**Given** a GitHub API error occurs,
+**When** the error is caught,
+**Then** the same retry and error-detail pattern applies as Story 8.3 — `jobs.status='failed'`, Retry Panel shown, `POST /api/v1/campaigns/{id}/publish/retry` with `platform='github_pages'`.
+
+---
+
+### Story 8.5: Publish Pipeline — Docusaurus & MkDocs
+
+As an authenticated user,
+I want to publish blog posts to my documentation site repo in the format those frameworks expect,
+So that my technical blog or docs site updates automatically without me creating files manually.
+
+**Acceptance Criteria:**
+
+**Given** `detected_framework` is `docusaurus`,
+**When** `integrations/github.py` generates the post file,
+**Then** the file is written to `blog/{YYYY-MM-DD}-{slug}.md` or `.mdx` depending on the format of existing files in the `blog/` directory; front matter contains: `title`, `description`, `authors` (set to a value matching the `authors.yml` format if that file exists in `blog/`, otherwise omitted), `tags`; if the repo uses Docusaurus v3 format (detected by `docusaurus.config.ts` extension or package version), `.mdx` is preferred.
+
+**Given** `detected_framework` is `mkdocs`,
+**When** `integrations/github.py` resolves the blog path,
+**Then** `mkdocs.yml` is read via the GitHub Contents API; if the Material theme's `blog` plugin is configured, the post is written to the plugin's `blog_dir` (default: `docs/blog/posts/{slug}.md`); if no blog plugin is found, the post is written to `docs/{slug}.md` and the connection card shows a warning message in Inter 14px Graphite: "MkDocs blog plugin not detected — post will be written to docs root."
+
+**Given** `mkdocs.yml` cannot be read (repo access error or file absent) with `detected_framework='mkdocs'` and `confidence='low'`,
+**When** the connection card renders,
+**Then** the card shows: "MkDocs detected but config could not be read. Confirm the publish path before your first post." with a manual path input (bottom-border Input component, UX-DR4) and a "Confirm path" Primary button; the confirmed path is stored in the connection record.
+
+**Given** a Docusaurus `authors.yml` file exists in the `blog/` directory,
+**When** the post is generated,
+**Then** the `authors` front matter field references a key from `authors.yml` matching the GitHub username of the account that owns the PersonnaPress subscription; if no matching key is found, the field is omitted rather than set to an incorrect value.
+
+**Given** either framework publish completes,
+**When** the commit or PR is created,
+**Then** the same Campaign status transition and `github_pr_url` pattern applies as Story 8.3; the Approval Gate shows the PR link or Published summary per the active publish mode.
+
+---
+
+### Story 8.6: PR-First Workflow, Preview UI & Direct Commit Option
+
+As an authenticated user,
+I want to review exactly where my post will be written and choose between a Pull Request or a direct commit before publishing to GitHub,
+So that I never accidentally corrupt a live site by committing the wrong file to the wrong location.
+
+**Acceptance Criteria:**
+
+**Given** a Campaign is in `approved` status and the active Client has a GitHub connection with `detected_framework` set,
+**When** the Approval Gate renders the sticky action footer,
+**Then** a "Publish to GitHub" Secondary button (1px Ink border, transparent fill, UX-DR3, `Github` Lucide icon 16px) appears alongside existing platform publish buttons; both GitHub and other-platform buttons may be present simultaneously.
+
+**Given** the user clicks "Publish to GitHub,"
+**When** the action is triggered,
+**Then** a pre-publish confirmation panel expands inline below the sticky footer (Paper background, 1px Border top, 24px padding, no shadow at rest); the panel contains:
+  - "Publishing to" label (Inter 11px uppercase tracked, UX-DR2 label style) + repo full name in Inter 14px Ink 500
+  - "File" label + target file path in JetBrains Mono 13px Ink: e.g., `_posts/2026-07-09-my-title.md`
+  - A "Show front matter" secondary link that expands a JetBrains Mono 12px code block (Paper background, 1px Border, 12px padding) showing the YAML/TOML that will be written; collapsed by default
+  - Publish mode selector: two Default Card variants (UX-DR5, rounded-none) side by side — "Open Pull Request" (Active variant: Highlighter fill, 1px Ink border, 4px 4px 0px Ink hard shadow) as default; "Commit directly" (Default variant: White fill, 1px Border) as alternative; clicking either card switches which holds the Active style
+  - "Confirm and publish" Primary button (Ink fill, White text, 4px 4px 0px Ink shadow, rounded-none, UX-DR3)
+  - "Cancel" secondary text link below the button that collapses the panel
+
+**Given** the user selects "Open Pull Request" and clicks "Confirm and publish,"
+**When** `POST /api/v1/campaigns/{id}/publish/github` is called with `{"mode": "pr"}`,
+**Then** FastAPI creates a branch at `personnapress/{campaign_id_short}` from the repo's default branch; commits the post file to the branch; opens a PR with the blog post H1 as title and a body containing the target file path and "Generated by PersonnaPress"; a `jobs` record is created with `job_type='github_publish'` and `status='pending'`; the confirm button shows an inline spinner (UX-DR17 pattern) while the job runs.
+
+**Given** the PR is successfully created,
+**When** the `jobs` record reaches `status='complete'`,
+**Then** the pre-publish panel collapses and is replaced by a single confirmation line below the footer: "PR opened — [{title truncated to 45 chars}]({pr_url})" rendered as an Ink-colored text link; the Approval Gate header shows a new "PR OPEN" StatusBadge variant (Default Card fill: Border (#E5E5E5), Graphite text, uppercase Inter tracked label "PR OPEN", 2px border-radius — matching UX-DR6 pattern).
+
+**Given** the user selects "Commit directly" and clicks "Confirm and publish,"
+**When** `POST /api/v1/campaigns/{id}/publish/github` is called with `{"mode": "commit"}`,
+**Then** the post file is committed directly to the repo's default branch; `campaigns.status` transitions to `published`; the Approval Gate footer transitions to the "Published" summary state showing "Published to {repo_name}" with the 7-character commit SHA as a text link.
+
+**Given** the Campaign's connection record has `direct_commit_default: true` (a toggle on the GitHub connection card, Secondary button style, labelled "Default to direct commit"),
+**When** the pre-publish panel opens,
+**Then** "Commit directly" is the pre-selected Active Card; the user can still switch to PR mode before confirming.
+
+**Given** a GitHub merge webhook fires (`pull_request.closed` with `merged: true`) for a PR URL stored in `campaigns.github_pr_url`,
+**When** the Next.js webhook route at `/api/webhooks/github` receives it,
+**Then** it validates the payload signature using the GitHub App webhook secret; calls FastAPI `POST /api/v1/webhooks/github`; FastAPI matches the PR URL to the Campaign record and transitions `campaigns.status` from `approved` to `published`; the Approval Gate shows "Published" on the user's next load.
+
+**Given** all interactive elements in the pre-publish panel,
+**When** assessed for accessibility,
+**Then** mode selector cards are keyboard-navigable (Tab moves between them, Space/Enter toggles selection); the "Show front matter" link has `aria-expanded` toggling true/false; the file path code block has `role="region" aria-label="Publish target file path"`; the confirm button has `focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2`.
+
+---
+
+### Story 8.7: GitHub Publisher Landing Page
+
+As a developer who hosts their blog on GitHub Pages,
+I want to find a dedicated page that clearly explains how PersonnaPress publishes to my specific setup,
+So that I can quickly understand if it supports my framework and sign up without friction.
+
+**Acceptance Criteria:**
+
+**Given** an unauthenticated visitor navigates to `/github-publisher`,
+**When** the page loads,
+**Then** it renders as a Next.js App Router SSG page (`export const dynamic = 'force-static'`); a minimal top navigation bar shows the PersonnaPress wordmark in Playfair Display (Ink) on a Paper background, a "Sign in" text link (Inter, Graphite), and a "Start free" Primary button (compact, Ink fill, White text); no app shell sidebar is present.
+
+**Given** the hero section renders,
+**When** it is displayed,
+**Then** the hero uses a full-bleed Ink (#111111) background (inverted Paper Style — the single aesthetic risk, appropriate for a developer audience expecting terminal/dark aesthetics); the headline is Playfair Display 700, White, `text-5xl lg:text-7xl`, `text-balance`: "Publish your AI-written blog to GitHub. In the right format, to the right file, every time."; the subheadline in Inter 18px White/70 reads: "PersonnaPress detects your Jekyll, Astro, Hugo, or Next.js setup and commits the post where it belongs — no config, no copy-paste."; a single Primary button with inverted styling (White fill, Ink text, 4px 4px 0px White hard shadow, `rounded-none`) reads "Connect your repo" and links to `/register`; below the button in JetBrains Mono 13px White/50: `Jekyll · Astro · Next.js · Hugo · Eleventy · Docusaurus · MkDocs`.
+
+**Given** the "Terminal demo" section renders below the hero,
+**When** the section scrolls into the viewport (Intersection Observer triggers the animation),
+**Then** a Paper (#F9F9F6) background section renders a simulated terminal window: an Ink-background card (rounded-none, 1px Border, no shadow), a traffic-light dots row in the card header (three 10px circles in Danger/Highlighter/Success — purely decorative, `aria-hidden="true"`), and a JetBrains Mono 13px White content area; on scroll trigger, a CSS `@keyframes` character-reveal animation (same mechanism as UX-DR10 typewriter) types the following sequence:
+
+```
+$ personnapress detect wilfridboris/my-blog
+Scanning repository...
+  ✓ Found _config.yml
+  ✓ Found _posts/ (14 posts)
+  ✓ Detected: Jekyll
+
+Target file: _posts/2026-07-09-how-i-built-this.md
+Front matter: title, date, categories, description
+
+Ready to publish via Pull Request.
+```
+
+The `✓` characters render in Success green (#2E4F2E); `prefers-reduced-motion` shows the completed terminal state immediately with no animation.
+
+**Given** the "Framework support" section renders,
+**When** it is displayed,
+**Then** a Paper background section with a Playfair H2 "Works with your setup" shows an 8-card grid (4 columns desktop, 2 columns mobile); each card is a Default Card (UX-DR5: White fill, 1px Border, rounded-none, hover adds 4px 4px 0px Ink hard shadow); each card shows: framework name in Inter 500 15px Ink, detection signal files in JetBrains Mono 12px Graphite (e.g., `_config.yml · _posts/`), publish path in JetBrains Mono 12px Ink bold (e.g., `_posts/YYYY-MM-DD-slug.md`); frameworks: Jekyll, Astro, Next.js, Hugo, Eleventy, Docusaurus, MkDocs, Plain static.
+
+**Given** the "How it compares" section renders,
+**When** it is displayed,
+**Then** a Paper background section with a Playfair H2 "Not a CMS. A publishing layer." shows a comparison table with Ink 1px solid borders throughout (no border-radius, brutalist table style consistent with Paper aesthetic); columns: Feature, PersonnaPress, Pages CMS, Decap CMS; rows and cell values: "AI content generation" (✓ / ✗ / ✗), "Auto framework detection" (✓ / ✗ / ✗), "PR-first publish" (✓ / ✓ / ✓), "Voice-matched writing" (✓ / ✗ / ✗), "No config file required" (✓ / ✗ / ✗); ✓ cells use Success (#2E4F2E) text, ✗ cells use Danger (#8B0000) text; table header row uses Ink background, White Inter 11px uppercase tracked labels.
+
+**Given** the CTA section at the bottom renders,
+**When** it is displayed,
+**Then** a full-bleed Highlighter (#FFF1B8) background section (the one warm accent from the Paper palette used as a deliberate full-section fill) shows: Playfair Display H2 "Your next post is one Brain Dump away." in Ink; Inter 16px Graphite body: "Connect your GitHub repo, paste your idea, and PersonnaPress handles the rest."; a Primary button "Start free — no credit card" (Ink fill, White text, 4px 4px 0px Ink shadow, rounded-none); below in Inter 13px Graphite: "14-day free trial · Supports 8 frameworks · PR-first by default."
+
+**Given** the page is assessed for SEO,
+**When** the static page is generated,
+**Then** `<title>` reads "AI Blog Writer for GitHub Pages — PersonnaPress"; `<meta name="description">` reads "Publish AI-written blog posts to your Jekyll, Astro, Hugo, Next.js, or Eleventy repo. PersonnaPress detects your framework and commits the post in the right format — no config required."; JSON-LD structured data of type `SoftwareApplication` is present with `operatingSystem: "Web"`, `applicationCategory: "DeveloperApplication"`, and an `offers` block matching the pricing in §8 of the PRD; `og:title`, `og:description`, and `og:image` are set; canonical URL is `/github-publisher`; all images have descriptive `alt` text.
+
+**Given** all interactive elements on the page,
+**When** assessed for accessibility,
+**Then** the terminal demo animation respects `prefers-reduced-motion`; all buttons have visible `focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2` states; the comparison table has `<th scope="col">` and `<th scope="row">` set correctly; decorative terminal dots have `aria-hidden="true"`; minimum touch target size is 44px on all interactive elements.
+
+---
+
+## Epic 11: UX Navigation & Publishing Clarity (continued)
+
+### Story 11.6: GitHub Connection Reuse & Connections Nav Item
+
+As an authenticated PersonnaPress user with multiple clients,
+I want connecting GitHub to a new client to reuse my existing GitHub App installation automatically,
+so that I don't get sent to a useless GitHub settings page when connecting a second client.
+
+**Acceptance Criteria:**
+
+1. **Given** a user clicks "Connect GitHub" on any client's connections page, **When** the user already has a GitHub connection on another client, **Then** the app detects the existing installation, creates the connection directly, and shows "Connected" without redirecting to GitHub — no GitHub OAuth flow is triggered.
+
+2. **Given** the existing GitHub installation is reused, **When** the connection is created, **Then** the user is immediately taken to repo selection (the same flow as after a fresh installation). The repo selection step is still per-client — each client picks its own repository.
+
+3. **Given** a user has no prior GitHub connection on any client, **When** they click "Connect GitHub", **Then** the existing GitHub OAuth redirect flow runs as before (no change to the first-time connect experience).
+
+4. **Given** the "Connect GitHub" button is clicked, **When** the reuse check is in progress, **Then** the button shows "Connecting…" and is disabled; a connection error is shown inline below the card if the reuse attempt fails.
+
+5. **Given** the left sidebar navigation, **When** it renders for an authenticated user with an active client, **Then** a "Connections" item appears in the nav list (between "Clients" and "Calendar"), using the `Plug` Lucide icon, linking to `/clients/{activeClientId}/connections`.
+
+6. **Given** the left sidebar navigation, **When** no active client is set (e.g. first login before client creation), **Then** the "Connections" nav item is not shown (or is shown but disabled) rather than linking to a broken URL.
+
+7. **Given** the GitHub publish endpoint receives `author` and `categories` fields in the request body, **When** the background job is dispatched, **Then** both values are passed through to `publish_github_job` and forwarded to `generate_github_post_file` — completing the router-layer wiring that Story 11.5 added at the service layer.
+
+---
+
+### Story 11.7: Republish Error Clarity & Re-Publish Support
+
+As an authenticated PersonnaPress user,
+I want clear feedback when I try to publish a campaign that is already published,
+and I want the option to re-publish to platforms I've connected since the original publish,
+so that I understand what's happening and can get content to new platforms without confusion.
+
+**Acceptance Criteria:**
+
+1. **Given** the frontend `apiFetch` utility receives a non-2xx response with body `{"detail": {"error": {"code": "...", "message": "..."}}}` (FastAPI HTTPException format), **When** parsing the error, **Then** `APIError.message` is set to the value from `detail.error.message` and `APIError.code` is set from `detail.error.code` — so all backend error messages surface correctly in the UI instead of falling through to "Something went wrong."
+
+2. **Given** the campaign is in `published` status and the user opens "Publish to more platforms", **When** they click "Publish now", **Then** the backend accepts the request (campaign in `published` status is treated as eligible for re-publishing) and dispatches the publish job to all currently connected platforms.
+
+3. **Given** a re-publish job completes after AC 2, **When** all platforms succeed, **Then** the campaign status remains `published` and the job result is stored; the approval panel shows the updated "Published to [platforms]" summary.
+
+4. **Given** the backend `publish_campaign_now` endpoint receives a request for a `published` campaign, **When** the publish job is dispatched, **Then** the endpoint accepts status `approved` OR `published` as valid pre-publish states (change: `campaign.status not in ("approved", "published")` triggers the 400 guard).
+
+5. **Given** a user is in the "Publish to more platforms" republish panel, **When** the publish job fails or the error is `INVALID_STATUS_TRANSITION` (e.g. campaign is in `rejected` or `failed` state), **Then** the toast message is the actual backend error text (fixed by AC 1), not "Something went wrong."
+
+6. **Given** all existing error handling throughout the app (TRIAL_EXPIRED, NO_PLATFORM_CONNECTIONS, etc.), **When** the `apiFetch` fix in AC 1 is applied, **Then** all existing toast messages and code-based checks (e.g. `err.code === "TRIAL_EXPIRED"`) continue to work correctly — the fix is additive, not breaking.

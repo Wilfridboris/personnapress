@@ -35,6 +35,7 @@ The product's core bet is that voice fidelity — not just content generation �
 
 - **Enterprise marketing teams** with existing content management systems, approval chains, and compliance workflows. PersonnaPress v1 has no RBAC, no approval chains beyond single-user approve/reject, and no SSO.
 - **Users who need to publish to Meta/Instagram/Threads.** These platforms are deferred to Phase 2.
+- **Users who want to publish to GitHub-hosted blogs (Jekyll, Astro, Next.js, Hugo, Eleventy, Docusaurus, MkDocs, static).** GitHub publishing is a Phase 2 feature (Epic 8).
 - **Users who want a full CMS.** PersonnaPress generates and publishes content — it does not manage an existing content library, handle comments, or provide analytics dashboards.
 - **Non-English content creators.** `[ASSUMPTION: v1 supports English-language content only. Multi-language generation is Phase 3+.]`
 
@@ -72,6 +73,9 @@ The product's core bet is that voice fidelity — not just content generation �
 - **Platform Connection** — An authenticated link between a Client and an external publishing platform (WordPress, Webflow, X, LinkedIn). Stores credentials required to publish on the Client's behalf.
 - **Brand Ingestion** — The process of analyzing a Client's existing website content and/or uploaded text to extract a Brand Voice Profile.
 - **Featured Image** — An AI-generated image (via FLUX.1 [pro] on Replicate) that accompanies the blog post in a Campaign.
+- **GitHub App** — A first-party GitHub integration that grants fine-grained repository permissions (Contents: write, Metadata: read, Pages: read) scoped to user-selected repositories only. Used in Epic 8 for repo connection and blog publishing.
+- **Repo Detection** — The process of scanning a connected GitHub repository for framework marker files (e.g., `_config.yml`, `astro.config.*`, `hugo.toml`) to determine the static site generator in use and the correct publish target path.
+- **Framework Template** — The publish format and target file path specific to a detected static site generator (e.g., `_posts/YYYY-MM-DD-slug.md` for Jekyll, `src/content/blog/slug.md` for Astro).
 
 ## 4. Features
 
@@ -404,6 +408,80 @@ When a user's 14-day trial expires without subscribing, the system transitions t
 - All existing data (Clients, Campaigns, Brand Voice Profiles, Platform Connections) is preserved for 30 days after trial expiration. `[ASSUMPTION: 30-day data retention after trial expiration.]`
 - After 30 days of inactivity post-trial, the account and all associated data are scheduled for deletion with a 7-day warning email. `[ASSUMPTION: 30+7 day retention-then-deletion policy.]`
 - Upgrade prompts appear at day 10 (4 days remaining) and day 13 (1 day remaining) as in-app notifications. `[ASSUMPTION: In-app nudge timing.]`
+
+### 4.11 GitHub Blog Publishing (Phase 2)
+
+**Description:** Users can connect a Client to one or more GitHub repositories via a GitHub App installation, allowing PersonnaPress to detect the static site generator in use and publish AI-generated blog posts directly to the repo in the correct format. Publishing defaults to opening a Pull Request for human review before merge. Supports Jekyll, Astro, Next.js (markdown/MDX content), Hugo, Eleventy, Docusaurus, MkDocs, and plain static sites.
+
+**Functional Requirements:**
+
+#### FR-29: GitHub App Repository Connection
+
+User can install the PersonnaPress GitHub App on selected repositories and link a repo to a Client.
+
+**Consequences (testable):**
+- User is redirected to GitHub App install flow and can select specific repos to grant access to.
+- Selected repos appear in a repo selector on the Platform Connections page.
+- Installation token is encrypted at rest (AES-256-GCM, same pattern as FR-22).
+- Connection card shows repo name and detected framework once scanned.
+
+#### FR-30: Repository Framework Detection
+
+System scans a connected repository and identifies the static site generator with a confidence score.
+
+**Consequences (testable):**
+- System reads root-level config files and directory structure via GitHub Contents API.
+- Returns detected framework (or "Unknown") with a confidence score and proposed publish path.
+- User sees a preview: "Detected Astro blog — will publish to `src/content/blog/`" before any commit.
+- If detection is ambiguous, system presents top 2–3 candidates for user confirmation.
+
+#### FR-31: GitHub Publish — Jekyll & Plain Static
+
+User can publish an approved Campaign blog post to a Jekyll or plain static GitHub Pages repo.
+
+**Consequences (testable):**
+- Jekyll: creates `_posts/YYYY-MM-DD-slug.md` with YAML front matter (title, date, tags, description).
+- Plain static: creates or updates HTML/Markdown in the configured publish root.
+- Publish defaults to PR-first; direct commit available as user opt-in per connection.
+
+#### FR-32: GitHub Publish — Astro, Next.js, Hugo, Eleventy
+
+User can publish to repos using modern static site generators.
+
+**Consequences (testable):**
+- Astro: creates MDX/Markdown entry under `src/content/blog/` matching detected collection schema.
+- Next.js: detects existing content pattern (`posts/`, `content/`, or MDX routes) and writes there only.
+- Hugo: creates `content/posts/slug.md` with front matter (title, description, date, tags).
+- Eleventy: creates Markdown in the configured content folder with front matter tags.
+- If content pattern is ambiguous (Next.js), system prompts user to confirm target folder before writing.
+
+#### FR-33: GitHub Publish — Docusaurus & MkDocs
+
+User can publish to documentation-focused static site repos.
+
+**Consequences (testable):**
+- Docusaurus: creates `blog/YYYY-MM-DD-slug.md` or `.mdx` following Docusaurus blog conventions.
+- MkDocs: reads `mkdocs.yml` for blog plugin path; creates markdown at the configured location.
+
+#### FR-34: PR-First Publish Workflow
+
+Publishing to GitHub defaults to opening a Pull Request; user can opt in to direct commit.
+
+**Consequences (testable):**
+- PR created on a new branch; title matches blog post H1; body includes file path preview and front matter.
+- User sees PR link in the Approval Gate after publish: "PR opened — [title] → [repo/branch]."
+- Direct commit option is user-configurable per connection (default: off).
+- Campaign status transitions to `published` on PR merge (via GitHub webhook) or immediately on direct commit.
+
+#### FR-35: GitHub Publisher Landing Page
+
+A dedicated public marketing page promotes the GitHub publishing capability to developer bloggers.
+
+**Consequences (testable):**
+- Accessible at a dedicated route (e.g., `/github-publisher`).
+- Targets search intent: "AI blog writer for GitHub Pages", "publish to Jekyll from AI."
+- Includes framework detection demo, differentiator table vs. Pages CMS / Decap, and sign-up CTA.
+- SEO-optimized with JSON-LD schema markup; built as a Next.js App Router SSG page.
 
 ## 5. Non-Goals (Explicit)
 
