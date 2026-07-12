@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 3-9-configurable-gemini-model (2026-07-12)
+
+- Empty string is a valid value for `GEMINI_MODEL` — Pydantic accepts it, Gemini client fails at call time. Out of scope per story dev notes ("Do NOT add validation"). Consider `Field(min_length=1)` in a future hardening pass.
+- No allowlist/enum constraint on `GEMINI_MODEL` — invalid model names defer to runtime API error. Out of scope per story dev notes.
+- Whitespace in `GEMINI_MODEL` not stripped — a padded value causes silent API rejection. Out of scope per story dev notes.
+- Module-level `_MODEL` singleton locks the model at import time — no per-request override possible. Pre-existing design; refactor only if A/B or fallback logic is needed.
+
 ## Deferred from: code review of 11-9-fix-publish-dedup-no-migration (2026-07-11)
 
 - `error_details` field name is semantically inverted — it now stores success data on complete jobs. Pre-existing design; rename to `result_details` would require a migration. [backend/app/workers/publish.py]

@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     INTERNAL_API_URL: str = "http://localhost:8000"
 
     GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
     REPLICATE_API_TOKEN: str = ""
 
     SENTRY_DSN: str = ""

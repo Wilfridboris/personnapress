@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 _client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-_MODEL = "gemini-2.5-flash"
+_MODEL = settings.GEMINI_MODEL
+logger.info("Gemini model: %s", _MODEL)
 
 _BVP_PROMPT_TEMPLATE = """Analyze the following text and extract a Brand Voice Profile.
 
