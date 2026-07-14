@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { publishingApi, clientsApi } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { PlatformConnectionCard, PlatformConnectionCardSkeleton } from "./PlatformConnectionCard";
+import { DeliveryTokensCard } from "./DeliveryTokensCard";
 
 interface Props {
   clientId: string;
@@ -77,6 +78,7 @@ export function PlatformConnectionsClient({ clientId }: Props) {
               />
             )
           )}
+          <DeliveryTokensCard clientId={clientId} />
         </div>
       )}
     </>

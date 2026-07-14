@@ -1,5 +1,14 @@
 # Deferred Work
 
+## Deferred from: code review of 12-2-public-delivery-api-tokens (2026-07-13)
+
+- Token prefix collision — only 4 bytes entropy after `ppd_` fixed prefix; `scalar_one_or_none` silently returns None on collision; birthday collision negligible below ~4096 tokens per client. Add DB unique constraint on (client_id, token_prefix) or extend prefix length in a future hardening pass. [backend/app/db/repositories/delivery_tokens.py]
+- `/v1/tags` fan-out loads up to 10,000 published articles into memory for tag aggregation; counts silently truncate above that limit. Replace with a DB-level aggregation (unnest + group by) if article volumes grow. [backend/app/routers/public_articles.py]
+- `TIMESTAMP(timezone=False)` in delivery_tokens migration — pre-existing pattern across all migrations; safe while app server and DB are both UTC. Migrate to TIMESTAMPTZ in a future infrastructure hardening pass. [backend/alembic/versions/b3c4d5e6f7a8_add_delivery_tokens.py]
+- `list_delivery_tokens` returns all tokens (including revoked) with no pagination; acceptable at MVP scale. Add pagination + filter-by-revoked-state when UI needs it. [backend/app/db/repositories/delivery_tokens.py]
+- `client_id` FK on delivery_tokens has no ON DELETE CASCADE — orphaned tokens possible after client deletion. Coordinate with client deletion logic (Story 7.3 cleanup scheduler) or add CASCADE in a future hardening migration. [backend/alembic/versions/b3c4d5e6f7a8_add_delivery_tokens.py]
+- `If-None-Match` multi-value ETag parsing (RFC 7232 §3.2) — current code does exact equality; a client sending multiple ETags gets 200 instead of 304. Implement proper comma-split comparison in a future caching hardening pass. [backend/app/routers/public_articles.py]
+
 ## Deferred from: code review of 12-1-article-model-revision-history (2026-07-13)
 
 - Empty slug — no DB non-empty constraint; `slug_from_title` always produces non-empty in practice; add `CheckConstraint("length(slug) > 0")` in a future hardening pass. [backend/alembic/versions/cc76abfc05a1_add_articles_and_revisions.py]

@@ -15,6 +15,12 @@ from app.db.repositories.clients import (
     get_clients_by_user,
     update_client,
 )
+from app.db.repositories.delivery_tokens import (
+    create_delivery_token,
+    get_delivery_token,
+    list_delivery_tokens,
+    revoke_delivery_token,
+)
 from app.db.repositories.jobs import (
     create_job,
     get_active_ingestion_job_for_client,
@@ -26,6 +32,10 @@ from app.schemas.client import (
     ClientListResponse,
     ClientResponse,
     ClientUpdate,
+    DeliveryTokenCreate,
+    DeliveryTokenCreateResponse,
+    DeliveryTokenListResponse,
+    DeliveryTokenResponse,
     QuestionnaireRequest,
 )
 from app.services.subscription_service import check_client_limit, get_user_plan_info
@@ -359,4 +369,89 @@ async def submit_voice_questionnaire(
     return {"job_id": str(job.id)}
 
 
+_TOKEN_NOT_FOUND = {"error": {"code": "TOKEN_NOT_FOUND", "message": "Delivery token not found.", "detail": {}}}
+
+
+@router.post("/{client_id}/delivery-tokens", response_model=DeliveryTokenCreateResponse, status_code=201)
+async def create_client_delivery_token(
+    client_id: uuid.UUID,
+    body: DeliveryTokenCreate,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> DeliveryTokenCreateResponse:
+    try:
+        user_id = uuid.UUID(current_user["user_id"])
+    except (ValueError, KeyError):
+        raise HTTPException(status_code=401, detail=_INVALID_SESSION)
+
+    client = await get_client(db, client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+
+    token_record, raw_token = await create_delivery_token(db, client_id, body.name)
+    await db.commit()
+
+    return DeliveryTokenCreateResponse(
+        id=token_record.id,
+        name=token_record.name,
+        token_prefix=token_record.token_prefix,
+        created_at=token_record.created_at,
+        token=raw_token,
+    )
+
+
+@router.get("/{client_id}/delivery-tokens", response_model=DeliveryTokenListResponse)
+async def list_client_delivery_tokens(
+    client_id: uuid.UUID,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> DeliveryTokenListResponse:
+    try:
+        user_id = uuid.UUID(current_user["user_id"])
+    except (ValueError, KeyError):
+        raise HTTPException(status_code=401, detail=_INVALID_SESSION)
+
+    client = await get_client(db, client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+
+    tokens = await list_delivery_tokens(db, client_id)
+    items = [
+        DeliveryTokenResponse(
+            id=t.id,
+            name=t.name,
+            token_prefix=t.token_prefix,
+            created_at=t.created_at,
+            last_used_at=t.last_used_at,
+            revoked=t.revoked_at is not None,
+        )
+        for t in tokens
+    ]
+    return DeliveryTokenListResponse(items=items)
+
+
+@router.delete("/{client_id}/delivery-tokens/{token_id}", status_code=204)
+async def revoke_client_delivery_token(
+    client_id: uuid.UUID,
+    token_id: uuid.UUID,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    try:
+        user_id = uuid.UUID(current_user["user_id"])
+    except (ValueError, KeyError):
+        raise HTTPException(status_code=401, detail=_INVALID_SESSION)
+
+    client = await get_client(db, client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+
+    token = await get_delivery_token(db, token_id)
+    if not token or token.client_id != client_id:
+        raise HTTPException(status_code=404, detail=_TOKEN_NOT_FOUND)
+
+    await revoke_delivery_token(db, token)
+    await db.commit()
+
+    return Response(status_code=204)
 

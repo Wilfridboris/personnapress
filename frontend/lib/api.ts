@@ -1,4 +1,4 @@
-import type { BrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, FileListResponse, GitHubDetectionResult, Job, PlatformConnectionStatus, QuestionnairePayload, SubscriptionInfo } from "./types";
+import type { BrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, DeliveryToken, DeliveryTokenCreateResponse, DeliveryTokenListResponse, FileListResponse, GitHubDetectionResult, Job, PlatformConnectionStatus, QuestionnairePayload, SubscriptionInfo } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -169,6 +169,18 @@ export const subscriptionsApi = {
   getMe: () => apiFetch<SubscriptionInfo>("/subscriptions/me"),
   getStatus: () => apiFetch<{ status: string }>("/subscriptions/status"),
   createPortal: () => apiFetch<{ portal_url: string }>("/subscriptions/portal", { method: "POST" }),
+};
+
+export const deliveryTokensApi = {
+  list: (clientId: string) =>
+    apiFetch<DeliveryTokenListResponse>(`/clients/${clientId}/delivery-tokens`),
+  create: (clientId: string, name: string) =>
+    apiFetch<DeliveryTokenCreateResponse>(`/clients/${clientId}/delivery-tokens`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  revoke: (clientId: string, tokenId: string) =>
+    apiFetch<void>(`/clients/${clientId}/delivery-tokens/${tokenId}`, { method: "DELETE" }),
 };
 
 export const publishingApi = {

@@ -195,6 +195,19 @@ class Article(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class DeliveryToken(SQLModel, table=True):
+    __tablename__ = "delivery_tokens"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    client_id: uuid.UUID = Field(foreign_key="clients.id", index=True)
+    name: str = Field(sa_column=Column(Text, nullable=False))
+    token_prefix: str = Field(sa_column=Column(Text, nullable=False, index=True))
+    token_hash: str = Field(sa_column=Column(Text, nullable=False))
+    revoked_at: Optional[datetime] = Field(default=None, nullable=True)
+    last_used_at: Optional[datetime] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class ArticleRevision(SQLModel, table=True):
     __tablename__ = "article_revisions"
     __table_args__ = (UniqueConstraint("article_id", "revision_number"),)

@@ -120,3 +120,40 @@ class ClientListResponse(BaseModel):
     plan_at_limit: bool
     plan_tier: str
     client_limit: int
+
+
+class DeliveryTokenCreate(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def name_not_empty(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Token name is required")
+        if len(v) > 255:
+            raise ValueError("Token name must be 255 characters or fewer")
+        return v
+
+
+class DeliveryTokenResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    token_prefix: str
+    created_at: datetime
+    last_used_at: Optional[datetime] = None
+    revoked: bool
+
+    model_config = {"from_attributes": True}
+
+
+class DeliveryTokenCreateResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    token_prefix: str
+    created_at: datetime
+    token: str
+
+
+class DeliveryTokenListResponse(BaseModel):
+    items: list[DeliveryTokenResponse]

@@ -226,6 +226,27 @@ export interface SubscriptionResponse {
 
 export type SubscriptionInfo = SubscriptionResponse;
 
+export interface DeliveryToken {
+  id: string;
+  name: string;
+  token_prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked: boolean;
+}
+
+export interface DeliveryTokenListResponse {
+  items: DeliveryToken[];
+}
+
+export interface DeliveryTokenCreateResponse {
+  id: string;
+  name: string;
+  token_prefix: string;
+  created_at: string;
+  token: string;
+}
+
 export interface Subscription {
   id: string;
   user_id: string;
