@@ -16,6 +16,20 @@ logger = logging.getLogger(__name__)
 _WORDS_PER_MINUTE = 225
 
 
+def _extract_excerpt(html: str) -> str:
+    """Return the first substantive paragraph (BLUF intro) as the article excerpt.
+
+    Strips the TL;DR block before searching so the excerpt is the real opening
+    paragraph, not the summary callout.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    tldr = soup.find("div", class_="tldr")
+    if tldr:
+        tldr.decompose()
+    first_p = soup.find("p")
+    return first_p.get_text(separator=" ", strip=True)[:300] if first_p else ""
+
+
 def _reading_time(html: str) -> int:
     text = BeautifulSoup(html, "html.parser").get_text(separator=" ")
     word_count = len(text.split())
@@ -73,7 +87,7 @@ async def create_or_update_article_from_campaign(
     slug = await _unique_slug(session, campaign.client_id, base_slug)
 
     meta_description = _extract_meta_description(campaign.blog_html)
-    excerpt = meta_description
+    excerpt = _extract_excerpt(campaign.blog_html)
     tags = campaign.voice_score.get("tags") if isinstance(campaign.voice_score, dict) else None
     reading_time = _reading_time(campaign.blog_html)
     article_status = status_override if status_override else ArticleStatus.published
