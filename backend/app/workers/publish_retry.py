@@ -5,9 +5,10 @@ import logging
 from uuid import UUID
 
 from app.db.connection import get_session_context
-from app.db.repositories.campaigns import update_campaign_status
+from app.db.repositories.campaigns import get_campaign, update_campaign_status
 from app.db.repositories.jobs import get_job, update_job
 from app.db.repositories.models import utcnow
+from app.services.articles import create_or_update_article_from_campaign
 from app.services.publishing import dispatch_publish_for_platform
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,14 @@ async def run_publish_retry(job_id: UUID, campaign_id: UUID, platform: str) -> N
             if all_success:
                 await update_campaign_status(db, campaign_id, "published")
                 await update_job(db, job_id, status="complete", error_details=None, completed_at=utcnow())
+                await db.commit()
+                campaign = await get_campaign(db, campaign_id)
+                if campaign is not None:
+                    try:
+                        await create_or_update_article_from_campaign(db, campaign)
+                        await db.commit()
+                    except Exception:
+                        logger.error("Article creation failed for campaign=%s", campaign_id, exc_info=True)
             else:
                 await update_campaign_status(db, campaign_id, "failed")
                 await update_job(

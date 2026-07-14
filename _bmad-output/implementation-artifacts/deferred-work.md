@@ -1,5 +1,15 @@
 # Deferred Work
 
+## Deferred from: code review of 12-1-article-model-revision-history (2026-07-13)
+
+- Empty slug — no DB non-empty constraint; `slug_from_title` always produces non-empty in practice; add `CheckConstraint("length(slug) > 0")` in a future hardening pass. [backend/alembic/versions/cc76abfc05a1_add_articles_and_revisions.py]
+- `update_article_content` max_rev=None produces revision_number=1 collision — unreachable in normal flow (articles always created with revision 1); add a guard if the article creation/revision path is ever refactored. [backend/app/db/repositories/articles.py]
+- `list_articles` page_size unbounded and page=0 silently returns first page — no API caller yet; add validation in Stories 12.2/12.3 when the endpoint is wired. [backend/app/db/repositories/articles.py]
+- `set_article_status` accepts any string (no Python-side enum validation) — no external caller yet; add `ArticleStatus(status)` cast when endpoint is added in 12.3. [backend/app/db/repositories/articles.py]
+- `create_article` repository function never called by service (service constructs Article directly) — future utility function; clean up or adopt when 12.3 adds an edit endpoint. [backend/app/db/repositories/articles.py]
+- Backfill loads all campaigns to memory — acceptable at current scale for an ops script; add `yield_per` pagination if campaign count exceeds thousands. [backend/scripts/backfill_articles.py]
+- `updated_at` has no server-side `onupdate` trigger — all update paths in this story set it manually; add `onupdate=sa.func.now()` if a bulk-update migration is ever needed. [backend/alembic/versions/cc76abfc05a1_add_articles_and_revisions.py]
+
 ## Deferred from: code review of 3-9-configurable-gemini-model (2026-07-12)
 
 - Empty string is a valid value for `GEMINI_MODEL` — Pydantic accepts it, Gemini client fails at call time. Out of scope per story dev notes ("Do NOT add validation"). Consider `Field(min_length=1)` in a future hardening pass.

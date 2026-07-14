@@ -1761,3 +1761,115 @@ so that I understand what's happening and can get content to new platforms witho
 5. **Given** a user is in the "Publish to more platforms" republish panel, **When** the publish job fails or the error is `INVALID_STATUS_TRANSITION` (e.g. campaign is in `rejected` or `failed` state), **Then** the toast message is the actual backend error text (fixed by AC 1), not "Something went wrong."
 
 6. **Given** all existing error handling throughout the app (TRIAL_EXPIRED, NO_PLATFORM_CONNECTIONS, etc.), **When** the `apiFetch` fix in AC 1 is applied, **Then** all existing toast messages and code-based checks (e.g. `err.code === "TRIAL_EXPIRED"`) continue to work correctly — the fix is additive, not breaking.
+
+---
+
+## Epic 12: Headless Blog Delivery
+
+**Goal:** Blog content becomes a first-class, versioned asset stored in PersonnaPress, delivered to customer websites through a public read-only API. "Headless Blog" is a new publish destination alongside WordPress, Webflow, and GitHub: publishing to it writes an article row in our database, and the customer's site fetches it with a delivery token. This pulls "Content revision history" (PRD 6.2 out-of-scope item) into scope deliberately, because revisions fall out nearly free once articles are real rows.
+
+**Positioning:** "Your website keeps its frontend; PersonnaPress stores, versions, and delivers the blog content through an API." Cluster page targets "headless blog API" and "Contentful alternative for blogs."
+
+**Sequencing:** 12.1 is the foundation (schema). 12.2 (public API) and 12.3 (editing UI) both depend on 12.1. 12.4 (cluster page) ships last, after the API it markets is real.
+
+### Story 12.1: Article Model, Backfill & Revision History
+
+As a PersonnaPress user,
+I want my published blog posts stored as first-class articles with full revision history,
+so that my content outlives the campaign that generated it and every change is recoverable.
+
+**Acceptance Criteria:**
+
+1. **Given** the Alembic migration runs, **When** it completes, **Then** two new tables exist: `articles` (id UUID PK, client_id FK indexed, campaign_id nullable FK indexed, slug Text, title Text, html Text, excerpt nullable, meta_description nullable, featured_image_url nullable, author nullable, tags JSONB nullable, category nullable, status enum `published`/`hidden`, reading_time_minutes int, published_at, created_at, updated_at) with a unique constraint on (client_id, slug), and `article_revisions` (id UUID PK, article_id FK indexed, revision_number int, title, html, excerpt, meta_description, tags JSONB, category, author, source Text `initial`/`edit`/`restore`, created_at) with a unique constraint on (article_id, revision_number). Downgrade drops both tables cleanly.
+
+2. **Given** a campaign publish job completes successfully on any platform, **When** the publish worker finishes, **Then** an article is created from the campaign (title parsed from the first H1 of blog_html, slug via `slug_from_title`, meta description via the existing extraction helper, tags from `voice_score.tags`, featured image from `image_url`, reading time computed from word count) together with revision 1 (source `initial`). If an article already exists for that campaign, it is not duplicated.
+
+3. **Given** a new article's generated slug collides with an existing slug for the same client, **When** the article is created, **Then** a numeric suffix (`-2`, `-3`, ...) is appended until the slug is unique per client.
+
+4. **Given** any update to an article's content fields (title, html, excerpt, meta_description, tags, category, author), **When** the update is persisted, **Then** a new revision row with an incremented revision_number snapshots the post-update state, and `articles.updated_at` changes. Updates that touch no content field (e.g. status toggle) do not create a revision.
+
+5. **Given** existing campaigns in `published` status at migration time, **When** the idempotent backfill script is run, **Then** each published campaign with non-empty blog_html gets an article with status `hidden` (user reviews before exposing) and an `initial` revision; re-running the script creates no duplicates.
+
+6. **Given** the repository layer, **When** article persistence is implemented, **Then** it follows the existing pattern: plain async functions in `backend/app/db/repositories/articles.py` accepting an `AsyncSession`, covering create, get by id, get by (client_id, slug), list with status/tag/category filters and pagination, update-with-revision, list revisions, get revision.
+
+7. **Given** the article creation hook in the publish worker, **When** article creation raises an unexpected error, **Then** the platform publish result is not affected (the hook is wrapped; a failed article upsert logs an error but never fails the publish job).
+
+---
+
+### Story 12.2: Public Delivery API & Delivery Tokens
+
+As a customer developer,
+I want to fetch my client's published articles from a public read-only API with a delivery token,
+so that my website renders the blog natively without a CMS connection.
+
+**Acceptance Criteria:**
+
+1. **Given** the Alembic migration runs, **When** it completes, **Then** a `delivery_tokens` table exists: id UUID PK, client_id FK indexed, name Text, token_prefix Text indexed, token_hash Text (SHA-256 hex), revoked_at nullable, last_used_at nullable, created_at. Raw tokens are never stored.
+
+2. **Given** an authenticated app user on a client they own, **When** they call POST `/api/v1/clients/{client_id}/delivery-tokens` with a name, **Then** a token of the form `ppd_` + 43-char urlsafe secret is generated, its SHA-256 hash and first-8-char prefix stored, and the full token returned exactly once in the response. GET lists tokens (name, prefix, created_at, last_used_at, revoked state) without secrets; DELETE revokes (sets revoked_at, token immediately stops working).
+
+3. **Given** a request to any `/public/v1/*` endpoint, **When** the `Authorization: Bearer ppd_...` header is missing, malformed, revoked, or does not hash-match a stored token, **Then** the response is 401 with a JSON error body; a valid token resolves to exactly one client_id and updates last_used_at.
+
+4. **Given** a valid delivery token, **When** GET `/public/v1/articles` is called, **Then** it returns a paginated list (`page`, `page_size` max 50, `total`) of that client's `published` articles only, newest first, each item carrying slug, title, excerpt, featured_image_url, author, tags, category, published_at, updated_at, reading_time_minutes (no full HTML in list responses). Optional `?tag=` and `?category=` filters apply.
+
+5. **Given** a valid delivery token, **When** GET `/public/v1/articles/{slug}` is called for a published article of that client, **Then** the response bundles: all list fields, full sanitized `html`, and an `seo` object containing meta_description, og (title, description, image), a ready-to-embed schema.org Article JSON-LD object, and reading_time_minutes. A hidden article, unknown slug, or another client's slug returns 404 (indistinguishable).
+
+6. **Given** GET `/public/v1/tags` with a valid token, **When** called, **Then** it returns the distinct tags and categories used by that client's published articles with per-tag counts.
+
+7. **Given** the public API surface, **When** it is mounted, **Then** it is a FastAPI sub-application mounted at `/public` with its own CORS policy (`allow_origins=["*"]`, GET/HEAD/OPTIONS only), while the main app's strict single-origin CORS is unchanged. Responses include `ETag` (derived from article/list updated_at) and `Cache-Control: public, max-age=60, stale-while-revalidate=300`; a matching `If-None-Match` returns 304.
+
+8. **Given** rate limiting, **When** public endpoints are called, **Then** a per-token limit of 120 requests/minute applies (keyed on token prefix, falling back to IP when unauthenticated) using the existing slowapi limiter, returning 429 with the standard error shape when exceeded.
+
+9. **Given** the security test suite, **When** it runs, **Then** tests prove: token for client A can never return client B's articles; hidden articles never appear in any public response; revoked tokens get 401; drafts/campaign data are unreachable from the public router.
+
+---
+
+### Story 12.3: Edit After Publish, Revision UI & Blog Section
+
+As a PersonnaPress user,
+I want to edit my live articles, browse their revision history, and restore any version,
+so that my published blog stays current without regenerating campaigns.
+
+**Acceptance Criteria:**
+
+1. **Given** the left sidebar navigation, **When** it renders for an authenticated user with an active client, **Then** a "Blog" item appears (Lucide `Newspaper` icon) between "Campaigns" and "Connections", linking to `/blog`; like the Connections item (Story 11.6), it is hidden or disabled when no active client is set.
+
+2. **Given** the `/blog` page, **When** it loads, **Then** it lists the active client's articles (title, slug, status badge `published`/`hidden`, published date, last updated) fetched via TanStack Query in a client component (server component does auth/session only, per the RSC loop rule), with an empty state explaining that publishing a campaign creates articles.
+
+3. **Given** the `/blog/[id]` editor page, **When** it loads an article, **Then** the existing Tiptap `BlogEditor` renders the article HTML in editable mode (read-only restriction does not apply to articles), alongside editable fields: title, slug, excerpt, meta description, tags, category, author, and a hide/unhide toggle.
+
+4. **Given** the user edits the slug, **When** they attempt to save, **Then** a confirmation dialog warns that existing links to the old slug will break (customer sites fetch by slug) and requires explicit confirmation before saving.
+
+5. **Given** the user clicks Save with content changes, **When** PATCH `/api/v1/articles/{id}` succeeds, **Then** the article is updated, a new revision is created (per Story 12.1 AC 4), the editor shows a success toast, and subsequent public API reads reflect the new content (new ETag).
+
+6. **Given** the revision history panel on `/blog/[id]`, **When** it renders, **Then** it lists revisions newest first (revision number, date, source badge initial/edit/restore), each with a preview action (rendered sanitized HTML in a modal) and a Restore action; restoring revision N creates a new highest revision with source `restore` whose content equals revision N (history is never rewritten), updates the article, and refreshes the editor.
+
+7. **Given** the approval panel of an approved or published campaign, **When** publish destinations are shown, **Then** "Headless Blog" appears as a destination requiring no platform connection; selecting it calls POST `/api/v1/campaigns/{id}/publish-headless`, which creates or updates the campaign's article (reusing the Story 12.1 service function), marks the campaign `published` (guard accepts `approved` or `published`, mirroring Story 11.7 AC 4), and the panel confirms with the article's slug.
+
+8. **Given** all backend article endpoints under `/api/v1/articles`, **When** called, **Then** they require the session cookie (existing `get_current_user`), verify the article's client belongs to the current user, and return the standard nested error shape on failure.
+
+9. **Given** the new UI, **When** assessed against the Paper Style design system, **Then** it uses Ink 1px solid borders, rounded-none surfaces, Playfair Display headings, Inter body, the 4px 4px 0px Ink shadow on primary buttons, Lucide icons only (no emojis), visible `focus-visible` rings, and 44px minimum touch targets.
+
+---
+
+### Story 12.4: Headless Blog API Cluster Page & Integration Docs
+
+As a marketing site visitor evaluating headless CMS options,
+I want a page that explains PersonnaPress headless blog delivery with real integration code,
+so that I understand it as a Contentful alternative for blogs and can integrate in minutes.
+
+**Acceptance Criteria:**
+
+1. **Given** the route `/headless-blog-api`, **When** it is built, **Then** it lives at `frontend/app/(public)/headless-blog-api/page.tsx`, inherits `PublicHeader`/`PublicFooter` from the (public) layout, is statically generated (force-static with the `CopyrightYear` client-component pattern from Story 11.1), and renders in the Paper Style design system.
+
+2. **Given** the page metadata, **When** the static page is generated, **Then** `generateMetadata()` sets a title targeting "Headless Blog API" (under 60 chars), a meta description under 160 chars mentioning API-powered blog delivery and Contentful alternative, canonical `/headless-blog-api`, and complete OpenGraph/Twitter card fields.
+
+3. **Given** structured data, **When** the page renders, **Then** it embeds JSON-LD for `SoftwareApplication` (consistent with the existing landing pages) and a `FAQPage` with at least 5 questions targeting AEO queries such as "What is a headless blog API?", "How is PersonnaPress different from Contentful?", "Do I need a CMS to use it?", "How do I fetch articles on my website?", "Can I edit articles after publishing?" with answers matching the visible FAQ accordion content.
+
+4. **Given** the page sections, **When** rendered, **Then** they include: a hero stating the store-once/deliver-anywhere positioning; a 3-step "How it works" (generate, store and version, fetch via API); a response-bundle showcase rendering a real `/public/v1/articles/{slug}` JSON example in a code block (including the `seo` object); an integration docs section with copy-paste examples for plain fetch, Next.js App Router, and Astro that work against the real API from Story 12.2; a brutalist comparison table (PersonnaPress vs Contentful vs DropInBlog) in the Story 8.7 table style; and a full-bleed Highlighter CTA section.
+
+5. **Given** site-wide SEO plumbing, **When** the page ships, **Then** `sitemap.ts` gains the `/headless-blog-api` route, `robots.ts` allows it, and the `PublicFooter` product links include it.
+
+6. **Given** the page copy, **When** written, **Then** it follows the human-seo-copywriter constraints: no AI tropes ("elevate", "delve", "unlock"), no em-dashes, E-E-A-T-conscious concrete claims, and technically accurate endpoint names and field names matching the implemented API.
+
+7. **Given** accessibility and performance, **When** assessed, **Then** code blocks are keyboard-scrollable with visible focus, the comparison table uses proper `<th scope>` attributes, animations respect `prefers-reduced-motion`, all images have descriptive alt text, and the page introduces no client-side data fetching.

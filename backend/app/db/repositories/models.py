@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import Column, Enum as SAEnum, Text
+from sqlalchemy import Column, Enum as SAEnum, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -27,6 +27,11 @@ class CampaignStatus(str, Enum):
     published = "published"
     rejected = "rejected"
     failed = "failed"
+
+
+class ArticleStatus(str, Enum):
+    published = "published"
+    hidden = "hidden"
 
 
 class User(SQLModel, table=True):
@@ -152,4 +157,57 @@ class GenerationLog(SQLModel, table=True):
     campaign_id: uuid.UUID = Field(foreign_key="campaigns.id", index=True)
     gemini_tokens: Optional[int] = None
     replicate_count: Optional[int] = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class Article(SQLModel, table=True):
+    __tablename__ = "articles"
+    __table_args__ = (UniqueConstraint("client_id", "slug"),)
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    client_id: uuid.UUID = Field(foreign_key="clients.id", index=True)
+    campaign_id: Optional[uuid.UUID] = Field(default=None, foreign_key="campaigns.id", index=True, nullable=True)
+    slug: str = Field(sa_column=Column(Text, nullable=False))
+    title: str = Field(sa_column=Column(Text, nullable=False))
+    html: str = Field(sa_column=Column(Text, nullable=False))
+    excerpt: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    meta_description: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    featured_image_url: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    author: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    tags: Optional[list] = Field(default=None, sa_column=Column(JSONB, nullable=True))
+    category: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    status: ArticleStatus = Field(
+        default=ArticleStatus.published,
+        sa_column=Column(
+            SAEnum(
+                ArticleStatus,
+                name="article_status_enum",
+                create_constraint=True,
+                values_callable=lambda obj: [e.value for e in obj],
+            ),
+            nullable=False,
+            default=ArticleStatus.published,
+        ),
+    )
+    reading_time_minutes: int = Field(default=1)
+    published_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class ArticleRevision(SQLModel, table=True):
+    __tablename__ = "article_revisions"
+    __table_args__ = (UniqueConstraint("article_id", "revision_number"),)
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    article_id: uuid.UUID = Field(foreign_key="articles.id", index=True)
+    revision_number: int
+    title: str = Field(sa_column=Column(Text, nullable=False))
+    html: str = Field(sa_column=Column(Text, nullable=False))
+    excerpt: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    meta_description: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    tags: Optional[list] = Field(default=None, sa_column=Column(JSONB, nullable=True))
+    category: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    author: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    source: str = Field(sa_column=Column(Text, nullable=False))
     created_at: datetime = Field(default_factory=utcnow)

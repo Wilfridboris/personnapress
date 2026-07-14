@@ -17,6 +17,7 @@ from app.db.repositories.jobs import update_job
 from app.db.repositories.models import utcnow
 from app.db.repositories.platform_connections import get_connections_for_client, upsert_connection
 from app.integrations import github as github_integration
+from app.services.articles import create_or_update_article_from_campaign
 from app.services.publishing import dispatch_publish, generate_github_post_file, _refresh_token_if_needed
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,13 @@ async def publish_github_job(
                     completed_at=utcnow(),
                 )
                 await db.commit()
+                campaign = await get_campaign(db, campaign_id)
+                if campaign is not None:
+                    try:
+                        await create_or_update_article_from_campaign(db, campaign)
+                        await db.commit()
+                    except Exception:
+                        logger.error("Article creation failed for campaign=%s", campaign_id, exc_info=True)
 
         except Exception as exc:
             logger.error("GitHub publish error job=%s: %s", job_id, exc, exc_info=True)
@@ -113,6 +121,14 @@ async def run_publish(job_id: UUID, campaign_id: UUID) -> None:
                 await update_campaign_status(db, campaign_id, "published")
                 await update_campaign_scheduled_at(db, campaign_id, None)
                 await update_job(db, job_id, status="complete", error_details=json.dumps(results), completed_at=utcnow())
+                await db.commit()
+                campaign = await get_campaign(db, campaign_id)
+                if campaign is not None:
+                    try:
+                        await create_or_update_article_from_campaign(db, campaign)
+                        await db.commit()
+                    except Exception:
+                        logger.error("Article creation failed for campaign=%s", campaign_id, exc_info=True)
             else:
                 await update_campaign_status(db, campaign_id, "failed")
                 await update_campaign_scheduled_at(db, campaign_id, None)
