@@ -17,7 +17,11 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/register") ||
     pathname.startsWith("/verify-email") ||
     pathname.startsWith("/api/auth/") ||
-    pathname.startsWith("/api/webhooks/");
+    pathname.startsWith("/api/webhooks/") ||
+    pathname.startsWith("/headless-blog-api") ||
+    pathname.startsWith("/github-publisher") ||
+    pathname.startsWith("/privacy") ||
+    pathname.startsWith("/terms");
 
   const sessionCookie = request.cookies.get("session")?.value;
 

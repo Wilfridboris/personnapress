@@ -202,7 +202,7 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
             "run_generation_pipeline: unrecoverable error for job %s: %s", job_id, exc
         )
         sentry_sdk.capture_exception(exc)
-        await _fail_job(db, job, "Generation service temporarily unavailable — retry in a few minutes")
+        await _fail_job(db, job, "Generation service temporarily unavailable. Retry in a few minutes.")
 
 
 async def _fail_job(db: AsyncSession, job: Job, error_details: str) -> None:

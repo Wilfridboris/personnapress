@@ -28,7 +28,7 @@ const MIN_CHARS = 20;
 
 export default function NewCampaignPage() {
   const router = useRouter();
-  const { clients, activeClientId } = useClientStore();
+  const { clients, activeClientId, isInitialized } = useClientStore();
   const showUpgradePrompt = useUIStore((s) => s.showUpgradePrompt);
   const activeClient = clients.find((c) => c.id === activeClientId) ?? null;
 
@@ -72,15 +72,15 @@ export default function NewCampaignPage() {
   const hasBvp = activeClient?.brand_voice_profile_status === "ready";
   const isDisabled = charCount < MIN_CHARS || !hasActiveClient || isSubmitting;
 
-  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const val = e.target.value;
-    if (val.length <= MAX_CHARS) {
-      setBrainDump(val);
-    }
-    // Auto-expand
-    const ta = e.target;
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
     ta.style.height = "auto";
     ta.style.height = `${ta.scrollHeight}px`;
+  }, [brainDump]);
+
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    setBrainDump(e.target.value.slice(0, MAX_CHARS));
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -173,7 +173,7 @@ export default function NewCampaignPage() {
         </div>
       )}
 
-      {!hasActiveClient && (
+      {isInitialized && !hasActiveClient && (
         <div className="mb-6 border border-danger/20 bg-danger/5 px-4 py-3">
           <p className="text-sm font-mono text-danger">
             Select a client first — use the switcher in the sidebar.

@@ -15,6 +15,7 @@ export function ClientSwitcher() {
 
   const clients = useClientStore((s) => s.clients);
   const activeClientId = useClientStore((s) => s.activeClientId);
+  const isInitialized = useClientStore((s) => s.isInitialized);
   const setActiveClientId = useClientStore((s) => s.setActiveClientId);
 
   const activeClient = clients.find((c) => c.id === activeClientId);
@@ -69,7 +70,7 @@ export function ClientSwitcher() {
           {initial}
         </span>
         <span className="hidden lg:block flex-1 text-sm font-medium text-[#111111] truncate text-left max-w-[160px]">
-          {activeClient ? activeClient.name : "No client"}
+          {activeClient ? activeClient.name : isInitialized ? "No client" : ""}
         </span>
         <ChevronDown
           className={cn(

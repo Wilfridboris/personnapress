@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { GitBranch, Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import { GitBranch, Database, Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { campaignsApi, clientsApi, jobsApi, publishingApi, fetchAPI, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
@@ -132,6 +132,10 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
   const [showRepublishControls, setShowRepublishControls] = useState(false);
   const [publishedPlatforms, setPublishedPlatforms] = useState<string[]>([]);
 
+  // Headless blog publish state
+  const [isHeadlessPublishing, setIsHeadlessPublishing] = useState(false);
+  const [headlessResult, setHeadlessResult] = useState<{ articleId: string; slug: string } | null>(null);
+
   // GitHub pre-publish panel state
   const [showGitHubPanel, setShowGitHubPanel] = useState(false);
   const [publishMode, setPublishMode] = useState<"pr" | "commit">("pr");
@@ -224,7 +228,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           const actualPublished = (Object.entries(jobDetails) as [string, string][])
             .filter(([, v]) => v === "success" || v === "already_published")
             .map(([p]) => platformLabel(p));
-          setPublishedPlatforms(actualPublished.length > 0 ? actualPublished : items.filter((c) => c.connected).map((c) => platformLabel(c.platform)));
+          setPublishedPlatforms(actualPublished);
           setClientHasPlatforms(items.length > 0);
           const ghConn = items.find((c) => c.platform === "github_pages" && c.connected);
           const framework = ghConn?.github_detection?.detected_framework ?? "";
@@ -366,8 +370,26 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     }
   }, [campaign.id, scheduledAt, router, addToast, showUpgradePrompt]);
 
+  const handleHeadlessPublish = useCallback(async () => {
+    setIsHeadlessPublishing(true);
+    try {
+      const result = await campaignsApi.publishHeadless(campaign.id);
+      setHeadlessResult({ articleId: result.article_id, slug: result.slug });
+      router.refresh();
+    } catch (err) {
+      if (err instanceof APIError && err.code === "TRIAL_EXPIRED") {
+        showUpgradePrompt(err.message);
+      } else if (err instanceof APIError && err.code === "INVALID_STATUS_TRANSITION") {
+        addToast(err.message, "error");
+      } else {
+        addToast(err instanceof APIError ? err.message : "Headless publish failed.", "error");
+      }
+    } finally {
+      setIsHeadlessPublishing(false);
+    }
+  }, [campaign.id, router, addToast, showUpgradePrompt]);
+
   const handleCancelSchedule = useCallback(async () => {
-    setIsCancelling(true);
     try {
       await campaignsApi.cancelSchedule(campaign.id);
       router.refresh();
@@ -457,7 +479,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
         <div className="fixed bottom-0 left-0 md:left-14 lg:left-[240px] right-0 z-10 bg-paper border-t border-border px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm text-graphite">
             <span className="font-medium text-ink">Scheduled</span>
-            {" — "}
+            {" "}
             <span>
               {new Intl.DateTimeFormat("en-US", {
                 weekday: "long",
@@ -531,7 +553,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                 <button
                   type="button"
                   onClick={() => setShowGitHubPanel((v) => !v)}
-                  disabled={isPublishing || isGitHubPublishing}
+                  disabled={isPublishing || isGitHubPublishing || isHeadlessPublishing}
                   className={cn(
                     "inline-flex items-center gap-2 px-5 py-2.5 border border-ink text-ink text-sm font-medium",
                     "hover:bg-ink hover:text-white transition-colors",
@@ -543,6 +565,31 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                   Publish to GitHub
                 </button>
               )}
+              <div className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={handleHeadlessPublish}
+                  disabled={isPublishing || isGitHubPublishing || isHeadlessPublishing}
+                  className={cn(
+                    "inline-flex items-center gap-2 px-5 py-2.5 border border-ink text-ink text-sm font-medium",
+                    "hover:bg-ink hover:text-white transition-colors",
+                    "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none",
+                    "disabled:opacity-50 disabled:cursor-not-allowed",
+                  )}
+                >
+                  {isHeadlessPublishing && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                  <Database className="size-4" aria-hidden="true" />
+                  Headless Blog
+                </button>
+                {headlessResult && (
+                  <Link
+                    href={`/blog/${headlessResult.articleId}`}
+                    className="font-mono text-xs text-graphite underline hover:text-ink"
+                  >
+                    View in Blog ({headlessResult.slug})
+                  </Link>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setShowSchedulePicker((v) => !v)}
@@ -554,7 +601,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                 <button
                   type="button"
                   onClick={handlePublishNow}
-                  disabled={isPublishing || isGitHubPublishing}
+                  disabled={isPublishing || isGitHubPublishing || isHeadlessPublishing}
                   className={cn(
                     "inline-flex items-center gap-2 px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent",
                     "shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all",
@@ -786,7 +833,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
         {(githubResult?.type === "pr" || hasPrOpen) && prDisplayUrl && (
           <div className="border-t border-[#E5E5E5] px-6 py-3">
             <p className="text-sm text-ink">
-              PR opened{" — "}
+              PR opened{" "}
               <a
                 href={prDisplayUrl}
                 target="_blank"
@@ -846,7 +893,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
         <div className="px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm text-graphite">
             <span className="font-medium text-ink">{publishedLine}</span>
-            {" — "}
+            {" "}
             <span>
               {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(
                 new Date(campaign.updated_at),
@@ -878,6 +925,31 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                   Publish to GitHub
                 </button>
               )}
+              <div className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={handleHeadlessPublish}
+                  disabled={isPublishing || isGitHubPublishing || isHeadlessPublishing}
+                  className={cn(
+                    "inline-flex items-center gap-2 px-5 py-2.5 border border-ink text-ink text-sm font-medium",
+                    "hover:bg-ink hover:text-white transition-colors",
+                    "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none",
+                    "disabled:opacity-50 disabled:cursor-not-allowed",
+                  )}
+                >
+                  {isHeadlessPublishing && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                  <Database className="size-4" aria-hidden="true" />
+                  Headless Blog
+                </button>
+                {headlessResult && (
+                  <Link
+                    href={`/blog/${headlessResult.articleId}`}
+                    className="font-mono text-xs text-graphite underline hover:text-ink"
+                  >
+                    View in Blog ({headlessResult.slug})
+                  </Link>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => { setScheduledAt(""); setShowSchedulePicker((v) => !v); }}
@@ -889,7 +961,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                 <button
                   type="button"
                   onClick={handlePublishNow}
-                  disabled={isPublishing || isGitHubPublishing}
+                  disabled={isPublishing || isGitHubPublishing || isHeadlessPublishing}
                   className={cn(
                     "inline-flex items-center gap-2 px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent",
                     "shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all",
