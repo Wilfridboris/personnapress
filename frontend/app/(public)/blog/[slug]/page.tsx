@@ -188,7 +188,8 @@ export default async function BlogDetailPage({
 
       {/* Article body */}
       <div className="max-w-3xl mx-auto px-6 pb-16">
-        {/* HTML sanitized by public API _strip_scripts(); safe to render as-is */}
+        {/* HTML sanitized by public API _strip_scripts(); safe to render as-is.
+            H1 tags are demoted to H2 to preserve single-H1 invariant. */}
         <div
           className="prose prose-sm md:prose-base max-w-none font-sans text-ink
             prose-headings:font-display prose-headings:text-ink prose-headings:font-bold
@@ -196,7 +197,11 @@ export default async function BlogDetailPage({
             prose-img:border prose-img:border-border prose-img:rounded-none
             prose-blockquote:border-l-ink prose-blockquote:text-graphite
             prose-code:bg-highlight prose-code:text-ink prose-code:px-1 prose-code:rounded-none"
-          dangerouslySetInnerHTML={{ __html: article.html }}
+          dangerouslySetInnerHTML={{
+            __html: article.html
+              .replace(/<h1(\s|>)/gi, "<h2$1")
+              .replace(/<\/h1>/gi, "</h2>"),
+          }}
         />
       </div>
 
