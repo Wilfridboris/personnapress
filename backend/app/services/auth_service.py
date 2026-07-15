@@ -44,7 +44,14 @@ def _err(code: str, message: str) -> dict:
 
 def logout_user() -> JSONResponse:
     response = JSONResponse({"success": True})
-    response.delete_cookie(key="session", path="/", httponly=True, secure=True, samesite="lax")
+    response.delete_cookie(
+        key="session",
+        path="/",
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        domain=settings.COOKIE_DOMAIN,
+    )
     return response
 
 

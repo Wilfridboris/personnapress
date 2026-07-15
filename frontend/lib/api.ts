@@ -5,10 +5,12 @@ const API_BASE = `${API_URL}/api/v1`;
 
 export class APIError extends Error {
   readonly code: string;
-  constructor(message: string, code: string) {
+  readonly status: number;
+  constructor(message: string, code: string, status = 0) {
     super(message);
     this.name = "APIError";
     this.code = code;
+    this.status = status;
   }
 }
 
@@ -50,7 +52,7 @@ export async function fetchAPI<T>(path: string, init?: RequestInit): Promise<T> 
       (typeof detail === "string" ? detail : undefined) ??
       "Something went wrong.";
     const code = errShape?.code ?? "UNKNOWN_ERROR";
-    throw new APIError(message, code);
+    throw new APIError(message, code, res.status);
   }
 
   return data as T;
