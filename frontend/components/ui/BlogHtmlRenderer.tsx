@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { _DOMPURIFY_CONFIG } from "@/components/campaigns/BlogEditor";
 import { Skeleton } from "./Skeleton";
 
 interface Props {
@@ -18,16 +19,7 @@ export function BlogHtmlRenderer({ html, className }: Props) {
     import("dompurify")
       .then(({ default: DOMPurify }) => {
         if (cancelled) return;
-        setSafeHtml(
-          DOMPurify.sanitize(html, {
-            ALLOWED_TAGS: [
-              "h1", "h2", "h3", "h4", "p", "ul", "ol", "li",
-              "strong", "em", "a", "br", "blockquote", "code", "pre",
-            ],
-            ALLOWED_ATTR: ["href", "title", "rel"],
-            FORBID_ATTR: ["target"],
-          })
-        );
+        setSafeHtml(DOMPurify.sanitize(html, _DOMPURIFY_CONFIG));
       })
       .catch(() => {
         if (!cancelled) setSafeHtml("");

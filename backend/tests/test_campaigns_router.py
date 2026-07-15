@@ -32,6 +32,7 @@ def _make_campaign(campaign_id=None, client_id=None):
     c.rejection_reason = None
     c.scheduled_at = None
     c.image_regen_count = 0
+    c.github_pr_url = None
     c.created_at = datetime(2026, 7, 2, 10, 0, 0, tzinfo=timezone.utc)
     c.updated_at = datetime(2026, 7, 2, 10, 0, 0, tzinfo=timezone.utc)
     return c
@@ -657,3 +658,69 @@ async def test_regenerate_campaign_only_from_rejected_status():
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail["error"]["code"] == "INVALID_STATUS_TRANSITION"
+
+
+# ── Campaign blog_html sanitizer — image handling ─────────────────────────────
+
+
+def test_sanitize_blog_html_keeps_own_bucket_img():
+    """_sanitize_blog_html preserves <img> with an own-bucket src."""
+    from app.routers.campaigns import _sanitize_blog_html
+    from app.core.config import settings
+
+    original_url = settings.SUPABASE_URL
+    settings.SUPABASE_URL = "https://test.supabase.co"
+    try:
+        src = "https://test.supabase.co/storage/v1/object/public/article-images/chart.png"
+        result = _sanitize_blog_html(f'<p>text</p><img src="{src}" alt="Chart">')
+        assert "img" in result
+        assert src in result
+    finally:
+        settings.SUPABASE_URL = original_url
+
+
+def test_sanitize_blog_html_strips_foreign_img():
+    """_sanitize_blog_html removes <img> with a foreign src URL."""
+    from app.routers.campaigns import _sanitize_blog_html
+    from app.core.config import settings
+
+    original_url = settings.SUPABASE_URL
+    settings.SUPABASE_URL = "https://test.supabase.co"
+    try:
+        result = _sanitize_blog_html('<p>text</p><img src="https://evil.com/tracker.png" alt="x">')
+        assert "evil.com" not in result
+        assert "<img" not in result
+    finally:
+        settings.SUPABASE_URL = original_url
+
+
+def test_sanitize_blog_html_strips_img_onerror():
+    """_sanitize_blog_html strips onerror attribute from img tags."""
+    from app.routers.campaigns import _sanitize_blog_html
+    from app.core.config import settings
+
+    original_url = settings.SUPABASE_URL
+    settings.SUPABASE_URL = "https://test.supabase.co"
+    try:
+        src = "https://test.supabase.co/storage/v1/object/public/article-images/ok.png"
+        result = _sanitize_blog_html(f'<img src="{src}" alt="x" onerror="alert(1)">')
+        assert "onerror" not in result
+        assert src in result
+    finally:
+        settings.SUPABASE_URL = original_url
+
+
+def test_sanitize_blog_html_strips_srcset():
+    """_sanitize_blog_html strips srcset from img tags (nh3 does not allow it)."""
+    from app.routers.campaigns import _sanitize_blog_html
+    from app.core.config import settings
+
+    original_url = settings.SUPABASE_URL
+    settings.SUPABASE_URL = "https://test.supabase.co"
+    try:
+        src = "https://test.supabase.co/storage/v1/object/public/article-images/ok.png"
+        result = _sanitize_blog_html(f'<img src="{src}" alt="x" srcset="{src} 2x, {src} 1x">')
+        assert "srcset" not in result
+        assert src in result  # img itself is preserved; only srcset stripped
+    finally:
+        settings.SUPABASE_URL = original_url
