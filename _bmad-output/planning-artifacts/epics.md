@@ -1901,3 +1901,10 @@ so that my articles carry my visuals, not just the AI-generated one.
 8. **Given** the new UI, **When** assessed against the Paper Style design system, **Then** it uses 1px Ink borders, rounded-none, Lucide icons only (no emojis), visible `focus-visible` rings, 44px minimum touch targets, CSS-only transitions (no Framer Motion), and required alt text enforced in the upload flow.
 
 9. **Given** the security test suite, **When** it runs, **Then** tests prove: user B cannot upload to user A's client; `<img onerror=...>` and foreign-host `src` are stripped by both server sanitizers; oversize and non-image payloads (including a renamed .exe) are rejected.
+
+## Epic 13: PersonnaPress Company Blog
+
+Company blog powered by the PersonnaPress headless delivery API; showcases the product by dogfooding it at `/blog`. ISR-based list and detail pages (revalidate = 3600) serve content from the public delivery API with no backend changes required.
+
+**Stories:**
+- Story 13.1: PersonnaPress Company Blog (ISR blog list + detail pages powered by headless delivery API)

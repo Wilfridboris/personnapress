@@ -20,6 +20,7 @@ export function PublicFooter() {
             <a href="/#workflow" className="font-mono text-xs text-graphite hover:text-ink transition-colors">How it works</a>
             <a href="/#platforms" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Platforms</a>
             <a href="/#pricing" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Pricing</a>
+            <Link href="/blog" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Blog</Link>
             <Link href="/github-publisher" className="font-mono text-xs text-graphite hover:text-ink transition-colors">GitHub Publisher</Link>
             <Link href="/headless-blog-api" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Headless Blog API</Link>
             <a href="/#faq" className="font-mono text-xs text-graphite hover:text-ink transition-colors">FAQ</a>

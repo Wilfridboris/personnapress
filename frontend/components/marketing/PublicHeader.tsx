@@ -21,6 +21,7 @@ export function PublicHeader() {
           <a href="/#platforms" className="text-sm text-graphite hover:text-ink transition-colors">Platforms</a>
           <a href="/#pricing" className="text-sm text-graphite hover:text-ink transition-colors">Pricing</a>
           <a href="/#faq" className="text-sm text-graphite hover:text-ink transition-colors">FAQ</a>
+          <Link href="/blog" className="text-sm text-graphite hover:text-ink transition-colors">Blog</Link>
           <Link
             href="/dashboard"
             className="inline-flex items-center gap-2 bg-ink text-paper text-sm font-medium px-5 py-2 hover:bg-graphite transition-colors"
