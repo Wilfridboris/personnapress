@@ -70,9 +70,9 @@ export async function generateStaticParams(): Promise<{ slug: string }[]> {
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const { id: slug } = await params;
+  const { slug } = await params;
   const article = await fetchArticle(slug);
   if (!article) notFound();
 
@@ -126,9 +126,9 @@ function formatDate(iso: string): string {
 export default async function BlogDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { id: slug } = await params;
+  const { slug } = await params;
   const article = await fetchArticle(slug);
   if (!article) notFound();
 
