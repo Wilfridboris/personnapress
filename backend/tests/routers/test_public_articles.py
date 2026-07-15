@@ -471,6 +471,17 @@ async def test_html_scripts_stripped():
     assert "<p>Hello</p>" in result
 
 
+def test_strip_scripts_preserves_img_tags():
+    """_strip_scripts does NOT strip <img> — inline images must pass through to API consumers."""
+    from app.routers.public_articles import _strip_scripts
+
+    src = "https://test.supabase.co/storage/v1/object/public/article-images/chart.png"
+    html = f'<p>Text</p><img src="{src}" alt="Chart">'
+    result = _strip_scripts(html)
+    assert "<img" in result
+    assert src in result
+
+
 # ---------------------------------------------------------------------------
 # Tags endpoint
 # ---------------------------------------------------------------------------

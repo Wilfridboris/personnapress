@@ -1873,3 +1873,31 @@ so that I understand it as a Contentful alternative for blogs and can integrate 
 6. **Given** the page copy, **When** written, **Then** it follows the human-seo-copywriter constraints: no AI tropes ("elevate", "delve", "unlock"), no em-dashes, E-E-A-T-conscious concrete claims, and technically accurate endpoint names and field names matching the implemented API.
 
 7. **Given** accessibility and performance, **When** assessed, **Then** code blocks are keyboard-scrollable with visible focus, the comparison table uses proper `<th scope>` attributes, animations respect `prefers-reduced-motion`, all images have descriptive alt text, and the page introduces no client-side data fetching.
+
+---
+
+### Story 12.5: User Image Uploads — Inline Article Images & Featured Image Replace
+
+As a PersonnaPress user,
+I want to upload my own images into the blog editor and replace the featured image,
+so that my articles carry my visuals, not just the AI-generated one.
+
+**Acceptance Criteria:**
+
+1. **Given** an authenticated user who owns a client, **When** they POST an image (png, jpg, jpeg, or webp, max 5 MB) as multipart to `/api/v1/clients/{client_id}/images`, **Then** the file is validated by extension AND magic bytes, stored in a public `article-images` Supabase bucket at `{client_id}/{uuid}.{ext}`, and the response returns the public URL; oversize, wrong type, unowned client, or missing session return the standard nested error shape (413/415/403-404/401 semantics matching existing conventions).
+
+2. **Given** the Supabase storage integration, **When** the `article-images` bucket is auto-created on first upload, **Then** it is created with `public=true` (the existing `_ensure_bucket` hardcodes `public=False`, which would 404 every public URL), and `_content_type_for_path` returns correct image MIME types for .png/.jpg/.jpeg/.webp.
+
+3. **Given** the three HTML sanitization layers (client DOMPurify in `BlogEditor.tsx`, nh3 in `campaigns.py` blog_html PATCH, BeautifulSoup `_sanitize_html` in `articles.py`), **When** HTML containing images is sanitized, **Then** all three allow `img`, `figure`, `figcaption` with attributes `src`, `alt`, `width`, `height` only; any `img` whose `src` does not start with the app's Supabase public-object URL prefix (article-images or generated-images buckets) is removed entirely; event-handler attributes, `srcset`, and `style` are stripped.
+
+4. **Given** the shared Tiptap `BlogEditor` toolbar, **When** the user clicks the image button (Lucide `ImagePlus`), pastes an image, or drops an image file onto the editor, **Then** the file uploads via the endpoint from AC 1 with a visible in-progress state, a required alt-text prompt is shown before insertion, and the image is inserted at the cursor as `<img src alt>`; multiple images per article are supported; upload failure surfaces an error toast and inserts nothing.
+
+5. **Given** an inline image is selected in the editor, **When** the selection is active, **Then** the toolbar exposes replace (re-upload, same node) and remove actions plus alt-text editing, each with accessible labels; removing an image from the article never deletes the stored object (revision history references it).
+
+6. **Given** the `/blog/[id]` article editor right rail, **When** an article renders, **Then** a "Featured image" card shows the current image (or an empty state) with a Replace action that uploads via AC 1 and PATCHes `featured_image_url` (field added to `ArticlePatch`, validated to the app's own storage URL prefix); featured image changes do not create revisions (documented v1 exclusion).
+
+7. **Given** GitHub publishing and the public delivery API, **When** blog HTML containing inline images flows through them, **Then** `html_to_markdown` converts `<img>` to `![alt](src)` (regression test) and `/public/v1/articles/{slug}` delivers inline `<img>` tags intact through `_strip_scripts` (regression test).
+
+8. **Given** the new UI, **When** assessed against the Paper Style design system, **Then** it uses 1px Ink borders, rounded-none, Lucide icons only (no emojis), visible `focus-visible` rings, 44px minimum touch targets, CSS-only transitions (no Framer Motion), and required alt text enforced in the upload flow.
+
+9. **Given** the security test suite, **When** it runs, **Then** tests prove: user B cannot upload to user A's client; `<img onerror=...>` and foreign-host `src` are stripped by both server sanitizers; oversize and non-image payloads (including a renamed .exe) are rejected.

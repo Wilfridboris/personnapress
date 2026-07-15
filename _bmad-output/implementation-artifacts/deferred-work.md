@@ -1,5 +1,9 @@
 # Deferred Work
 
+## Deferred from: code review of 12-5-user-image-uploads (2026-07-14)
+
+- No rate-limiting on `POST /clients/{client_id}/images` — no per-user upload quota or storage quota check; pre-existing infrastructure gap (all endpoints share global limiter with no per-endpoint burst limit). Add per-user daily upload limit when abuse becomes a concern. [backend/app/routers/images.py]
+
 ## Deferred from: code review of 12-2-public-delivery-api-tokens (2026-07-13)
 
 - Token prefix collision — only 4 bytes entropy after `ppd_` fixed prefix; `scalar_one_or_none` silently returns None on collision; birthday collision negligible below ~4096 tokens per client. Add DB unique constraint on (client_id, token_prefix) or extend prefix length in a future hardening pass. [backend/app/db/repositories/delivery_tokens.py]

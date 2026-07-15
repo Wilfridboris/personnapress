@@ -2,6 +2,7 @@ import uuid
 from typing import Optional
 
 import nh3
+from bs4 import BeautifulSoup
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.core.dependencies import get_current_user
+from app.core.html_sanitize import is_allowed_image_src
 from app.db.connection import get_session
 from app.db.repositories.campaigns import create_campaign, get_campaign
 from app.db.repositories.clients import get_client
@@ -20,10 +22,35 @@ from app.services.subscription_service import check_campaign_limit, check_trial_
 from app.workers.generate import run_generation
 
 
-_ALLOWED_HTML_TAGS = {"h1", "h2", "h3", "h4", "p", "ul", "ol", "li", "strong", "em", "a", "br", "blockquote", "code", "pre"}
-_ALLOWED_HTML_ATTRS: dict[str, set[str]] = {"a": {"href", "title", "rel"}}
+_ALLOWED_HTML_TAGS = {"h1", "h2", "h3", "h4", "p", "ul", "ol", "li", "strong", "em", "a", "br", "blockquote", "code", "pre", "img", "figure", "figcaption"}
+_ALLOWED_HTML_ATTRS: dict[str, set[str]] = {"a": {"href", "title", "rel"}, "img": {"src", "alt", "width", "height"}}
 _ALLOWED_URL_SCHEMES = {"http", "https", "mailto"}
 _PATCHABLE_FIELDS = frozenset({"blog_html", "x_post", "linkedin_post"})
+
+
+def _nh3_attribute_filter(tag: str, attr: str, value: str) -> Optional[str]:
+    """Filter img src to own-bucket URLs only; pass all other attributes through."""
+    if tag == "img" and attr == "src":
+        return value if is_allowed_image_src(value) else None
+    return value
+
+
+def _sanitize_blog_html(html: str) -> str:
+    """Sanitize blog HTML through nh3, then remove any <img> left without a src."""
+    cleaned = nh3.clean(
+        html,
+        tags=_ALLOWED_HTML_TAGS,
+        attributes=_ALLOWED_HTML_ATTRS,
+        attribute_filter=_nh3_attribute_filter,
+        url_schemes=_ALLOWED_URL_SCHEMES,
+        link_rel=None,
+    )
+    # Post-pass: nh3 strips a disallowed src attribute but leaves the tag; remove empty-src imgs
+    soup = BeautifulSoup(cleaned, "html.parser")
+    for img in soup.find_all("img"):
+        if not img.get("src"):
+            img.decompose()
+    return str(soup)
 
 
 class ImageRegenerateResponse(BaseModel):
@@ -182,14 +209,8 @@ async def patch_campaign(
 
     patch_data = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in _PATCHABLE_FIELDS}
     if "blog_html" in patch_data:
-        cleaned = nh3.clean(
-            patch_data["blog_html"],
-            tags=_ALLOWED_HTML_TAGS,
-            attributes=_ALLOWED_HTML_ATTRS,
-            url_schemes=_ALLOWED_URL_SCHEMES,
-            link_rel=None,
-        )
-        patch_data["blog_html"] = cleaned or None
+        sanitized = _sanitize_blog_html(patch_data["blog_html"])
+        patch_data["blog_html"] = sanitized or None
 
     for key, value in patch_data.items():
         setattr(campaign, key, value)

@@ -1,4 +1,4 @@
-import type { BrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, DeliveryToken, DeliveryTokenCreateResponse, DeliveryTokenListResponse, FileListResponse, GitHubDetectionResult, Job, PlatformConnectionStatus, QuestionnairePayload, SubscriptionInfo } from "./types";
+import type { Article, ArticleListResponse, BrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, DeliveryToken, DeliveryTokenCreateResponse, DeliveryTokenListResponse, FileListResponse, GitHubDetectionResult, Job, PlatformConnectionStatus, PublishHeadlessResponse, QuestionnairePayload, RevisionDetail, RevisionListResponse, SubscriptionInfo } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -154,6 +154,8 @@ export const campaignsApi = {
       method: "POST",
       body: JSON.stringify({ platform }),
     }),
+  publishHeadless: (id: string) =>
+    apiFetch<PublishHeadlessResponse>(`/campaigns/${id}/publish-headless`, { method: "POST" }),
 };
 
 export const dashboardApi = {
@@ -230,4 +232,61 @@ export const publishingApi = {
       `/clients/${clientId}/connections/github`,
       { method: "POST", body: JSON.stringify({ installation_id: installationId }) }
     ),
+};
+
+export const imagesApi = {
+  upload: async (clientId: string, file: File): Promise<{ url: string; path: string }> => {
+    const form = new FormData();
+    form.append("file", file);
+    // Do NOT set Content-Type — browser sets it with the multipart boundary automatically.
+    const res = await fetch(`${API_BASE}/clients/${clientId}/images`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+    if (res.status === 204) return { url: "", path: "" };
+    let data: Record<string, unknown>;
+    try {
+      data = (await res.json()) as Record<string, unknown>;
+    } catch {
+      throw new APIError(`Upload failed (${res.status})`, "NETWORK_ERROR");
+    }
+    if (!res.ok) {
+      const detail = data?.detail as Record<string, unknown> | string | undefined;
+      const nestedError = typeof detail === "object" && detail !== null ? (detail as Record<string, unknown>).error : undefined;
+      const errShape = (nestedError ?? data?.error) as { message?: string; code?: string } | undefined;
+      const message = errShape?.message ?? (typeof detail === "string" ? detail : undefined) ?? "Upload failed.";
+      const code = errShape?.code ?? "UNKNOWN_ERROR";
+      throw new APIError(message, code);
+    }
+    return data as { url: string; path: string };
+  },
+};
+
+export const articlesApi = {
+  list: (clientId: string, status?: string, page = 1, pageSize = 50) => {
+    const q = new URLSearchParams({ client_id: clientId, page: String(page), page_size: String(pageSize) });
+    if (status) q.set("status", status);
+    return apiFetch<ArticleListResponse>(`/articles?${q.toString()}`);
+  },
+  get: (articleId: string) => apiFetch<Article>(`/articles/${articleId}`),
+  patch: (articleId: string, data: {
+    title?: string;
+    html?: string;
+    excerpt?: string;
+    meta_description?: string;
+    tags?: string[];
+    category?: string;
+    author?: string;
+    slug?: string;
+    status?: string;
+    featured_image_url?: string;
+  }) =>
+    apiFetch<Article>(`/articles/${articleId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  listRevisions: (articleId: string) =>
+    apiFetch<RevisionListResponse>(`/articles/${articleId}/revisions`),
+  getRevision: (articleId: string, revisionNumber: number) =>
+    apiFetch<RevisionDetail>(`/articles/${articleId}/revisions/${revisionNumber}`),
+  restoreRevision: (articleId: string, revisionNumber: number) =>
+    apiFetch<Article>(`/articles/${articleId}/revisions/${revisionNumber}/restore`, { method: "POST" }),
 };

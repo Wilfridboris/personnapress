@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { X, Plug } from "lucide-react";
+import { X, Newspaper, Plug } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { useClientStore } from "@/lib/stores/useClientStore";
@@ -75,6 +75,15 @@ export function MobileDrawer() {
           {NAV_ITEMS.slice(0, calendarIdx).map((item) => (
             <NavItem key={item.href} {...item} onClick={close} forceLabel />
           ))}
+          {activeClientId && (
+            <NavItem
+              href="/blog"
+              label="Blog"
+              icon={Newspaper}
+              onClick={close}
+              forceLabel
+            />
+          )}
           {activeClientId && (
             <NavItem
               href={`/clients/${activeClientId}/connections`}

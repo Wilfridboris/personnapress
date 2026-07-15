@@ -128,6 +128,26 @@ def test_html_to_markdown_converts_image():
     assert "![Featured](https://cdn.example.com/img.png)" in result
 
 
+def test_html_to_markdown_converts_figure_with_figcaption():
+    """<figure><img><figcaption> produces image markdown and caption text without crashing."""
+    from app.integrations.github import html_to_markdown
+
+    html = '<figure><img src="https://cdn.example.com/a.png" alt="Chart"><figcaption>Caption text</figcaption></figure>'
+    result = html_to_markdown(html)
+    assert "![Chart](https://cdn.example.com/a.png)" in result
+    assert "Caption text" in result
+
+
+def test_html_to_markdown_paragraph_with_inline_img():
+    """Paragraph containing inline img produces img markdown inline."""
+    from app.integrations.github import html_to_markdown
+
+    html = '<p>Some text</p><img src="https://cdn.example.com/b.png" alt="Chart">'
+    result = html_to_markdown(html)
+    assert "Some text" in result
+    assert "![Chart](https://cdn.example.com/b.png)" in result
+
+
 # ---------------------------------------------------------------------------
 # create_file_commit
 # ---------------------------------------------------------------------------

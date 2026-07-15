@@ -358,9 +358,6 @@ export default function HeadlessBlogApiPage() {
         {/* Hero */}
         <section className="max-w-6xl mx-auto px-6 pt-24 pb-20">
           <div className="max-w-3xl">
-            <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-6">
-              Headless Blog API
-            </p>
             <h1 className="font-display text-6xl lg:text-7xl font-bold text-ink leading-tight tracking-tight text-balance mb-8">
               Your blog, on your website,{" "}
               <span className="relative">

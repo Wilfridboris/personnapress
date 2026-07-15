@@ -1,6 +1,6 @@
 "use client";
 
-import { Plug } from "lucide-react";
+import { Newspaper, Plug } from "lucide-react";
 import { useClientStore } from "@/lib/stores/useClientStore";
 import { ClientSwitcher } from "./ClientSwitcher";
 import { NavItem } from "./NavItem";
@@ -23,6 +23,13 @@ export function Sidebar() {
         {NAV_ITEMS.slice(0, calendarIdx).map((item) => (
           <NavItem key={item.href} {...item} />
         ))}
+        {activeClientId && (
+          <NavItem
+            href="/blog"
+            label="Blog"
+            icon={Newspaper}
+          />
+        )}
         {activeClientId && (
           <NavItem
             href={`/clients/${activeClientId}/connections`}

@@ -22,7 +22,19 @@ def _content_type_for_path(path: str) -> str:
         return "text/markdown"
     if lower.endswith(".docx"):
         return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    if lower.endswith(".png"):
+        return "image/png"
+    if lower.endswith(".jpg") or lower.endswith(".jpeg"):
+        return "image/jpeg"
+    if lower.endswith(".webp"):
+        return "image/webp"
     return "application/octet-stream"
+
+
+def public_object_url(bucket: str, object_path: str) -> str:
+    """Return the public CDN URL for a stored object."""
+    base = settings.SUPABASE_URL.rstrip("/")
+    return f"{base}/storage/v1/object/public/{bucket}/{object_path}"
 
 
 def _headers() -> dict[str, str]:
@@ -49,7 +61,7 @@ async def _ensure_bucket(client: httpx.AsyncClient, bucket: str, public: bool = 
         logger.warning("_ensure_bucket: %s → %d %s", bucket, resp.status_code, resp.text)
 
 
-async def upload_file(bucket: str, path: str, file_bytes: bytes) -> None:
+async def upload_file(bucket: str, path: str, file_bytes: bytes, public: bool = False) -> None:
     """Upload file_bytes to Supabase Storage at bucket/path.
 
     Auto-creates the bucket on first use if it doesn't exist.
@@ -68,8 +80,8 @@ async def upload_file(bucket: str, path: str, file_bytes: bytes) -> None:
             },
         )
         if resp.status_code == 400 and "Bucket not found" in resp.text:
-            logger.info("upload_file: bucket %r not found — creating it", bucket)
-            await _ensure_bucket(client, bucket, public=False)
+            logger.info("upload_file: bucket %r not found — creating it (public=%s)", bucket, public)
+            await _ensure_bucket(client, bucket, public=public)
             resp = await client.post(
                 url,
                 content=file_bytes,
@@ -152,9 +164,7 @@ async def upload_image_from_url(replicate_url: str, storage_path: str) -> str:
 
     await upload_file(bucket, object_path, image_bytes)
 
-    base = settings.SUPABASE_URL.rstrip("/")
-    public_url = f"{base}/storage/v1/object/public/{bucket}/{object_path}"
-    return public_url
+    return public_object_url(bucket, object_path)
 
 
 async def delete_file(bucket: str, path: str) -> None:

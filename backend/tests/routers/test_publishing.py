@@ -409,3 +409,205 @@ async def test_publish_campaign_now_rejects_invalid_statuses(invalid_status):
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail["error"]["code"] == "INVALID_STATUS_TRANSITION"
+
+
+# ── POST /campaigns/{id}/publish-headless ─────────────────────────────────────
+
+
+def _make_headless_article(client_id=None, article_id=None):
+    """Minimal article mock returned by create_or_update_article_from_campaign."""
+    a = MagicMock()
+    a.id = article_id or uuid.uuid4()
+    a.slug = "my-headless-article"
+    a.status = "published"
+    a.client_id = client_id or uuid.uuid4()
+    return a
+
+
+@pytest.mark.asyncio
+async def test_publish_headless_approved_campaign_200():
+    """POST publish-headless on an approved campaign returns 200 with article_id/slug/status
+    and transitions the campaign to 'published'."""
+    from app.routers.publishing import publish_headless
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id, status="approved")
+    article = _make_headless_article()
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock()),
+        patch("app.routers.publishing.create_or_update_article_from_campaign", AsyncMock(return_value=article)),
+    ):
+        result = await publish_headless(
+            campaign_id=campaign.id,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result["article_id"] == str(article.id)
+    assert result["slug"] == "my-headless-article"
+    assert campaign.status == "published"
+    db.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_publish_headless_published_campaign_200():
+    """POST publish-headless on an already-published campaign returns 200 (idempotent call)."""
+    from app.routers.publishing import publish_headless
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id, status="published")
+    article = _make_headless_article()
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock()),
+        patch("app.routers.publishing.create_or_update_article_from_campaign", AsyncMock(return_value=article)),
+    ):
+        result = await publish_headless(
+            campaign_id=campaign.id,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result["article_id"] == str(article.id)
+    assert result["slug"] == "my-headless-article"
+    db.commit.assert_called_once()
+
+
+@pytest.mark.parametrize("invalid_status", ["pending_approval", "rejected", "failed"])
+@pytest.mark.asyncio
+async def test_publish_headless_400_invalid_status(invalid_status):
+    """POST publish-headless returns 400 INVALID_STATUS_TRANSITION for non-publishable statuses."""
+    from app.routers.publishing import publish_headless
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id, status=invalid_status)
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock()),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await publish_headless(
+                campaign_id=campaign.id,
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["error"]["code"] == "INVALID_STATUS_TRANSITION"
+
+
+@pytest.mark.asyncio
+async def test_publish_headless_trial_expired_raises():
+    """POST publish-headless propagates TRIAL_EXPIRED from check_trial_not_expired."""
+    from app.routers.publishing import publish_headless
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id, status="approved")
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock(side_effect=HTTPException(
+            status_code=402,
+            detail={"error": {"code": "TRIAL_EXPIRED", "message": "Trial expired.", "detail": {}}},
+        ))),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await publish_headless(
+                campaign_id=campaign.id,
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 402
+    assert exc_info.value.detail["error"]["code"] == "TRIAL_EXPIRED"
+
+
+@pytest.mark.asyncio
+async def test_publish_headless_no_content_400():
+    """POST publish-headless returns 400 NO_CONTENT when campaign has no blog content."""
+    from app.routers.publishing import publish_headless
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id, status="approved")
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock()),
+        patch("app.routers.publishing.create_or_update_article_from_campaign", AsyncMock(return_value=None)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await publish_headless(
+                campaign_id=campaign.id,
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["error"]["code"] == "NO_CONTENT"
+
+
+@pytest.mark.asyncio
+async def test_publish_headless_404_campaign_not_found():
+    """Returns 404 when the campaign doesn't exist."""
+    from app.routers.publishing import publish_headless
+
+    user_id = uuid.uuid4()
+    db = AsyncMock()
+
+    with patch("app.routers.publishing.get_campaign", AsyncMock(return_value=None)):
+        with pytest.raises(HTTPException) as exc_info:
+            await publish_headless(
+                campaign_id=uuid.uuid4(),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_publish_headless_404_wrong_owner():
+    """Returns 404 when the campaign's client doesn't belong to the current user."""
+    from app.routers.publishing import publish_headless
+
+    user_id = uuid.uuid4()
+    other_user_id = uuid.uuid4()
+    client = _make_client(user_id=other_user_id)
+    campaign = _make_campaign(client_id=client.id, status="approved")
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await publish_headless(
+                campaign_id=campaign.id,
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 404

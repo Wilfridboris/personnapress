@@ -95,6 +95,7 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
                   ref={blogEditorRef}
                   initialHtml={rawBlogHtml}
                   campaignId={campaign.id}
+                  clientId={campaign.client_id}
                   readOnly={false}
                 />
               ) : (

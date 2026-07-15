@@ -38,6 +38,7 @@ from app.scheduler.scheduler import scheduler
 from app.services.subscription_service import check_trial_not_expired
 from app.workers.publish import publish_github_job, run_publish
 from app.workers.publish_retry import run_publish_retry
+from app.services.articles import create_or_update_article_from_campaign
 
 router = APIRouter(prefix="", tags=["publishing"])
 
@@ -1116,3 +1117,73 @@ async def delete_platform_connection(
             status_code=404,
             detail={"error": {"code": "NOT_FOUND", "message": "Connection not found.", "detail": {}}},
         )
+
+
+@router.post("/campaigns/{campaign_id}/publish-headless", status_code=200)
+async def publish_headless(
+    campaign_id: uuid.UUID,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Create or update the headless article for a campaign.
+
+    Idempotent: calling again on an already-published campaign returns the existing article.
+    No external API calls — only a local DB write.
+    """
+    user_id = _parse_user_id(current_user)
+
+    campaign = await get_campaign(db, campaign_id)
+    if not campaign:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
+        )
+
+    client = await get_client(db, campaign.client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
+        )
+
+    # Trial guard — headless publish counts as a publish action
+    await check_trial_not_expired(user_id, db, "publish")
+
+    if campaign.status not in ("approved", "published"):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": "INVALID_STATUS_TRANSITION",
+                    "message": "Only approved or published campaigns can be published to the headless blog.",
+                    "detail": {},
+                }
+            },
+        )
+
+    article = await create_or_update_article_from_campaign(db, campaign)
+    if article is None:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": "NO_CONTENT",
+                    "message": "Campaign has no blog content to publish.",
+                    "detail": {},
+                }
+            },
+        )
+
+    # Mark campaign published if it was only approved
+    if campaign.status == "approved":
+        campaign.status = "published"
+        db.add(campaign)
+
+    await db.commit()
+    await db.refresh(article)
+
+    return {
+        "article_id": str(article.id),
+        "slug": article.slug,
+        "status": str(article.status.value if hasattr(article.status, "value") else article.status),
+    }

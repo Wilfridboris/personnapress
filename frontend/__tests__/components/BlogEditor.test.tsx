@@ -12,6 +12,10 @@ const mockChain = {
   setLink: vi.fn().mockReturnThis(),
   unsetLink: vi.fn().mockReturnThis(),
   undo: vi.fn().mockReturnThis(),
+  setImage: vi.fn().mockReturnThis(),
+  deleteSelection: vi.fn().mockReturnThis(),
+  updateAttributes: vi.fn().mockReturnThis(),
+  insertContent: vi.fn().mockReturnThis(),
   run: vi.fn(),
 };
 
@@ -22,13 +26,12 @@ const mockEditor = {
   getHTML: vi.fn(() => "<p>edited content</p>"),
   isEmpty: false,
   destroy: vi.fn(),
+  state: { selection: { from: 0 }, doc: { nodeAt: vi.fn(() => null) } },
 };
 
 vi.mock("@tiptap/react", () => ({
   useEditor: vi.fn((opts?: { onUpdate?: (args: { editor: typeof mockEditor }) => void }) => {
-    // Call onUpdate to simulate dirty state in tests that need it
     if (opts?.onUpdate) {
-      // Store for manual trigger
       (mockEditor as unknown as Record<string, unknown>)._triggerUpdate = () =>
         opts.onUpdate?.({ editor: mockEditor });
     }
@@ -44,14 +47,24 @@ vi.mock("@tiptap/starter-kit", () => ({
 vi.mock("@tiptap/extension-link", () => ({
   default: { configure: vi.fn(() => ({})) },
 }));
+vi.mock("@tiptap/extension-image", () => ({
+  default: { configure: vi.fn(() => ({})) },
+}));
 vi.mock("dompurify", () => ({
   default: { sanitize: vi.fn((html: string) => html) },
 }));
+vi.mock("@/components/ui/Modal", () => ({
+  Modal: ({ isOpen, children }: { isOpen: boolean; children: React.ReactNode }) =>
+    isOpen ? <div data-testid="modal">{children}</div> : null,
+}));
 
-// Mock campaignsApi
+// Mock campaignsApi and imagesApi
 vi.mock("@/lib/api", () => ({
   campaignsApi: {
     patch: vi.fn(),
+  },
+  imagesApi: {
+    upload: vi.fn(),
   },
 }));
 
@@ -69,35 +82,35 @@ describe("BlogEditor", () => {
 
   it("renders toolbar when readOnly=false", () => {
     render(
-      <BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" readOnly={false} />,
+      <BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />,
     );
     expect(screen.getByRole("toolbar", { name: /text formatting/i })).toBeInTheDocument();
   });
 
   it("does NOT render toolbar when readOnly=true", () => {
     render(
-      <BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" readOnly={true} />,
+      <BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={true} />,
     );
     expect(screen.queryByRole("toolbar")).not.toBeInTheDocument();
   });
 
   it("renders editor content area", () => {
-    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" />);
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" />);
     expect(screen.getByTestId("editor-content")).toBeInTheDocument();
   });
 
   it("renders Save button when readOnly=false", () => {
-    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" readOnly={false} />);
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
     expect(screen.getByRole("button", { name: /save edits/i })).toBeInTheDocument();
   });
 
   it("does NOT render Save button when readOnly=true", () => {
-    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" readOnly={true} />);
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={true} />);
     expect(screen.queryByRole("button", { name: /save edits/i })).not.toBeInTheDocument();
   });
 
   it("Save button is disabled when not dirty", () => {
-    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" readOnly={false} />);
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
     const saveBtn = screen.getByRole("button", { name: /save edits/i });
     expect(saveBtn).toBeDisabled();
   });
@@ -106,7 +119,7 @@ describe("BlogEditor", () => {
     const { campaignsApi } = await import("@/lib/api");
     const patchMock = vi.mocked(campaignsApi.patch).mockResolvedValue({} as never);
 
-    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" readOnly={false} />);
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
 
     // Simulate editor becoming dirty by triggering onUpdate
     const { useEditor } = await import("@tiptap/react");
@@ -127,7 +140,7 @@ describe("BlogEditor", () => {
     const { campaignsApi } = await import("@/lib/api");
     vi.mocked(campaignsApi.patch).mockResolvedValue({} as never);
 
-    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" readOnly={false} />);
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
 
     const { useEditor } = await import("@tiptap/react");
     const opts = vi.mocked(useEditor).mock.calls[0]?.[0];
@@ -146,7 +159,7 @@ describe("BlogEditor", () => {
     const { campaignsApi } = await import("@/lib/api");
     vi.mocked(campaignsApi.patch).mockRejectedValue(new Error("Network error"));
 
-    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" readOnly={false} />);
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
 
     const { useEditor } = await import("@tiptap/react");
     const opts = vi.mocked(useEditor).mock.calls[0]?.[0];
@@ -159,5 +172,10 @@ describe("BlogEditor", () => {
     await waitFor(() =>
       expect(mockAddToast).toHaveBeenCalledWith("Network error", "error"),
     );
+  });
+
+  it("renders Insert image toolbar button", () => {
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    expect(screen.getByRole("button", { name: /insert image/i })).toBeInTheDocument();
   });
 });

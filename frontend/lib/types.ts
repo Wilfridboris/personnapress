@@ -261,3 +261,70 @@ export interface Subscription {
   created_at: string;
   updated_at: string;
 }
+
+// ── Article types ────────────────────────────────────────────────────────────
+
+export type ArticleStatus = "published" | "hidden";
+
+export interface ArticleListItem {
+  id: string;
+  slug: string;
+  title: string;
+  status: ArticleStatus;
+  published_at: string;
+  updated_at: string;
+}
+
+export interface ArticleListResponse {
+  items: ArticleListItem[];
+  total: number;
+}
+
+export interface Article {
+  id: string;
+  client_id: string;
+  campaign_id: string | null;
+  slug: string;
+  title: string;
+  html: string;
+  excerpt: string | null;
+  meta_description: string | null;
+  featured_image_url: string | null;
+  author: string | null;
+  tags: string[] | null;
+  category: string | null;
+  status: ArticleStatus;
+  reading_time_minutes: number;
+  published_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RevisionListItem {
+  revision_number: number;
+  source: "initial" | "edit" | "restore";
+  created_at: string;
+}
+
+export interface RevisionListResponse {
+  items: RevisionListItem[];
+}
+
+export interface RevisionDetail {
+  revision_number: number;
+  title: string;
+  html: string;
+  excerpt: string | null;
+  meta_description: string | null;
+  tags: string[] | null;
+  category: string | null;
+  author: string | null;
+  source: "initial" | "edit" | "restore";
+  created_at: string;
+}
+
+export interface PublishHeadlessResponse {
+  article_id: string;
+  slug: string;
+  status: string;
+}
