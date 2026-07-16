@@ -188,7 +188,11 @@ Return ONLY a valid JSON object (no markdown):
 """
 
 
-def _build_seo_section(target_keyword: str | None, target_audience: str | None) -> tuple[str, str]:
+def _build_seo_section(
+    target_keyword: str | None,
+    target_audience: str | None,
+    secondary_keywords: str | None = None,
+) -> tuple[str, str]:
     if target_keyword:
         seo_section = f"""SEO TARGET:
 - Primary keyword: {target_keyword}
@@ -197,6 +201,14 @@ def _build_seo_section(target_keyword: str | None, target_audience: str | None) 
     else:
         seo_section = """SEARCH INTENT FOCUS (no keyword provided):
 Extract the single most specific, actionable angle from the Brain Dump. Pick ONE target reader type — not "developers AND marketers", not "apps AND SaaS". Choose one. Write exclusively for that angle. State your choice in the H1 and commit to it through every section. If the brain dump is broad, pick the most specific, technical angle."""
+
+    if secondary_keywords:
+        seo_section += f"""
+
+SUPPORTING KEYWORDS (mention each at most once, naturally):
+{secondary_keywords}
+- Place each term at most once within the first 500 words, only inside a sentence that already calls for it.
+- If no natural sentence exists for a term, skip it entirely — forced insertion is worse than omission."""
 
     audience_section = ""
     if target_audience:
@@ -238,6 +250,7 @@ async def generate_blog(
     thinking_tokens: int = 512,
     target_keyword: str | None = None,
     target_audience: str | None = None,
+    secondary_keywords: str | None = None,
 ) -> str:
     if brand_voice_profile:
         bvp_json = json.dumps(brand_voice_profile)
@@ -251,7 +264,7 @@ async def generate_blog(
         avg_sentence_length = 15
         banned_jargon_list = "none specified"
 
-    seo_target_section, audience_section = _build_seo_section(target_keyword, target_audience)
+    seo_target_section, audience_section = _build_seo_section(target_keyword, target_audience, secondary_keywords)
 
     prompt = _BLOG_PROMPT.format(
         bvp_json=bvp_json,

@@ -34,6 +34,7 @@ export default function NewCampaignPage() {
 
   const [brainDump, setBrainDump] = useState("");
   const [targetKeyword, setTargetKeyword] = useState("");
+  const [supportingKeywords, setSupportingKeywords] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,10 +105,12 @@ export default function NewCampaignPage() {
         client_id: activeClient.id,
         brain_dump: brainDump.trim(),
         target_keyword: targetKeyword.trim() || null,
+        secondary_keywords: supportingKeywords.trim() || null,
         target_audience: targetAudience.trim() || null,
       });
       setBrainDump("");
       setTargetKeyword("");
+      setSupportingKeywords("");
       setTargetAudience("");
       setIsSubmitting(false);
       router.push(`/campaigns/${data.campaign_id}?job_id=${data.job_id}`);
@@ -248,7 +251,7 @@ export default function NewCampaignPage() {
 
       <div className="space-y-1 mb-2">
         <label className="font-mono text-xs text-graphite uppercase tracking-widest">
-          Target keyword <span className="normal-case">(optional)</span>
+          Focus keyword <span className="normal-case">(optional)</span>
         </label>
         <input
           type="text"
@@ -258,6 +261,23 @@ export default function NewCampaignPage() {
           placeholder="e.g. how to scale a subscription mobile app"
           className="w-full bg-transparent font-mono text-sm text-ink border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink py-2 focus:outline-none transition-all placeholder:text-graphite/40"
         />
+      </div>
+
+      <div className="space-y-1 mb-2">
+        <label className="font-mono text-xs text-graphite/70 uppercase tracking-widest">
+          Supporting keywords <span className="normal-case">(optional)</span>
+        </label>
+        <input
+          type="text"
+          value={supportingKeywords}
+          onChange={(e) => setSupportingKeywords(e.target.value)}
+          maxLength={500}
+          placeholder="e.g. SaaS growth, bootstrapped startup, MRR expansion"
+          className="w-full bg-transparent font-mono text-sm text-ink border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink py-2 focus:outline-none transition-all placeholder:text-graphite/40"
+        />
+        <p className="font-mono text-xs text-graphite/50 normal-case tracking-normal">
+          Comma-separated. Each mentioned once naturally within the first 500 words.
+        </p>
       </div>
 
       <div className="space-y-1 mb-6">

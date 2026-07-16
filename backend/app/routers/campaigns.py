@@ -105,6 +105,7 @@ async def create_new_campaign(
         body.brain_dump,
         target_keyword=body.target_keyword,
         target_audience=body.target_audience,
+        secondary_keywords=body.secondary_keywords,
     )
     job = await create_job(db, job_type="generation", status="pending", campaign_id=campaign.id)
 

@@ -186,6 +186,31 @@ async def test_create_campaign_schema_rejects_brain_dump_over_10000_chars():
         CampaignCreate(client_id=uuid.uuid4(), brain_dump="A" * 10001)
 
 
+# ── POST /campaigns: secondary_keywords field (Story 3-10) ───────────────────
+
+def test_campaign_create_schema_validates_secondary_keywords():
+    body = CampaignCreate(
+        client_id=uuid.uuid4(),
+        brain_dump="A" * 25,
+        secondary_keywords="term1, term2",
+    )
+    assert body.secondary_keywords == "term1, term2"
+
+
+def test_campaign_create_nullifies_blank_secondary_keywords():
+    body = CampaignCreate(
+        client_id=uuid.uuid4(),
+        brain_dump="A" * 25,
+        secondary_keywords="   ",
+    )
+    assert body.secondary_keywords is None
+
+
+def test_campaign_create_secondary_keywords_defaults_to_none():
+    body = CampaignCreate(client_id=uuid.uuid4(), brain_dump="A" * 25)
+    assert body.secondary_keywords is None
+
+
 # ── GET /campaigns/{id}: happy path ──────────────────────────────────────────
 
 async def test_get_campaign_returns_200_for_owner():

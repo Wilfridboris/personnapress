@@ -1,5 +1,14 @@
 # Deferred Work
 
+## Deferred from: code review of 3-10-focus-keyword-supporting-keywords (2026-07-15)
+
+- Prompt injection via unsanitized user-controlled text (`secondary_keywords`, `target_keyword`, `target_audience`) interpolated directly into LLM prompt f-string — pre-existing pattern for all three fields; mitigate in a future hardening pass by stripping or encoding newlines. [backend/app/integrations/gemini.py]
+- Frontend `maxLength` vs Pydantic `max_length` multi-byte Unicode semantics — `maxLength` counts UTF-16 code units; Pydantic counts code points; pre-existing gap for all text fields.
+- No `min_length` guard allows empty-token keywords like `","` — pre-existing; LLM gracefully skips unplaceable terms. [backend/app/schemas/campaign.py]
+- No per-keyword count limit on `secondary_keywords` — pre-existing pattern; a future pass could cap individual term count.
+- Whitespace-only value could reach `_build_seo_section` via ORM-direct construction bypassing Pydantic — non-production path; only matters for admin scripts or migrations.
+- Positional argument fragility in `run_generation_pipeline` → `generate_blog()` call — pre-existing style; consider switching to keyword-only arguments.
+
 ## Deferred from: code review of 13-2-featured-image-alt-seo (2026-07-15)
 
 - `max_length=500` on `featured_image_alt` not enforced at DB column level — pre-existing pattern; add `VARCHAR(500)` or CHECK constraint in a future hardening pass. [backend/app/schemas/article.py]

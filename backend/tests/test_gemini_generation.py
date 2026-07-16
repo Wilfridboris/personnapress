@@ -699,3 +699,57 @@ async def test_generate_social_prompt_includes_linkedin_first_person_hook(mock_c
 
     prompt_text = captured_prompt[0]
     assert "first-person" in prompt_text.lower()
+
+
+# ── Story 3-10: Focus keyword rename + supporting keywords ────────────────────
+
+def test_build_seo_section_includes_supporting_keywords_block():
+    from app.integrations.gemini import _build_seo_section
+
+    seo_section, _ = _build_seo_section("focus kw", None, "term1, term2")
+    assert "SUPPORTING KEYWORDS" in seo_section
+    assert "term1, term2" in seo_section
+
+
+def test_build_seo_section_no_supporting_keywords_block_when_none():
+    from app.integrations.gemini import _build_seo_section
+
+    seo_section, _ = _build_seo_section("focus kw", None, None)
+    assert "SUPPORTING KEYWORDS" not in seo_section
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_injects_supporting_keywords(mock_client):
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("dump", _VALID_BVP, target_keyword="focus kw", secondary_keywords="term1, term2")
+
+    prompt_text = captured_prompt[0]
+    assert "SUPPORTING KEYWORDS" in prompt_text
+    assert "term1, term2" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_no_supporting_keywords_when_null(mock_client):
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("dump", _VALID_BVP, target_keyword="focus kw", secondary_keywords=None)
+
+    prompt_text = captured_prompt[0]
+    assert "SUPPORTING KEYWORDS" not in prompt_text

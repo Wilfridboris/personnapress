@@ -14,6 +14,7 @@ async def create_campaign(
     brain_dump: str,
     target_keyword: Optional[str] = None,
     target_audience: Optional[str] = None,
+    secondary_keywords: Optional[str] = None,
 ) -> Campaign:
     campaign = Campaign(
         client_id=client_id,
@@ -21,6 +22,7 @@ async def create_campaign(
         status="pending_approval",
         target_keyword=target_keyword,
         target_audience=target_audience,
+        secondary_keywords=secondary_keywords,
     )
     session.add(campaign)
     await session.flush()
