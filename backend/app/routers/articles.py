@@ -216,9 +216,8 @@ async def patch_article_endpoint(
 
     # Handle featured_image_url separately (no revision; bumps updated_at so ETag changes)
     if body.featured_image_url is not None:
-        from datetime import datetime, timezone
         article.featured_image_url = body.featured_image_url
-        article.updated_at = datetime.now(timezone.utc)
+        article.updated_at = utcnow()
         db.add(article)
 
     await db.commit()
