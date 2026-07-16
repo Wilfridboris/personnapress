@@ -64,14 +64,14 @@ function formatDate(iso: string): string {
 }
 
 export const metadata: Metadata = {
-  title: "Blog | PersonnaPress",
+  title: "Blog",
   description:
-    "Insights on AI writing, brand voice, and content strategy from the PersonnaPress team.",
+    "Insights on AI writing, brand voice, and content strategy from Boris Kwayep and the PersonnaPress team.",
   alternates: { canonical: "/blog" },
   openGraph: {
     title: "Blog | PersonnaPress",
     description:
-      "Insights on AI writing, brand voice, and content strategy from the PersonnaPress team.",
+      "Insights on AI writing, brand voice, and content strategy from Boris Kwayep and the PersonnaPress team.",
     url: "/blog",
     type: "website",
     images: [
@@ -87,7 +87,27 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Blog | PersonnaPress",
     description:
-      "Insights on AI writing, brand voice, and content strategy from the PersonnaPress team.",
+      "Insights on AI writing, brand voice, and content strategy from Boris Kwayep and the PersonnaPress team.",
+  },
+};
+
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://www.personnapress.com").replace(/\/$/, "");
+
+const schemaBlog = {
+  "@context": "https://schema.org",
+  "@type": "Blog",
+  name: "PersonnaPress Blog",
+  description: "Insights on AI writing, brand voice, and content strategy.",
+  url: `${APP_URL}/blog`,
+  author: {
+    "@type": "Person",
+    name: "Boris Kwayep",
+    url: APP_URL,
+  },
+  publisher: {
+    "@type": "Organization",
+    name: "PersonnaPress",
+    url: APP_URL,
   },
 };
 
@@ -108,13 +128,17 @@ export default async function BlogListPage({
 
   return (
     <main className="min-h-screen bg-paper">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaBlog) }}
+      />
       {/* Hero */}
       <section className="max-w-6xl mx-auto px-6 pt-20 pb-12">
         <p className="font-mono text-xs text-graphite uppercase tracking-widest mb-4">
-          The Blog
+          The PersonnaPress Blog
         </p>
         <h1 className="font-display text-5xl md:text-6xl font-bold text-ink text-balance leading-tight">
-          Ideas on AI, brand voice, and content that sounds like you.
+          AI Content Marketing, Brand Voice &amp; Publishing Strategy.
         </h1>
         <p className="mt-6 text-graphite max-w-2xl text-pretty leading-relaxed">
           Practical writing on AI-generated content, brand voice strategy, and publishing
@@ -166,7 +190,7 @@ export default async function BlogListPage({
                       {featured.excerpt}
                     </p>
                     <p className="font-mono text-xs text-graphite mb-6">
-                      {featured.author || "PersonnaPress Team"} &middot; {formatDate(featured.published_at)} &middot;{" "}
+                      {featured.author || "Boris Kwayep"} &middot; {formatDate(featured.published_at)} &middot;{" "}
                       {featured.reading_time_minutes} min read
                     </p>
                     <Link
@@ -216,7 +240,7 @@ export default async function BlogListPage({
                           {article.excerpt}
                         </p>
                         <p className="font-mono text-xs text-graphite mt-4">
-                          {article.author || "PersonnaPress Team"} &middot; {formatDate(article.published_at)} &middot;{" "}
+                          {article.author || "Boris Kwayep"} &middot; {formatDate(article.published_at)} &middot;{" "}
                           {article.reading_time_minutes} min read
                         </p>
                         <ArrowRight

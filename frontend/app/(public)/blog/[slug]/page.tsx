@@ -132,15 +132,38 @@ export default async function BlogDetailPage({
   const article = await fetchArticle(slug);
   if (!article) notFound();
 
+  const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://www.personnapress.com").replace(/\/$/, "");
+  const articleAuthor = article.author || "Boris Kwayep";
+  const schemaBlogPosting = article.seo?.json_ld ?? {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: article.title,
+    description: article.excerpt,
+    url: `${APP_URL}/blog/${article.slug}`,
+    datePublished: article.published_at,
+    dateModified: article.updated_at,
+    author: {
+      "@type": "Person",
+      name: articleAuthor,
+      url: APP_URL,
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "PersonnaPress",
+      url: APP_URL,
+    },
+    ...(article.featured_image_url
+      ? { image: { "@type": "ImageObject", url: article.featured_image_url } }
+      : {}),
+  };
+
   return (
     <main className="min-h-screen bg-paper">
       {/* JSON-LD structured data */}
-      {article.seo?.json_ld && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(article.seo.json_ld).replace(/</g, "\\u003c") }}
-        />
-      )}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaBlogPosting).replace(/</g, "\\u003c") }}
+      />
 
       {/* Back nav */}
       <div className="max-w-3xl mx-auto px-6 pt-12">
@@ -162,7 +185,7 @@ export default async function BlogDetailPage({
           {article.title}
         </h1>
         <div className="flex items-center gap-3 font-mono text-xs text-graphite mt-6 flex-wrap">
-          <span>{article.author || "PersonnaPress Team"}</span>
+          <span>{articleAuthor}</span>
           <span aria-hidden="true">&middot;</span>
           <time dateTime={article.published_at}>{formatDate(article.published_at)}</time>
           <span aria-hidden="true">&middot;</span>
@@ -170,7 +193,7 @@ export default async function BlogDetailPage({
         </div>
         {!article.author && (
           <p className="text-sm text-graphite mt-3 max-w-xl">
-            PersonnaPress Team helps founders and marketers turn their personal notes into blog posts that sound like them and are built to rank.
+            Boris Kwayep is the founder of PersonnaPress, building tools that help founders and marketers publish content that sounds like them.
           </p>
         )}
       </header>

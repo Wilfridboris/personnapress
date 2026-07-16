@@ -19,22 +19,15 @@ import { FaqAccordion } from "./_components/FaqAccordion";
 import { PublicHeader } from "@/components/marketing/PublicHeader";
 import { PublicFooter } from "@/components/marketing/PublicFooter";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://personnapress.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.personnapress.com";
 
 export const metadata: Metadata = {
-  title: "PersonnaPress - AI Blog Writer That Sounds Like You | Publish Everywhere",
+  title: {
+    absolute: "PersonnaPress - AI Blog Writer That Sounds Like You",
+  },
   description:
     "PersonnaPress is an AI blog writer that learns your voice and turns your notes into SEO-ranked blog posts and social campaigns. Schedule and publish to WordPress, Webflow, X, and LinkedIn — without sounding like AI.",
   metadataBase: new URL(APP_URL),
-  keywords: [
-    "ai blog writer",
-    "ai content publisher",
-    "social media scheduler",
-    "brand voice ai",
-    "wordpress publishing",
-    "ai copywriting tool",
-    "publish blog with ai",
-  ],
   alternates: {
     canonical: APP_URL,
   },
@@ -108,7 +101,7 @@ const WORKFLOW_STEPS = [
     icon: Globe,
     title: "Brand Ingestion",
     description:
-      "Paste your website URL and upload past writing samples. PersonaPress extracts your tone, cadence, and banned jargon into a living brand voice profile.",
+      "Paste your website URL and upload past writing samples. PersonnaPress extracts your tone, cadence, and banned jargon into a living brand voice profile.",
   },
   {
     step: "02",
@@ -190,7 +183,7 @@ const KEY_FEATURES = [
     icon: Fingerprint,
     title: "Voice Profile",
     description:
-      "PersonaPress scrapes your website and past writing to extract your tone, cadence, and banned phrases into a living Brand Voice Profile applied to every campaign.",
+      "PersonnaPress scrapes your website and past writing to extract your tone, cadence, and banned phrases into a living Brand Voice Profile applied to every campaign.",
   },
   {
     icon: Eraser,
@@ -250,19 +243,19 @@ const AGENCY_FEATURES = [
 
 const FAQ_ITEMS = [
   {
-    question: "What is PersonaPress and how does it work?",
+    question: "What is PersonnaPress and how does it work?",
     answer:
-      "PersonaPress is an AI content engine that learns your exact writing voice, then turns raw ideas into SEO-structured blog posts and social campaigns. You paste a website URL or upload past writing samples, PersonaPress extracts your tone and style into a Brand Voice Profile, and then any time you submit a brain dump it generates a complete campaign in under 90 seconds.",
+      "PersonnaPress is an AI content engine that learns your exact writing voice, then turns raw ideas into SEO-structured blog posts and social campaigns. You paste a website URL or upload past writing samples, PersonnaPress extracts your tone and style into a Brand Voice Profile, and then any time you submit a brain dump it generates a complete campaign in under 90 seconds.",
   },
   {
-    question: "How does PersonaPress learn my writing voice?",
+    question: "How does PersonnaPress learn my writing voice?",
     answer:
-      "PersonaPress scrapes your website for blog posts and public content, then runs it through a voice extraction model (Gemini 2.5 Flash) that identifies your tone, sentence cadence, and words you never use (banned jargon). The resulting Brand Voice Profile is stored on your account and applied to every campaign. You can review and edit every field before finalizing.",
+      "PersonnaPress scrapes your website for blog posts and public content, then runs it through a voice extraction model (Gemini 2.5 Flash) that identifies your tone, sentence cadence, and words you never use (banned jargon). The resulting Brand Voice Profile is stored on your account and applied to every campaign. You can review and edit every field before finalizing.",
   },
   {
-    question: "What publishing platforms does PersonaPress support?",
+    question: "What publishing platforms does PersonnaPress support?",
     answer:
-      "PersonaPress currently supports WordPress (self-hosted and WordPress.com), Webflow, X (Twitter), and LinkedIn. Meta / Instagram / Threads are architected and will ship in Phase 2. Each platform integration is independent; a failure on one platform does not block publishing to the others.",
+      "PersonnaPress currently supports WordPress (self-hosted and WordPress.com), Webflow, X (Twitter), and LinkedIn. Meta / Instagram / Threads are architected and will ship in Phase 2. Each platform integration is independent; a failure on one platform does not block publishing to the others.",
   },
   {
     question: "How long does content generation take?",
@@ -270,19 +263,19 @@ const FAQ_ITEMS = [
       "A typical campaign (blog post + X post + LinkedIn post + featured image) generates in under 90 seconds. The 95th-percentile upper bound is 120 seconds. You see real-time progress via a typewriter animation while the pipeline runs.",
   },
   {
-    question: "Does PersonaPress publish content automatically?",
+    question: "Does PersonnaPress publish content automatically?",
     answer:
       "No. Every draft goes through a human approval gate before anything is published. You review the full campaign, edit it in a WYSIWYG editor if needed, then explicitly approve or reject. Only after your approval can you trigger immediate or scheduled publishing.",
   },
   {
     question: "What is a Brain Dump?",
     answer:
-      "A Brain Dump is a free-form text input where you write your raw idea, voice note transcript, or bullet list. It can be between 20 and 10,000 characters. No structure is required. PersonaPress takes that rough input and transforms it into a polished, on-brand campaign.",
+      "A Brain Dump is a free-form text input where you write your raw idea, voice note transcript, or bullet list. It can be between 20 and 10,000 characters. No structure is required. PersonnaPress takes that rough input and transforms it into a polished, on-brand campaign.",
   },
   {
-    question: "How is PersonaPress different from ChatGPT or other AI writing tools?",
+    question: "How is PersonnaPress different from ChatGPT or other AI writing tools?",
     answer:
-      "Generic AI tools produce generic-sounding content because they have no knowledge of your voice. PersonaPress is trained on your specific content before generating anything. It also automates the full pipeline from idea to live post, including featured image generation and multi-platform publishing, which no general-purpose AI tool does.",
+      "Generic AI tools produce generic-sounding content because they have no knowledge of your voice. PersonnaPress is trained on your specific content before generating anything. It also automates the full pipeline from idea to live post, including featured image generation and multi-platform publishing, which no general-purpose AI tool does.",
   },
   {
     question: "Can I edit the AI-generated content before publishing?",
@@ -295,14 +288,14 @@ const FAQ_ITEMS = [
       "The 14-day free trial includes full access to all features: brand voice ingestion, campaign generation, image generation, and publishing to all connected platforms. No credit card is required to start. After 14 days you can subscribe to continue or your account enters a read-only state for 30 days.",
   },
   {
-    question: "Is PersonaPress suitable for agencies managing multiple clients?",
+    question: "Is PersonnaPress suitable for agencies managing multiple clients?",
     answer:
-      "Yes. PersonaPress has first-class multi-client support. Each client has a separate Brand Voice Profile, campaign history, and platform connections. You switch between clients from the dashboard. Campaigns never cross-contaminate between clients.",
+      "Yes. PersonnaPress has first-class multi-client support. Each client has a separate Brand Voice Profile, campaign history, and platform connections. You switch between clients from the dashboard. Campaigns never cross-contaminate between clients.",
   },
   {
     question: "Can I publish to WordPress.com (not just self-hosted WordPress)?",
     answer:
-      "Yes. PersonaPress supports both self-hosted WordPress (via Application Password) and WordPress.com (via OAuth 2.0). The WordPress.com OAuth flow handles authentication without requiring you to generate an application password.",
+      "Yes. PersonnaPress supports both self-hosted WordPress (via Application Password) and WordPress.com (via OAuth 2.0). The WordPress.com OAuth flow handles authentication without requiring you to generate an application password.",
   },
   {
     question: "How are featured images generated?",
@@ -312,10 +305,10 @@ const FAQ_ITEMS = [
   {
     question: "What is the best AI blog writer for small businesses?",
     answer:
-      "PersonaPress is designed for small businesses and entrepreneurs who need consistent, authentic blog content without a dedicated content team. Unlike generic AI writers, PersonaPress learns your specific voice, tone, and banned phrases before writing anything. The result is blog posts that sound like you wrote them, not a robot. Posts are also SEO-structured with proper headings and meta descriptions, so they are ready to rank when published.",
+      "PersonnaPress is designed for small businesses and entrepreneurs who need consistent, authentic blog content without a dedicated content team. Unlike generic AI writers, PersonnaPress learns your specific voice, tone, and banned phrases before writing anything. The result is blog posts that sound like you wrote them, not a robot. Posts are also SEO-structured with proper headings and meta descriptions, so they are ready to rank when published.",
   },
   {
-    question: "Can I use PersonaPress to schedule social media posts?",
+    question: "Can I use PersonnaPress to schedule social media posts?",
     answer:
       "Yes. Once you approve a campaign in the Approval Gate, you can publish immediately or set a future date and time for automatic publishing. Your LinkedIn post and X post are scheduled alongside the blog post. You manage everything from one place without switching between tools or logging into each platform separately.",
   },
@@ -362,12 +355,9 @@ export default function LandingPage() {
         <section className="max-w-6xl mx-auto px-6 pt-24 pb-20">
           <div className="max-w-3xl">
             <h1 className="font-display text-6xl lg:text-7xl font-bold text-ink leading-tight tracking-tight text-balance mb-8">
-              Your Notes.
-              <br />
-              Published and Ranked.
-              <br />
+              The AI Blog Writer{" "}
               <span className="relative">
-                In Your Voice.
+                That Sounds Like You.
                 <span
                   className="absolute -bottom-1 left-0 w-full h-0.5 bg-highlight"
                   aria-hidden="true"
@@ -375,10 +365,9 @@ export default function LandingPage() {
               </span>
             </h1>
             <p className="text-xl text-graphite leading-relaxed text-pretty mb-10 max-w-xl">
-              Stop spending 6 hours on blog posts that sound like every other AI
-              blog writer. PersonaPress learns your voice, then turns your notes
-              into ranked articles and social campaigns &mdash; ready to publish
-              or schedule across every platform.
+              Drop in a quick voice memo or brain dump. PersonnaPress learns your
+              tone, removes the AI fluff, and turns your notes into published,
+              ranked articles in seconds.
             </p>
             <div className="flex items-center gap-4">
               <Link
@@ -528,13 +517,13 @@ export default function LandingPage() {
               The Difference
             </p>
             <h2 className="font-display text-4xl font-bold text-ink text-balance">
-              Life before and after PersonaPress
+              Life before and after PersonnaPress
             </h2>
           </header>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-px border border-border bg-border">
             <div className="bg-paper p-8">
               <h3 className="font-mono text-xs text-graphite tracking-widest uppercase mb-6">
-                Before PersonaPress
+                Before PersonnaPress
               </h3>
               <ul className="space-y-3">
                 {BEFORE_ITEMS.map((item) => (
@@ -547,7 +536,7 @@ export default function LandingPage() {
             </div>
             <div className="bg-highlight p-8">
               <h3 className="font-mono text-xs text-ink tracking-widest uppercase mb-6">
-                After PersonaPress
+                After PersonnaPress
               </h3>
               <ul className="space-y-3">
                 {AFTER_ITEMS.map((item) => (
@@ -587,6 +576,12 @@ export default function LandingPage() {
             Publishing to GitHub Pages?{" "}
             <Link href="/github-publisher" className="text-ink underline underline-offset-2 hover:text-graphite transition-colors">
               See the GitHub blog publisher
+            </Link>
+          </p>
+          <p className="text-sm text-graphite mt-2 font-mono">
+            Building a headless or custom site?{" "}
+            <Link href="/headless-blog-api" className="text-ink underline underline-offset-2 hover:text-graphite transition-colors">
+              See the Headless Blog API
             </Link>
           </p>
           <p className="text-sm text-graphite mt-2 font-mono">

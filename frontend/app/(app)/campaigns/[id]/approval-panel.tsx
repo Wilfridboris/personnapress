@@ -421,7 +421,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
         setIsPublishing(false);
         if (headlessSelected) {
           addToast("Published to Headless Blog.", "success");
-          router.refresh();
+          router.push("/dashboard");
         }
       }
     } catch (err) {
@@ -487,7 +487,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           ...(filterPlatforms !== undefined ? [filterPlatforms] : []),
         );
       }
-      router.refresh();
+      router.push("/calendar");
     } catch (err) {
       if (err instanceof APIError && err.code === "TRIAL_EXPIRED") {
         showUpgradePrompt(err.message);
@@ -543,7 +543,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           const jobResults = (() => { try { return JSON.parse(job.error_details ?? "{}"); } catch { return {}; } })();
           const allAlready = Object.values(jobResults).length > 0 && (Object.values(jobResults) as string[]).every((v) => v === "already_published");
           addToast(allAlready ? "Already published to all connected platforms." : "Published successfully.", "success");
-          router.refresh();
+          router.push("/dashboard");
         } else if (job.status === "failed") {
           clearInterval(interval);
           setIsPublishing(false);

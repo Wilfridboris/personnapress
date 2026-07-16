@@ -1187,6 +1187,7 @@ async def publish_headless(
                     }
                 },
             )
+        await update_campaign_scheduled_at(db, campaign_id, scheduled_at_utc)
         await db.commit()
         await db.refresh(article)
 

@@ -7,23 +7,25 @@ import { PublicFooter } from "@/components/marketing/PublicFooter";
 
 export const dynamic = "force-static";
 
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://www.personnapress.com").replace(/\/$/, "");
+
 export async function generateMetadata(): Promise<Metadata> {
   return {
-    title: "AI Blog Writer for GitHub Pages | PersonnaPress",
+    title: { absolute: "Auto-Publish AI Blogs Directly to GitHub Pages | PersonnaPress" },
     description:
       "Publish AI-written blog posts to Jekyll, Astro, Hugo, or Eleventy repos. PersonnaPress detects your framework and commits posts correctly, no config needed.",
     openGraph: {
-      title: "AI Blog Writer for GitHub Pages | PersonnaPress",
+      title: "Auto-Publish AI Blogs Directly to GitHub Pages | PersonnaPress",
       description:
         "Publish AI-written blog posts to Jekyll, Astro, Hugo, or Eleventy repos. PersonnaPress detects your framework and commits posts correctly, no config needed.",
       type: "website",
     },
     alternates: {
-      canonical: "https://personnapress.com/github-publisher",
+      canonical: `${APP_URL}/github-publisher`,
     },
     twitter: {
       card: "summary_large_image",
-      title: "AI Blog Writer for GitHub Pages | PersonnaPress",
+      title: "Auto-Publish AI Blogs Directly to GitHub Pages | PersonnaPress",
       description:
         "PersonnaPress detects your GitHub Pages framework and commits AI-written posts in the right format. Jekyll, Astro, Hugo, Next.js, Eleventy, no config required.",
     },
@@ -38,7 +40,7 @@ const jsonLd = {
     "AI-powered blog writing and GitHub Pages publishing tool. Detects your static site framework and commits posts in the correct format via Pull Request or direct commit.",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Web",
-  url: "https://personnapress.com",
+  url: APP_URL,
   offers: [
     {
       "@type": "Offer",
@@ -203,10 +205,9 @@ export default function GitHubPublisherPage() {
         <section className="max-w-6xl mx-auto px-6 pt-24 pb-20" aria-label="Hero">
           <div className="max-w-3xl">
             <h1 className="font-display text-6xl lg:text-7xl font-bold text-ink leading-tight tracking-tight text-balance mb-8">
-              Publish your AI-written blog to GitHub.
-              <br />
+              Auto-Publish AI Blogs{" "}
               <span className="relative">
-                In the right format, every time.
+                Directly to GitHub Pages.
                 <span
                   className="absolute -bottom-1 left-0 w-full h-0.5 bg-highlight"
                   aria-hidden="true"
@@ -215,7 +216,7 @@ export default function GitHubPublisherPage() {
             </h1>
             <p className="text-xl text-graphite leading-relaxed text-pretty mb-10 max-w-xl">
               PersonnaPress detects your Jekyll, Astro, Hugo, or Next.js setup
-              and commits the post where it belongs &mdash; no config, no
+              and commits the post where it belongs: no config, no
               copy-paste, no SSH keys.
             </p>
             <div className="flex items-center gap-4">

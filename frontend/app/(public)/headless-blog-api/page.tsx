@@ -5,18 +5,18 @@ import { FaqAccordion } from "@/app/_components/FaqAccordion";
 
 export const dynamic = "force-static";
 
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://personnapress.com").replace(/\/$/, "");
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://www.personnapress.com").replace(/\/$/, "");
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
-    title: "Headless Blog API for Your Website | PersonnaPress",
+    title: { absolute: "The AI Headless Blog API for Custom Web Apps | PersonnaPress" },
     description:
       "Store blog content in PersonnaPress and fetch it on your own site through one API. A Contentful alternative built for blogs, with SEO data included.",
     alternates: {
       canonical: `${APP_URL}/headless-blog-api`,
     },
     openGraph: {
-      title: "Headless Blog API for Your Website | PersonnaPress",
+      title: "The AI Headless Blog API for Custom Web Apps | PersonnaPress",
       description:
         "Store blog content in PersonnaPress and fetch it on your own site through one API. A Contentful alternative built for blogs, with SEO data included.",
       type: "website",
@@ -32,7 +32,7 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     twitter: {
       card: "summary_large_image",
-      title: "Headless Blog API for Your Website | PersonnaPress",
+      title: "The AI Headless Blog API for Custom Web Apps | PersonnaPress",
       description:
         "Store blog content in PersonnaPress and fetch it on your own site through one API. A Contentful alternative built for blogs, with SEO data included.",
     },
@@ -359,9 +359,9 @@ export default function HeadlessBlogApiPage() {
         <section className="max-w-6xl mx-auto px-6 pt-24 pb-20">
           <div className="max-w-3xl">
             <h1 className="font-display text-6xl lg:text-7xl font-bold text-ink leading-tight tracking-tight text-balance mb-8">
-              Your blog, on your website,{" "}
+              The AI Headless Blog API{" "}
               <span className="relative">
-                powered by our API.
+                for Custom Web Apps.
                 <span
                   className="absolute -bottom-1 left-0 w-full h-0.5 bg-highlight"
                   aria-hidden="true"

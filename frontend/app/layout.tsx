@@ -23,25 +23,13 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://personnapress.com"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://www.personnapress.com"),
   title: {
     default: "PersonnaPress - Publish in Your Voice, Not AI's",
     template: "%s | PersonnaPress",
   },
   description:
     "PersonnaPress turns your raw ideas into SEO-ranked blog posts and social campaigns that sound exactly like you. Built for founders, coaches, and agencies.",
-  keywords: [
-    "AI content writing",
-    "blog automation",
-    "content marketing automation",
-    "social media automation",
-    "SEO blog posts",
-    "brand voice AI",
-    "AI writing tool",
-    "content agency tool",
-    "WordPress publishing automation",
-    "LinkedIn content automation",
-  ],
   manifest: "/site.webmanifest",
   icons: {
     icon: [
