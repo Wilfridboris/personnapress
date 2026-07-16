@@ -3,7 +3,6 @@
 import { forwardRef, useImperativeHandle, useState, useEffect, useRef, useCallback } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import type { Config } from "dompurify";
 import { Bold, Italic, Heading2, ImagePlus, Link2, Loader2, PenLine, Quote, RotateCcw, Trash2 } from "lucide-react";
@@ -71,9 +70,13 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
     useEffect(() => { setIsMounted(true); }, []);
 
     const editor = useEditor({
+      immediatelyRender: true,
       extensions: [
-        StarterKit.configure({ horizontalRule: false, strike: false }),
-        Link.configure({ openOnClick: false, HTMLAttributes: { class: "underline" } }),
+        StarterKit.configure({
+          horizontalRule: false,
+          strike: false,
+          link: { openOnClick: false, HTMLAttributes: { class: "underline" } },
+        }),
         Image.configure({ inline: false, allowBase64: false }),
       ],
       content: initialHtml,

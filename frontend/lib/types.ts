@@ -125,6 +125,7 @@ export interface CampaignCreate {
   client_id: string;
   brain_dump: string;
   target_keyword?: string | null;
+  secondary_keywords?: string | null;
   target_audience?: string | null;
 }
 
