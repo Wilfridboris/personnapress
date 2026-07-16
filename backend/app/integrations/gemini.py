@@ -95,19 +95,19 @@ _BLOG_PROMPT = """You are a direct, expert blog writer. Write a blog post that s
 BRAND VOICE PROFILE:
 {bvp_json}
 
-BRAIN DUMP (author's raw ideas — build the blog around the core argument, but RETAIN all first-person experiences, specific numbers, dates, named tools, or unique outcomes. These are E-E-A-T and Information Gain signals; do not generalize or anonymize them):
+BRAIN DUMP (author's raw ideas: build the blog around the core argument, but RETAIN all first-person experiences, specific numbers, dates, named tools, or unique outcomes. These are E-E-A-T and Information Gain signals; do not generalize or anonymize them):
 {brain_dump}
 
 {seo_target_section}
 {audience_section}
 
-MANDATORY STRUCTURE (HTML only, no markdown — follow this EXACTLY):
+MANDATORY STRUCTURE (HTML only, no markdown; follow this EXACTLY):
 <h1>[Keyword-first title, specific and direct]</h1>
 <!-- meta: [One sentence meta description, max 150 chars, ends with action phrase] -->
 <div class="tldr"><p><strong>TL;DR:</strong> [2-3 bold sentences that directly answer the post's core question. Specific. No filler.]</p></div>
 <p>[BLUF intro paragraph: Start with a specific fact, number, or bold claim. Never start with "In today's..." or similar openers. State the core takeaway in the first sentence.]</p>
-<h2>[Main topic — actionable heading]</h2>
-[GEO RULE: If this H2 implies a direct question (How to, Why, What is, When should you): open with a direct 1–3 sentence answer paragraph (max ~60 words) BEFORE the H3 — this is the AI Overview citation extract. If the H2 is built around examples, comparisons, step-by-step processes, or data: skip the answer block and lead straight into the H3. Never force an answer block where it does not arise naturally.]
+<h2>[Main topic, actionable heading]</h2>
+[GEO RULE: If this H2 implies a direct question (How to, Why, What is, When should you): open with a direct 1–3 sentence answer paragraph (max ~60 words) BEFORE the H3 (this is the AI Overview citation extract). If the H2 is built around examples, comparisons, step-by-step processes, or data: skip the answer block and lead straight into the H3. Never force an answer block where it does not arise naturally.]
 <h3>[Sub-topic]</h3>
 <p>...</p>
 [Repeat this H2 pattern for each main content section (3 to 4 total, not counting the FAQ and Key Takeaways sections below)]
@@ -129,12 +129,12 @@ REQUIREMENTS:
 - Match the tone: {tone_list}
 - Match the cadence: avg sentence length {avg_sentence_length} words
 - Never use these jargon terms: {banned_jargon_list}
-- If the Brain Dump says "I found X", "I tested X", or "I built X" — use first-person voice in the post. Never convert "I found conversion increased 40%" into "conversion rates can increase up to 40%". The author's direct experience is the E-E-A-T signal.
-- If the Brain Dump contains proprietary data, A/B test results, client outcomes, or specific findings not commonly known — surface these in the opening of the relevant H2 section. Do not bury unique data behind generic context-setting paragraphs.
-- Output ONLY valid HTML tags — NEVER use markdown syntax like **bold**, *italic*, ##, ###
+- If the Brain Dump says "I found X", "I tested X", or "I built X": use first-person voice in the post. Never convert "I found conversion increased 40%" into "conversion rates can increase up to 40%". The author's direct experience is the E-E-A-T signal.
+- If the Brain Dump contains proprietary data, A/B test results, client outcomes, or specific findings not commonly known: surface these in the opening of the relevant H2 section. Do not bury unique data behind generic context-setting paragraphs.
+- Output ONLY valid HTML tags. NEVER use markdown syntax like **bold**, *italic*, ##, ###
 - Bold text must use <strong>, italics must use <em>
 
-BANNED OPENERS — never start any paragraph or sentence with these phrases:
+BANNED OPENERS, never start any paragraph or sentence with these phrases:
 - "In today's fast-paced world"
 - "In today's digital landscape"
 - "As we all know"
@@ -143,7 +143,7 @@ BANNED OPENERS — never start any paragraph or sentence with these phrases:
 - "Standing out requires more than"
 - "Now more than ever"
 
-BANNED WORDS — do not use anywhere: delve, moreover, testament, comprehensive, furthermore, tapestry, paradigm, bespoke, unlock, supercharge, navigate (as metaphor)
+BANNED WORDS, do not use anywhere: delve, moreover, testament, comprehensive, furthermore, tapestry, paradigm, bespoke, unlock, supercharge, navigate (as metaphor), em-dash
 
 Every sentence must earn its place. If a sentence does not give the reader new information or a specific action, cut it.
 """
@@ -161,7 +161,7 @@ Return ONLY a valid JSON object (no markdown):
   "tone_score": <integer 0-10>,
   "cadence_score": <integer 0-10>,
   "jargon_violations": <integer count of banned BVP terms found>,
-  "seo_bluf_present": <boolean: true if the first <p> tag starts with a specific fact, stat, or direct claim — NOT a general statement like "The landscape is..."; false otherwise>,
+  "seo_bluf_present": <boolean: true if the first <p> tag starts with a specific fact, stat, or direct claim, NOT a general statement like "The landscape is..."; false otherwise>,
   "seo_h2_count": <integer: count of <h2> tags in the blog HTML>,
   "seo_faq_present": <boolean: true if a FAQ section with at least 3 Q&A pairs (as <dl> or similar) is present>,
   "seo_fluff_detected": <boolean: true if any banned opener phrase like "In today's fast-paced world", "As we all know", "It's no secret that" appears anywhere in the content>,
@@ -183,7 +183,7 @@ BLOG TITLE:
 Return ONLY a valid JSON object (no markdown):
 {{
   "x_post": "<X post text, max 280 characters, tease the blog without duplicating it>",
-  "linkedin_post": "<LinkedIn post, 500-1300 characters, use blank lines for paragraph breaks. Must open with a first-person hook tied to the brain dump's key insight — acceptable openers: 'I just discovered...', 'Last week I...', 'After testing X, I found...'. Tease the specific outcome from the brain dump, not the general topic.>"
+  "linkedin_post": "<LinkedIn post, 500-1300 characters, use blank lines for paragraph breaks. Must open with a first-person hook tied to the brain dump's key insight. Acceptable openers: 'I just discovered...', 'Last week I...', 'After testing X, I found...'. Tease the specific outcome from the brain dump, not the general topic.>"
 }}
 """
 
@@ -197,10 +197,10 @@ def _build_seo_section(
         seo_section = f"""SEO TARGET:
 - Primary keyword: {target_keyword}
 - Include this exact phrase or a close variant in: the H1 title, the first 100 words, at least one H2 heading, and the conclusion paragraph.
-- Write to rank for this specific search query — assume the reader typed this exact phrase into Google."""
+- Write to rank for this specific search query. Assume the reader typed this exact phrase into Google."""
     else:
         seo_section = """SEARCH INTENT FOCUS (no keyword provided):
-Extract the single most specific, actionable angle from the Brain Dump. Pick ONE target reader type — not "developers AND marketers", not "apps AND SaaS". Choose one. Write exclusively for that angle. State your choice in the H1 and commit to it through every section. If the brain dump is broad, pick the most specific, technical angle."""
+Extract the single most specific, actionable angle from the Brain Dump. Pick ONE target reader type: not "developers AND marketers", not "apps AND SaaS". Choose one. Write exclusively for that angle. State your choice in the H1 and commit to it through every section. If the brain dump is broad, pick the most specific, technical angle."""
 
     if secondary_keywords:
         seo_section += f"""
