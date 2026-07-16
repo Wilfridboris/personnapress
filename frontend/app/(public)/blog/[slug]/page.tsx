@@ -76,8 +76,7 @@ export async function generateMetadata({
   const article = await fetchArticle(slug);
   if (!article) notFound();
 
-  const rawTitle = `${article.title} | PersonnaPress Blog`;
-  const title = rawTitle.length > 70 ? rawTitle.slice(0, 67) + "..." : rawTitle;
+  const title = article.title;
   const description = article.seo?.meta_description ?? article.excerpt ?? "";
   const ogTitle = article.seo?.og?.title ?? article.title;
   const ogDescription = article.seo?.og?.description ?? article.excerpt ?? "";
