@@ -13,6 +13,7 @@ export function PublicHeader() {
             width={128}
             height={128}
             priority
+            loading="eager"
             className="h-8 w-auto"
           />
         </Link>
