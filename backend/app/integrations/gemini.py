@@ -208,7 +208,7 @@ Extract the single most specific, actionable angle from the Brain Dump. Pick ONE
 SUPPORTING KEYWORDS (mention each at most once, naturally):
 {secondary_keywords}
 - Place each term at most once within the first 500 words, only inside a sentence that already calls for it.
-- If no natural sentence exists for a term, skip it entirely — forced insertion is worse than omission."""
+- If no natural sentence exists for a term, skip it entirely - forced insertion is worse than omission."""
 
     audience_section = ""
     if target_audience:
