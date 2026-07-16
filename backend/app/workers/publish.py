@@ -19,6 +19,7 @@ from app.db.repositories.platform_connections import get_connections_for_client,
 from app.integrations import github as github_integration
 from app.services.articles import create_or_update_article_from_campaign
 from app.services.publishing import dispatch_publish, generate_github_post_file, _refresh_token_if_needed
+from app.db.repositories.articles import get_article_by_campaign_id
 
 logger = logging.getLogger(__name__)
 
@@ -109,13 +110,15 @@ async def publish_github_job(
             await db.commit()
 
 
-async def run_publish(job_id: UUID, campaign_id: UUID) -> None:
+async def run_publish(job_id: UUID, campaign_id: UUID, platforms: list[str] | None = None) -> None:
     """BackgroundTask entry point for multi-platform publishing."""
+    if platforms is None:
+        platforms = []
     async with get_session_context() as db:
         await update_job(db, job_id, status="in_progress", started_at=utcnow())
         await db.commit()
         try:
-            results = await dispatch_publish(db, campaign_id, job_id)
+            results = await dispatch_publish(db, campaign_id, job_id, platforms)
             all_success = all(v in ("success", "already_published") for v in results.values()) and bool(results)
             if all_success:
                 await update_campaign_status(db, campaign_id, "published")
@@ -152,3 +155,26 @@ async def run_publish(job_id: UUID, campaign_id: UUID) -> None:
                 completed_at=utcnow(),
             )
             await db.commit()
+
+
+async def run_publish_headless(campaign_id_str: str) -> None:
+    """APScheduler fires this to flip a scheduled headless article from hidden to published."""
+    from uuid import UUID as _UUID
+    try:
+        campaign_id = _UUID(campaign_id_str)
+    except (ValueError, AttributeError):
+        logger.error("run_publish_headless: invalid campaign_id=%r — skipping", campaign_id_str)
+        return
+    async with get_session_context() as db:
+        article = await get_article_by_campaign_id(db, campaign_id)
+        if not article:
+            logger.warning("run_publish_headless: no article for campaign=%s — skipping", campaign_id)
+            return
+        if str(getattr(article.status, "value", article.status)) == "published":
+            logger.info("run_publish_headless: article=%s already published — skipping", article.id)
+            return
+        article.status = "published"
+        article.updated_at = utcnow()
+        db.add(article)
+        await db.commit()
+        logger.info("run_publish_headless: article=%s published (campaign=%s)", article.id, campaign_id)

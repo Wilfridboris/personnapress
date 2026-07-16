@@ -19,6 +19,11 @@ async def create_article(session: AsyncSession, **fields) -> Article:
     return article
 
 
+async def get_article_by_campaign_id(session: AsyncSession, campaign_id: uuid.UUID) -> Optional[Article]:
+    result = await session.execute(select(Article).where(Article.campaign_id == campaign_id))
+    return result.scalar_one_or_none()
+
+
 async def get_article(session: AsyncSession, article_id: uuid.UUID) -> Optional[Article]:
     result = await session.execute(select(Article).where(Article.id == article_id))
     return result.scalar_one_or_none()

@@ -157,6 +157,42 @@ async def test_cancel_schedule_success():
     db.commit.assert_called_once()
 
 
+async def test_schedule_with_platform_filter():
+    """POST with platforms filter passes platforms list as third APScheduler job arg."""
+    from app.routers.publishing import schedule_campaign_publish, ScheduleRequest
+
+    user_id = uuid.uuid4()
+    campaign = _make_campaign()
+    client = _make_client(user_id=user_id, client_id=campaign.client_id)
+    job = _make_job(campaign_id=campaign.id)
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    mock_scheduler = MagicMock()
+    scheduled_at = _future_dt()
+
+    with (
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock(return_value=None)),
+        patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.create_job", AsyncMock(return_value=job)),
+        patch("app.routers.publishing.update_campaign_scheduled_at", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.scheduler", mock_scheduler),
+    ):
+        await schedule_campaign_publish(
+            campaign_id=campaign.id,
+            body=ScheduleRequest(scheduled_at=scheduled_at, platforms=["linkedin"]),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    mock_scheduler.add_job.assert_called_once()
+    call_kwargs = mock_scheduler.add_job.call_args
+    args_passed = call_kwargs.kwargs.get("args") or call_kwargs.args[1] if len(call_kwargs.args) > 1 else call_kwargs.kwargs.get("args")
+    # APScheduler args: [job_id_str, campaign_id_str, platforms_list]
+    add_job_args = mock_scheduler.add_job.call_args[1]["args"]
+    assert add_job_args[2] == ["linkedin"]
+
+
 async def test_cancel_schedule_not_found():
     from app.routers.publishing import cancel_scheduled_publish
 

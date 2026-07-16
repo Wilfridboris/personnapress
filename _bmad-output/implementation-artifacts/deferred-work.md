@@ -1,5 +1,13 @@
 # Deferred Work
 
+## Deferred from: code review of 14-1-platform-destination-picker (2026-07-16)
+
+- Atomicity hole: `create_or_update_article_from_campaign` committed before `scheduler.add_job` in `publish_headless` scheduled branch — if scheduler raises, article is stranded as `hidden` with no job to flip it; recoverable manually; architectural change needed to fix cleanly. [backend/app/routers/publishing.py]
+- APScheduler platforms list serialization across process restart — new connected-platform jobs store `platforms` as a Python list in `args`; pickle/JSON round-trip assumed; pre-existing concern across all APScheduler job args in codebase.
+- `platform` field polymorphism `isinstance(c.platform, str)` in `dispatch_publish` — masks a pre-existing ORM inconsistency where some rows store a string and others an enum; not introduced by this story. [backend/app/services/publishing.py]
+- WordPress + WordPress.com dedup overrides explicit chip selection — existing precedence logic in `dispatch_publish` drops `wordpress-com` when both are present, regardless of the user's chip selection; pre-existing behavior. [backend/app/services/publishing.py]
+- Partial success states in `handlePublishNow`/`handleConfirmSchedule` — if headless succeeds but connected-platform call fails (or vice-versa), only a generic error toast fires with no partial-success feedback; spec does not require atomic rollback. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]
+
 ## Deferred from: code review of 3-10-focus-keyword-supporting-keywords (2026-07-15)
 
 - Prompt injection via unsanitized user-controlled text (`secondary_keywords`, `target_keyword`, `target_audience`) interpolated directly into LLM prompt f-string — pre-existing pattern for all three fields; mitigate in a future hardening pass by stripping or encoding newlines. [backend/app/integrations/gemini.py]

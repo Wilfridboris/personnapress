@@ -33,7 +33,7 @@
   --tw-prose-bullets: #E5E5E5;
   --tw-prose-hr: #E5E5E5;
   --tw-prose-quotes: #111111;
-  --tw-prose-quote-borders: #E5E5E5;
+  --tw-prose-quote-borders: #111111;
   --tw-prose-captions: #555555;
   --tw-prose-code: #111111;
   --tw-prose-pre-code: #111111;
@@ -115,6 +115,12 @@ body {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
+}
+
+/* Prose blockquote — thin 1px Ink border instead of the default 4px bar */
+.prose :where(blockquote):not(:where([class~="not-prose"],[class~="not-prose"] *)) {
+  border-left-width: 1px;
+  font-style: normal;
 }
 
 /* Custom scrollbar */

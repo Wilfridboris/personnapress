@@ -133,8 +133,11 @@ export const campaignsApi = {
     }),
   regenerate: (id: string) =>
     apiFetch<{ campaign_id: string; job_id: string }>(`/campaigns/${id}/regenerate`, { method: "POST" }),
-  publishNow: (id: string) =>
-    apiFetch<{ job_id: string }>(`/campaigns/${id}/publish`, { method: "POST" }),
+  publishNow: (id: string, platforms?: string[]) =>
+    apiFetch<{ job_id: string }>(`/campaigns/${id}/publish`, {
+      method: "POST",
+      ...(platforms !== undefined ? { body: JSON.stringify({ platforms }) } : {}),
+    }),
   regenerateImage: (id: string) =>
     apiFetch<{ image_url: string; image_regen_count: number }>(
       `/campaigns/${id}/image/regenerate`,
@@ -142,10 +145,10 @@ export const campaignsApi = {
     ),
   patch: (id: string, data: { blog_html?: string; x_post?: string; linkedin_post?: string }) =>
     apiFetch<Campaign>(`/campaigns/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  schedule: (id: string, scheduledAt: string) =>
+  schedule: (id: string, scheduledAt: string, platforms?: string[]) =>
     apiFetch<{ job_id: string; scheduled_at: string }>(`/campaigns/${id}/publish/schedule`, {
       method: "POST",
-      body: JSON.stringify({ scheduled_at: scheduledAt }),
+      body: JSON.stringify({ scheduled_at: scheduledAt, ...(platforms !== undefined ? { platforms } : {}) }),
     }),
   cancelSchedule: (id: string) =>
     apiFetch<{ campaign_id: string; status: string }>(`/campaigns/${id}/publish/schedule`, {
@@ -156,8 +159,11 @@ export const campaignsApi = {
       method: "POST",
       body: JSON.stringify({ platform }),
     }),
-  publishHeadless: (id: string) =>
-    apiFetch<PublishHeadlessResponse>(`/campaigns/${id}/publish-headless`, { method: "POST" }),
+  publishHeadless: (id: string, scheduledAt?: string) =>
+    apiFetch<PublishHeadlessResponse>(`/campaigns/${id}/publish-headless`, {
+      method: "POST",
+      ...(scheduledAt !== undefined ? { body: JSON.stringify({ scheduled_at: scheduledAt }) } : {}),
+    }),
 };
 
 export const dashboardApi = {

@@ -94,6 +94,53 @@ async def test_credentials_not_logged(caplog):
 
 
 # ---------------------------------------------------------------------------
+# dispatch_publish — platform filter (AC 5, 7)
+# ---------------------------------------------------------------------------
+
+async def test_dispatch_publish_filters_by_platforms():
+    """When platforms=['linkedin'], only LinkedIn is dispatched; WordPress skipped."""
+    from app.services.publishing import dispatch_publish
+
+    campaign = _make_campaign()
+    campaign.status = "approved"
+    wp_conn = _make_connection("wordpress")
+    li_creds = {"access_token": "li_token"}
+    li_conn = _make_connection("linkedin", creds=li_creds)
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=[wp_conn, li_conn])),
+        patch("app.services.publishing.linkedin_integration.create_ugc_post", AsyncMock(return_value=None)),
+        patch("app.services.publishing.wordpress_integration.publish_post", AsyncMock(return_value=None)) as mock_wp,
+    ):
+        results = await dispatch_publish(db, campaign.id, uuid.uuid4(), platforms=["linkedin"])
+
+    assert results.get("linkedin") == "success"
+    assert "wordpress" not in results
+    mock_wp.assert_not_called()
+
+
+async def test_dispatch_publish_empty_platforms_publishes_all():
+    """When platforms=[] (empty list), all connected platforms are dispatched."""
+    from app.services.publishing import dispatch_publish
+
+    campaign = _make_campaign()
+    campaign.status = "approved"
+    wp_conn = _make_connection("wordpress")
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=[wp_conn])),
+        patch("app.services.publishing.wordpress_integration.publish_post", AsyncMock(return_value=None)),
+    ):
+        results = await dispatch_publish(db, campaign.id, uuid.uuid4(), platforms=[])
+
+    assert results.get("wordpress") == "success"
+
+
+# ---------------------------------------------------------------------------
 # _publish_github — Jekyll path
 # ---------------------------------------------------------------------------
 

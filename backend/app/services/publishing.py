@@ -514,9 +514,10 @@ async def dispatch_publish_for_platform(
         return {platform: f"Unexpected error — {str(exc)[:100]}"}
 
 
-async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID) -> dict:
+async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, platforms: list[str] | None = None) -> dict:
     """
-    Publish to all connected platforms. Returns per-platform results dict.
+    Publish to connected platforms. Returns per-platform results dict.
+    If platforms is non-empty, only those platforms are targeted.
     ONLY this function may call decrypt_credential().
     Decrypted credentials never leave this function's scope and are never logged.
     """
@@ -524,7 +525,11 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID) ->
     if campaign is None:
         logger.error("dispatch_publish: campaign %s not found", campaign_id)
         return {"error": f"campaign {campaign_id} not found"}
+    if platforms is None:
+        platforms = []
     connections = await get_connections_for_client(db, campaign.client_id)
+    if platforms:
+        connections = [c for c in connections if (c.platform if isinstance(c.platform, str) else c.platform.value) in platforms]
     # If both self-hosted and WordPress.com connections exist, prefer self-hosted (mirrors UI precedence)
     platform_names = {(c.platform if isinstance(c.platform, str) else c.platform.value) for c in connections}
     if "wordpress" in platform_names and "wordpress-com" in platform_names:

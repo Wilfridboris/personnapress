@@ -8,7 +8,8 @@ logger = logging.getLogger(__name__)
 
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.triggers.date import DateTrigger
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from typing import Annotated
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,8 +36,9 @@ from app.integrations import webflow as webflow_integration
 from app.integrations import wordpress as wordpress_integration
 from app.integrations import wordpress_com as wordpress_com_integration
 from app.scheduler.scheduler import scheduler
+from app.schemas.publishing import PublishRequest, PublishHeadlessRequest
 from app.services.subscription_service import check_trial_not_expired
-from app.workers.publish import publish_github_job, run_publish
+from app.workers.publish import publish_github_job, run_publish, run_publish_headless
 from app.workers.publish_retry import run_publish_retry
 from app.services.articles import create_or_update_article_from_campaign
 
@@ -832,6 +834,7 @@ async def publish_campaign_now(
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
+    request: Annotated[Optional[PublishRequest], Body()] = None,
 ) -> dict:
     user_id = _parse_user_id(current_user)
 
@@ -881,13 +884,15 @@ async def publish_campaign_now(
     job = await create_job(db, job_type="publish", status="pending", campaign_id=campaign_id)
     await db.commit()
 
-    background_tasks.add_task(run_publish, job.id, campaign_id)
+    platforms = (request.platforms or []) if request else []
+    background_tasks.add_task(run_publish, job.id, campaign_id, platforms)
 
     return {"job_id": str(job.id)}
 
 
 class ScheduleRequest(BaseModel):
     scheduled_at: datetime
+    platforms: Optional[list[str]] = None
 
     @field_validator("scheduled_at")
     @classmethod
@@ -955,7 +960,7 @@ async def schedule_campaign_publish(
         scheduler.add_job(
             run_publish,
             trigger=DateTrigger(run_date=scheduled_at_utc),
-            args=[str(job.id), str(campaign_id)],
+            args=[str(job.id), str(campaign_id), body.platforms or []],
             id=str(job.id),
             replace_existing=True,
         )
@@ -1124,11 +1129,12 @@ async def publish_headless(
     campaign_id: uuid.UUID,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
+    request: Annotated[Optional[PublishHeadlessRequest], Body()] = None,
 ) -> dict:
     """Create or update the headless article for a campaign.
 
-    Idempotent: calling again on an already-published campaign returns the existing article.
-    No external API calls — only a local DB write.
+    Without scheduled_at: publishes immediately, marks campaign published.
+    With scheduled_at: creates article as hidden, registers APScheduler job to flip it.
     """
     user_id = _parse_user_id(current_user)
 
@@ -1161,29 +1167,73 @@ async def publish_headless(
             },
         )
 
-    article = await create_or_update_article_from_campaign(db, campaign)
-    if article is None:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": {
-                    "code": "NO_CONTENT",
-                    "message": "Campaign has no blog content to publish.",
-                    "detail": {},
-                }
-            },
-        )
+    if request and request.scheduled_at:
+        scheduled_at_utc = request.scheduled_at.astimezone(timezone.utc).replace(tzinfo=None)
+        if scheduled_at_utc <= datetime.now(timezone.utc).replace(tzinfo=None):
+            raise HTTPException(
+                status_code=400,
+                detail={"error": {"code": "SCHEDULED_TIME_IN_PAST", "message": "Scheduled time must be in the future.", "detail": {}}},
+            )
+        # Create article as hidden — campaign stays approved; APScheduler flips it at scheduled time
+        article = await create_or_update_article_from_campaign(db, campaign, status_override="hidden")
+        if article is None:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": {
+                        "code": "NO_CONTENT",
+                        "message": "Campaign has no blog content to publish.",
+                        "detail": {},
+                    }
+                },
+            )
+        await db.commit()
+        await db.refresh(article)
 
-    # Mark campaign published if it was only approved
-    if campaign.status == "approved":
-        campaign.status = "published"
-        db.add(campaign)
+        try:
+            scheduler.add_job(
+                run_publish_headless,
+                trigger=DateTrigger(run_date=scheduled_at_utc),
+                args=[str(campaign_id)],
+                id=f"headless_{campaign_id}",
+                replace_existing=True,
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": {"code": "SCHEDULER_ERROR", "message": "Failed to register scheduled headless job.", "detail": {}}},
+            ) from exc
 
-    await db.commit()
-    await db.refresh(article)
+        return {
+            "article_id": str(article.id),
+            "slug": article.slug,
+            "status": "scheduled",
+        }
+    else:
+        # Existing behavior: publish immediately, mark campaign published
+        article = await create_or_update_article_from_campaign(db, campaign)
+        if article is None:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": {
+                        "code": "NO_CONTENT",
+                        "message": "Campaign has no blog content to publish.",
+                        "detail": {},
+                    }
+                },
+            )
 
-    return {
-        "article_id": str(article.id),
-        "slug": article.slug,
-        "status": str(article.status.value if hasattr(article.status, "value") else article.status),
-    }
+        # Mark campaign published if it was only approved
+        if campaign.status == "approved":
+            campaign.status = "published"
+            db.add(campaign)
+
+        await db.commit()
+        await db.refresh(article)
+
+        return {
+            "article_id": str(article.id),
+            "slug": article.slug,
+            "status": str(article.status.value if hasattr(article.status, "value") else article.status),
+        }

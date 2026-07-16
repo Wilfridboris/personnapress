@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApprovalPanel } from "@/app/(app)/campaigns/[id]/approval-panel";
 import type { Campaign } from "@/lib/types";
+
+function wrapper({ children }: { children: React.ReactNode }) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
 
 const mockPush = vi.fn();
 const mockRefresh = vi.fn();
@@ -21,6 +27,7 @@ const mockReject = vi.fn();
 const mockRegenerate = vi.fn();
 const mockPatch = vi.fn();
 const mockPublishNow = vi.fn();
+const mockPublishHeadless = vi.fn();
 const mockJobGet = vi.fn();
 const mockSchedule = vi.fn();
 const mockCancelSchedule = vi.fn();
@@ -32,8 +39,12 @@ vi.mock("@/lib/api", () => ({
     regenerate: (...args: unknown[]) => mockRegenerate(...args),
     patch: (...args: unknown[]) => mockPatch(...args),
     publishNow: (...args: unknown[]) => mockPublishNow(...args),
+    publishHeadless: (...args: unknown[]) => mockPublishHeadless(...args),
     schedule: (...args: unknown[]) => mockSchedule(...args),
     cancelSchedule: (...args: unknown[]) => mockCancelSchedule(...args),
+  },
+  clientsApi: {
+    get: vi.fn().mockResolvedValue({ id: "client-456", name: "Test Client" }),
   },
   jobsApi: {
     get: (...args: unknown[]) => mockJobGet(...args),
@@ -49,10 +60,11 @@ vi.mock("@/lib/api", () => ({
 }));
 
 const mockAddToast = vi.fn();
+const mockShowUpgradePrompt = vi.fn();
 
 vi.mock("@/lib/stores/useUIStore", () => ({
-  useUIStore: (selector: (s: { addToast: typeof mockAddToast }) => unknown) =>
-    selector({ addToast: mockAddToast }),
+  useUIStore: (selector: (s: { addToast: typeof mockAddToast; showUpgradePrompt: typeof mockShowUpgradePrompt }) => unknown) =>
+    selector({ addToast: mockAddToast, showUpgradePrompt: mockShowUpgradePrompt }),
 }));
 
 function makeCampaign(overrides: Partial<Campaign> = {}): Campaign {
@@ -82,7 +94,7 @@ describe("ApprovalPanel — pending_approval state", () => {
   });
 
   it("renders Approve and Reject buttons", () => {
-    render(<ApprovalPanel campaign={makeCampaign()} />);
+    render(<ApprovalPanel campaign={makeCampaign()} />, { wrapper });
     expect(screen.getByRole("button", { name: /approve/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reject/i })).toBeInTheDocument();
   });
@@ -91,7 +103,7 @@ describe("ApprovalPanel — pending_approval state", () => {
     const onOptimisticStatus = vi.fn();
     mockApprove.mockResolvedValueOnce({ id: "campaign-123", status: "approved", client_id: "client-456" });
 
-    render(<ApprovalPanel campaign={makeCampaign()} onOptimisticStatus={onOptimisticStatus} />);
+    render(<ApprovalPanel campaign={makeCampaign()} onOptimisticStatus={onOptimisticStatus} />, { wrapper });
     fireEvent.click(screen.getByRole("button", { name: /approve/i }));
 
     expect(onOptimisticStatus).toHaveBeenCalledWith("approved");
@@ -103,7 +115,7 @@ describe("ApprovalPanel — pending_approval state", () => {
     const { APIError } = await import("@/lib/api");
     mockApprove.mockRejectedValueOnce(new APIError("Approve failed", "INVALID_STATUS_TRANSITION"));
 
-    render(<ApprovalPanel campaign={makeCampaign()} onOptimisticStatus={onOptimisticStatus} />);
+    render(<ApprovalPanel campaign={makeCampaign()} onOptimisticStatus={onOptimisticStatus} />, { wrapper });
     fireEvent.click(screen.getByRole("button", { name: /approve/i }));
 
     await waitFor(() => expect(mockAddToast).toHaveBeenCalledWith("Approve failed", "error"));
@@ -111,7 +123,7 @@ describe("ApprovalPanel — pending_approval state", () => {
   });
 
   it("opens reject dialog when Reject is clicked", () => {
-    render(<ApprovalPanel campaign={makeCampaign()} />);
+    render(<ApprovalPanel campaign={makeCampaign()} />, { wrapper });
     fireEvent.click(screen.getByRole("button", { name: "Reject campaign" }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("Reject this campaign?")).toBeInTheDocument();
@@ -120,7 +132,7 @@ describe("ApprovalPanel — pending_approval state", () => {
   it("calls campaignsApi.reject with reason when confirmed", async () => {
     mockReject.mockResolvedValueOnce({ id: "campaign-123", status: "rejected", rejection_reason: "Too vague" });
 
-    render(<ApprovalPanel campaign={makeCampaign()} />);
+    render(<ApprovalPanel campaign={makeCampaign()} />, { wrapper });
     fireEvent.click(screen.getByRole("button", { name: "Reject campaign" }));
 
     const textarea = screen.getByPlaceholderText(/reason \(optional\)/i);
@@ -138,7 +150,7 @@ describe("ApprovalPanel — pending_approval state", () => {
   it("calls campaignsApi.reject with undefined when no reason provided", async () => {
     mockReject.mockResolvedValueOnce({ id: "campaign-123", status: "rejected", rejection_reason: null });
 
-    render(<ApprovalPanel campaign={makeCampaign()} />);
+    render(<ApprovalPanel campaign={makeCampaign()} />, { wrapper });
     fireEvent.click(screen.getByRole("button", { name: "Reject campaign" }));
     const allRejectBtns2 = screen.getAllByText("Reject campaign");
     const confirmBtn2 = allRejectBtns2.find((el) => !el.getAttribute("aria-label"))!;
@@ -148,7 +160,7 @@ describe("ApprovalPanel — pending_approval state", () => {
   });
 
   it("closes reject dialog on Cancel", () => {
-    render(<ApprovalPanel campaign={makeCampaign()} />);
+    render(<ApprovalPanel campaign={makeCampaign()} />, { wrapper });
     fireEvent.click(screen.getByRole("button", { name: "Reject campaign" }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
@@ -162,14 +174,14 @@ describe("ApprovalPanel — rejected state", () => {
   });
 
   it("shows Regenerate button", () => {
-    render(<ApprovalPanel campaign={makeCampaign({ status: "rejected" })} />);
+    render(<ApprovalPanel campaign={makeCampaign({ status: "rejected" })} />, { wrapper });
     expect(screen.getByRole("button", { name: /regenerate from same brain dump/i })).toBeInTheDocument();
   });
 
   it("calls campaignsApi.regenerate and navigates to new campaign", async () => {
     mockRegenerate.mockResolvedValueOnce({ campaign_id: "new-camp-999", job_id: "job-888" });
 
-    render(<ApprovalPanel campaign={makeCampaign({ status: "rejected" })} />);
+    render(<ApprovalPanel campaign={makeCampaign({ status: "rejected" })} />, { wrapper });
     fireEvent.click(screen.getByRole("button", { name: /regenerate from same brain dump/i }));
 
     await waitFor(() =>
@@ -180,7 +192,7 @@ describe("ApprovalPanel — rejected state", () => {
 
 describe("ApprovalPanel — approved state", () => {
   it("shows Connect a platform CTA when clientHasPlatforms is false (loading skeleton initially)", () => {
-    render(<ApprovalPanel campaign={makeCampaign({ status: "approved" })} />);
+    render(<ApprovalPanel campaign={makeCampaign({ status: "approved" })} />, { wrapper });
     // Initially shows skeleton while clientHasPlatforms is null
     expect(screen.getByText(/campaign approved/i)).toBeInTheDocument();
   });
@@ -189,22 +201,25 @@ describe("ApprovalPanel — approved state", () => {
 describe("ApprovalPanel — publish now", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Headless is always selected by default so this is called on every Publish Now
+    mockPublishHeadless.mockResolvedValue({ article_id: "art-1", slug: "test-article", status: "published" });
   });
 
   async function renderApprovedWithPlatforms() {
-    const utils = render(<ApprovalPanel campaign={makeCampaign({ status: "approved" })} />);
+    const utils = render(<ApprovalPanel campaign={makeCampaign({ status: "approved" })} />, { wrapper });
     // Wait for platforms to load (fetchAPI returns items with wordpress)
     await waitFor(() => expect(screen.queryByRole("button", { name: /publish now/i })).toBeInTheDocument());
     return utils;
   }
 
-  it("Publish now button calls campaignsApi.publishNow", async () => {
+  it("Publish now button calls campaignsApi.publishNow (and publishHeadless since headless selected by default)", async () => {
     mockPublishNow.mockResolvedValueOnce({ job_id: "job-111" });
     mockJobGet.mockResolvedValue({ status: "pending", error_details: null });
 
     await renderApprovedWithPlatforms();
     fireEvent.click(screen.getByRole("button", { name: /publish now/i }));
 
+    await waitFor(() => expect(mockPublishHeadless).toHaveBeenCalledWith("campaign-123"));
     await waitFor(() => expect(mockPublishNow).toHaveBeenCalledWith("campaign-123"));
   });
 
@@ -256,12 +271,12 @@ describe("ApprovalPanel — publish now", () => {
 
 describe("ApprovalPanel — published state", () => {
   it("shows Published footer with date", () => {
-    render(<ApprovalPanel campaign={makeCampaign({ status: "published", updated_at: "2026-07-03T14:30:00Z" })} />);
+    render(<ApprovalPanel campaign={makeCampaign({ status: "published", updated_at: "2026-07-03T14:30:00Z" })} />, { wrapper });
     expect(screen.getByText("Published")).toBeInTheDocument();
   });
 
   it("does not show Approve/Reject buttons in published state", () => {
-    render(<ApprovalPanel campaign={makeCampaign({ status: "published" })} />);
+    render(<ApprovalPanel campaign={makeCampaign({ status: "published" })} />, { wrapper });
     expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /reject/i })).not.toBeInTheDocument();
   });
@@ -270,10 +285,12 @@ describe("ApprovalPanel — published state", () => {
 describe("ApprovalPanel — schedule picker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Headless is selected by default; schedule handler calls publishHeadless with scheduled_at
+    mockPublishHeadless.mockResolvedValue({ article_id: "art-1", slug: "test-article", status: "scheduled" });
   });
 
   async function renderApprovedWithPlatforms() {
-    const utils = render(<ApprovalPanel campaign={makeCampaign({ status: "approved" })} />);
+    const utils = render(<ApprovalPanel campaign={makeCampaign({ status: "approved" })} />, { wrapper });
     await waitFor(() => expect(screen.queryByRole("button", { name: /publish now/i })).toBeInTheDocument());
     return utils;
   }
@@ -355,7 +372,8 @@ describe("ApprovalPanel — scheduled state", () => {
     render(
       <ApprovalPanel
         campaign={makeCampaign({ status: "approved", scheduled_at: "2099-07-10T13:00:00Z" })}
-      />
+      />,
+      { wrapper },
     );
     expect(screen.getByText("Scheduled")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /cancel schedule/i })).toBeInTheDocument();
@@ -365,14 +383,16 @@ describe("ApprovalPanel — scheduled state", () => {
     render(
       <ApprovalPanel
         campaign={makeCampaign({ status: "approved", scheduled_at: "2099-07-10T13:00:00Z" })}
-      />
+      />,
+      { wrapper },
     );
     expect(screen.queryByRole("button", { name: /publish now/i })).not.toBeInTheDocument();
   });
 
   it("failed campaign — returns null (no Approve/Reject buttons shown)", () => {
     render(
-      <ApprovalPanel campaign={makeCampaign({ status: "failed" })} />
+      <ApprovalPanel campaign={makeCampaign({ status: "failed" })} />,
+      { wrapper },
     );
 
     expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
@@ -385,12 +405,107 @@ describe("ApprovalPanel — scheduled state", () => {
     render(
       <ApprovalPanel
         campaign={makeCampaign({ status: "approved", scheduled_at: "2099-07-10T13:00:00Z" })}
-      />
+      />,
+      { wrapper },
     );
 
     fireEvent.click(screen.getByRole("button", { name: /cancel schedule/i }));
 
     await waitFor(() => expect(mockCancelSchedule).toHaveBeenCalledWith("campaign-123"));
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
+  });
+});
+
+describe("ApprovalPanel — destination chips", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPublishHeadless.mockResolvedValue({ article_id: "art-1", slug: "test-slug", status: "published" });
+    mockPublishNow.mockResolvedValue({ job_id: "job-chip-1" });
+    mockJobGet.mockResolvedValue({ status: "pending", error_details: null });
+  });
+
+  async function renderApprovedWithPlatforms() {
+    const utils = render(<ApprovalPanel campaign={makeCampaign({ status: "approved" })} />, { wrapper });
+    await waitFor(() => expect(screen.queryByRole("button", { name: /publish now/i })).toBeInTheDocument());
+    return utils;
+  }
+
+  it("renders WordPress and Headless Blog chips after connections load", async () => {
+    await renderApprovedWithPlatforms();
+    expect(screen.getByRole("button", { name: /wordpress/i, hidden: false })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /headless blog/i, hidden: false })).toBeInTheDocument();
+  });
+
+  it("all chips are selected by default (aria-pressed=true)", async () => {
+    await renderApprovedWithPlatforms();
+    const chips = screen.getAllByRole("button").filter((btn) => btn.getAttribute("aria-pressed") !== null);
+    chips.forEach((chip) => expect(chip).toHaveAttribute("aria-pressed", "true"));
+  });
+
+  it("toggling a chip deselects it (aria-pressed becomes false)", async () => {
+    await renderApprovedWithPlatforms();
+    const wpChip = screen.getByRole("button", { name: /wordpress/i });
+    fireEvent.click(wpChip);
+    expect(wpChip).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("Publish now is disabled when all chips are deselected", async () => {
+    await renderApprovedWithPlatforms();
+    // Deselect all
+    const chips = screen.getAllByRole("button").filter((btn) => btn.getAttribute("aria-pressed") !== null);
+    chips.forEach((chip) => fireEvent.click(chip));
+    expect(screen.getByRole("button", { name: /publish now/i })).toBeDisabled();
+  });
+
+  it("sub-label shows 'Publishes to all platforms' when all chips selected", async () => {
+    await renderApprovedWithPlatforms();
+    // Both wordpress + headless selected by default — all platforms selected
+    expect(screen.getByText("Publishes to all platforms")).toBeInTheDocument();
+  });
+
+  it("publishNow with only connected platform selected skips publishHeadless", async () => {
+    await renderApprovedWithPlatforms();
+    // Deselect Headless Blog chip
+    const headlessChip = screen.getByRole("button", { name: /headless blog/i });
+    fireEvent.click(headlessChip);
+    expect(headlessChip).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: /publish now/i }));
+    await waitFor(() => expect(mockPublishNow).toHaveBeenCalledWith("campaign-123"));
+    expect(mockPublishHeadless).not.toHaveBeenCalled();
+  });
+
+  it("publishNow with only headless chip selected calls publishHeadless but not publishNow", async () => {
+    await renderApprovedWithPlatforms();
+    // Deselect WordPress chip
+    const wpChip = screen.getByRole("button", { name: /wordpress/i });
+    fireEvent.click(wpChip);
+
+    fireEvent.click(screen.getByRole("button", { name: /publish now/i }));
+    await waitFor(() => expect(mockPublishHeadless).toHaveBeenCalledWith("campaign-123"));
+    expect(mockPublishNow).not.toHaveBeenCalled();
+  });
+
+  it("publishNow with filter passes platforms list when subset is selected", async () => {
+    // Mock fetchAPI to return two connected platforms
+    const { fetchAPI } = await import("@/lib/api");
+    (fetchAPI as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      items: [
+        { platform: "wordpress", connected: true },
+        { platform: "linkedin", connected: true },
+      ],
+    });
+
+    const utils = render(<ApprovalPanel campaign={makeCampaign({ status: "approved" })} />, { wrapper });
+    await waitFor(() => expect(screen.queryByRole("button", { name: /publish now/i })).toBeInTheDocument());
+
+    // Deselect linkedin so only wordpress+headless remain
+    const liChip = screen.getByRole("button", { name: /linkedin/i });
+    fireEvent.click(liChip);
+
+    fireEvent.click(screen.getByRole("button", { name: /publish now/i }));
+    await waitFor(() => expect(mockPublishNow).toHaveBeenCalledWith("campaign-123", ["wordpress"]));
+
+    utils.unmount();
   });
 });

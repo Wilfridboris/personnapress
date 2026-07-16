@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { GitBranch, Database, Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import { GitBranch, Database, Loader2, CheckCircle2, XCircle, RefreshCw, Check, Globe, Layout, AtSign, Share2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { campaignsApi, clientsApi, jobsApi, publishingApi, fetchAPI, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
@@ -103,6 +103,61 @@ function buildFrontMatterPreview(
   return `---\ntitle: "${safe}"\ndate: ${isoDate}\ndescription: "${safeDesc}"${tagsLine}\n---`;
 }
 
+type LucideIcon = typeof Globe;
+
+const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
+  wordpress: Globe,
+  "wordpress-com": Globe,
+  webflow: Layout,
+  x: AtSign,
+  linkedin: Share2,
+  headless: Database,
+};
+
+const PLATFORM_LABEL_MAP: Record<string, string> = {
+  wordpress: "WordPress",
+  "wordpress-com": "WordPress.com",
+  webflow: "Webflow",
+  x: "X",
+  linkedin: "LinkedIn",
+  headless: "Headless Blog",
+};
+
+function DestinationChip({
+  platform,
+  selected,
+  onToggle,
+  disabled,
+}: {
+  platform: string;
+  selected: boolean;
+  onToggle: () => void;
+  disabled?: boolean;
+}) {
+  const Icon = PLATFORM_ICON_MAP[platform] ?? Globe;
+  const label = PLATFORM_LABEL_MAP[platform] ?? platform;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      aria-pressed={selected}
+      className={cn(
+        "inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border transition-colors duration-150",
+        "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none",
+        "disabled:opacity-50 disabled:cursor-not-allowed",
+        selected
+          ? "bg-highlighter border-ink shadow-[2px_2px_0px_#111111] text-ink font-medium"
+          : "bg-paper border-border text-graphite hover:border-ink hover:text-ink",
+      )}
+    >
+      {selected && <Check className="size-3" aria-hidden="true" />}
+      <Icon className="size-3.5" aria-hidden="true" />
+      {label}
+    </button>
+  );
+}
+
 interface ApprovalPanelProps {
   campaign: Campaign;
   blogEditorRef?: RefObject<BlogEditorHandle | null>;
@@ -131,6 +186,8 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
   const [isCancelling, setIsCancelling] = useState(false);
   const [showRepublishControls, setShowRepublishControls] = useState(false);
   const [publishedPlatforms, setPublishedPlatforms] = useState<string[]>([]);
+  const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set());
 
   // Headless blog publish state
   const [isHeadlessPublishing, setIsHeadlessPublishing] = useState(false);
@@ -210,10 +267,18 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
             setDirectCommitDefault(defaultCommit);
             if (defaultCommit) setPublishMode("commit");
           }
+          const connectedPlatforms = items
+            .filter((c) => c.connected && c.platform !== "github_pages")
+            .map((c) => c.platform);
+          const allDestinations = [...connectedPlatforms, "headless"];
+          setAvailablePlatforms(allDestinations);
+          setSelectedPlatforms(new Set(allDestinations));
         })
         .catch(() => {
           setClientHasPlatforms(false);
           setGithubPublishReady(false);
+          setAvailablePlatforms(["headless"]);
+          setSelectedPlatforms(new Set(["headless"]));
         });
     }
   }, [effectiveStatus, campaign.client_id, clientHasPlatforms]);
@@ -246,12 +311,27 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
             setDirectCommitDefault(defaultCommit);
             if (defaultCommit) setPublishMode("commit");
           }
+          const connectedPlatforms = items
+            .filter((c) => c.connected && c.platform !== "github_pages")
+            .map((c) => c.platform);
+          const allDestinations = [...connectedPlatforms, "headless"];
+          setAvailablePlatforms(allDestinations);
+          setSelectedPlatforms(new Set(allDestinations));
         })
         .catch(() => {
           setClientHasPlatforms(false);
+          setAvailablePlatforms(["headless"]);
+          setSelectedPlatforms(new Set(["headless"]));
         });
     }
   }, [effectiveStatus, campaign.client_id, clientHasPlatforms]);
+
+  // Reset selectedPlatforms to all-selected when republish panel opens
+  useEffect(() => {
+    if (showRepublishControls) {
+      setSelectedPlatforms(new Set(availablePlatforms));
+    }
+  }, [showRepublishControls, availablePlatforms]);
 
   const handleApprove = useCallback(async () => {
     const previousStatus = campaign.status;
@@ -322,9 +402,28 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
 
   const handlePublishNow = useCallback(async () => {
     setIsPublishing(true);
+    const connectedSelected = [...selectedPlatforms].filter((p) => p !== "headless");
+    const headlessSelected = selectedPlatforms.has("headless");
+    const connectedPlatformCount = availablePlatforms.filter((p) => p !== "headless").length;
     try {
-      const { job_id } = await campaignsApi.publishNow(campaign.id);
-      setActiveJobId(job_id);
+      if (headlessSelected) {
+        const result = await campaignsApi.publishHeadless(campaign.id);
+        setHeadlessResult({ articleId: result.article_id, slug: result.slug });
+      }
+      if (connectedSelected.length > 0) {
+        const filterPlatforms = connectedSelected.length < connectedPlatformCount ? connectedSelected : undefined;
+        const { job_id } = await campaignsApi.publishNow(
+          campaign.id,
+          ...(filterPlatforms !== undefined ? [filterPlatforms] : []),
+        );
+        setActiveJobId(job_id);
+      } else {
+        setIsPublishing(false);
+        if (headlessSelected) {
+          addToast("Published to Headless Blog.", "success");
+          router.refresh();
+        }
+      }
     } catch (err) {
       if (err instanceof APIError && err.code === "TRIAL_EXPIRED") {
         showUpgradePrompt(err.message);
@@ -333,7 +432,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
       }
       setIsPublishing(false);
     }
-  }, [campaign.id, addToast, showUpgradePrompt]);
+  }, [campaign.id, selectedPlatforms, availablePlatforms, router, addToast, showUpgradePrompt]);
 
   const handleConfirmGitHubPublish = useCallback(async () => {
     setIsGitHubPublishing(true);
@@ -356,12 +455,38 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
 
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const isPastTime = Boolean(scheduledAt && new Date(scheduledAt) <= new Date());
+  const nothingSelected = selectedPlatforms.size === 0;
+  const allPlatformsSelected =
+    availablePlatforms.length > 0 && availablePlatforms.every((p) => selectedPlatforms.has(p));
+  const approvedSubLabel = allPlatformsSelected
+    ? "Publishes to all platforms"
+    : `Publishes to ${selectedPlatforms.size} selected platform(s)`;
+  const republishSubLabel = allPlatformsSelected
+    ? "Publishes to platforms not yet reached"
+    : `Publishes to ${selectedPlatforms.size} selected platform(s) not yet reached`;
 
   const handleConfirmSchedule = useCallback(async () => {
     setIsScheduling(true);
+    const connectedSelected = [...selectedPlatforms].filter((p) => p !== "headless");
+    const headlessSelected = selectedPlatforms.has("headless");
+    const connectedPlatformCount = availablePlatforms.filter((p) => p !== "headless").length;
     try {
-      const localDate = new Date(scheduledAt);
-      await campaignsApi.schedule(campaign.id, localDate.toISOString());
+      const isoAt = new Date(scheduledAt).toISOString();
+      if (headlessSelected) {
+        await campaignsApi.publishHeadless(campaign.id, isoAt);
+        addToast(
+          `Headless Blog scheduled for ${new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(scheduledAt))}.`,
+          "success",
+        );
+      }
+      if (connectedSelected.length > 0) {
+        const filterPlatforms = connectedSelected.length < connectedPlatformCount ? connectedSelected : undefined;
+        await campaignsApi.schedule(
+          campaign.id,
+          isoAt,
+          ...(filterPlatforms !== undefined ? [filterPlatforms] : []),
+        );
+      }
       router.refresh();
     } catch (err) {
       if (err instanceof APIError && err.code === "TRIAL_EXPIRED") {
@@ -372,7 +497,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     } finally {
       setIsScheduling(false);
     }
-  }, [campaign.id, scheduledAt, router, addToast, showUpgradePrompt]);
+  }, [campaign.id, scheduledAt, selectedPlatforms, availablePlatforms, router, addToast, showUpgradePrompt]);
 
   const handleHeadlessPublish = useCallback(async () => {
     setIsHeadlessPublishing(true);
@@ -552,72 +677,84 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
               </Link>
             </div>
           ) : (
-            <div className="flex items-center gap-3 flex-wrap">
-              {githubPublishReady && (
-                <button
-                  type="button"
-                  onClick={() => setShowGitHubPanel((v) => !v)}
-                  disabled={isPublishing || isGitHubPublishing || isHeadlessPublishing}
-                  className={cn(
-                    "inline-flex items-center gap-2 px-5 py-2.5 border border-ink text-ink text-sm font-medium",
-                    "hover:bg-ink hover:text-white transition-colors",
-                    "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none",
-                    "disabled:opacity-50 disabled:cursor-not-allowed",
-                  )}
-                >
-                  <GitBranch className="size-4" aria-hidden="true" />
-                  Publish to GitHub
-                </button>
+            <div className="flex flex-col gap-3 w-full">
+              {/* Destination chip row */}
+              {availablePlatforms.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {availablePlatforms.map((p) => (
+                    <DestinationChip
+                      key={p}
+                      platform={p}
+                      selected={selectedPlatforms.has(p)}
+                      onToggle={() =>
+                        setSelectedPlatforms((prev) => {
+                          const next = new Set(prev);
+                          next.has(p) ? next.delete(p) : next.add(p);
+                          return next;
+                        })
+                      }
+                      disabled={isPublishing || isGitHubPublishing}
+                    />
+                  ))}
+                </div>
               )}
-              <div className="flex flex-col gap-1">
-                <button
-                  type="button"
-                  onClick={handleHeadlessPublish}
-                  disabled={isPublishing || isGitHubPublishing || isHeadlessPublishing}
-                  className={cn(
-                    "inline-flex items-center gap-2 px-5 py-2.5 border border-ink text-ink text-sm font-medium",
-                    "hover:bg-ink hover:text-white transition-colors",
-                    "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none",
-                    "disabled:opacity-50 disabled:cursor-not-allowed",
-                  )}
-                >
-                  {isHeadlessPublishing && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  <Database className="size-4" aria-hidden="true" />
-                  Headless Blog
-                </button>
-                {headlessResult && (
-                  <Link
-                    href={`/articles/${headlessResult.articleId}`}
-                    className="font-mono text-xs text-graphite underline hover:text-ink"
+              {nothingSelected && (
+                <p className="font-mono text-xs text-danger" role="alert">
+                  Select at least one destination to publish.
+                </p>
+              )}
+              {/* Action row */}
+              <div className="flex items-center gap-3 flex-wrap">
+                {githubPublishReady && (
+                  <button
+                    type="button"
+                    onClick={() => setShowGitHubPanel((v) => !v)}
+                    disabled={isPublishing || isGitHubPublishing}
+                    className={cn(
+                      "inline-flex items-center gap-2 px-5 py-2.5 border border-ink text-ink text-sm font-medium",
+                      "hover:bg-ink hover:text-white transition-colors",
+                      "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none",
+                      "disabled:opacity-50 disabled:cursor-not-allowed",
+                    )}
                   >
-                    View in Blog ({headlessResult.slug})
-                  </Link>
+                    <GitBranch className="size-4" aria-hidden="true" />
+                    Publish to GitHub
+                  </button>
                 )}
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSchedulePicker((v) => !v)}
-                className="inline-flex items-center px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none"
-              >
-                Schedule
-              </button>
-              <div className="flex flex-col gap-1">
                 <button
                   type="button"
-                  onClick={handlePublishNow}
-                  disabled={isPublishing || isGitHubPublishing || isHeadlessPublishing}
-                  className={cn(
-                    "inline-flex items-center gap-2 px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent",
-                    "shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all",
-                    "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2",
-                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none",
-                  )}
+                  onClick={() => setShowSchedulePicker((v) => !v)}
+                  disabled={nothingSelected}
+                  className="inline-flex items-center px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isPublishing ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
-                  {isPublishing ? "Publishing..." : "Publish now"}
+                  Schedule
                 </button>
-                <p className="font-mono text-xs text-graphite">Publishes to all connected platforms</p>
+                <div className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={handlePublishNow}
+                    disabled={isPublishing || isGitHubPublishing || nothingSelected}
+                    className={cn(
+                      "inline-flex items-center gap-2 px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent",
+                      "shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all",
+                      "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2",
+                      "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none",
+                    )}
+                  >
+                    {isPublishing ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
+                    {isPublishing ? "Publishing..." : "Publish now"}
+                  </button>
+                  {!nothingSelected && <p className="font-mono text-xs text-graphite">{approvedSubLabel}</p>}
+                </div>
               </div>
+              {headlessResult && (
+                <Link
+                  href={`/articles/${headlessResult.articleId}`}
+                  className="font-mono text-xs text-graphite underline hover:text-ink"
+                >
+                  View in Blog ({headlessResult.slug})
+                </Link>
+              )}
             </div>
           )}
         </div>
@@ -918,66 +1055,78 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
             <p className="font-mono text-xs text-graphite uppercase tracking-wider mb-3 pt-3">
               Publish to additional platforms
             </p>
-            <div className="flex items-center gap-3 flex-wrap">
-              {githubPublishReady && (
-                <button
-                  type="button"
-                  onClick={() => { setGithubResult(null); setShowGitHubPanel((v) => !v); }}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none"
-                >
-                  <GitBranch className="size-4" aria-hidden="true" />
-                  Publish to GitHub
-                </button>
+            <div className="flex flex-col gap-3">
+              {/* Destination chip row */}
+              {availablePlatforms.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {availablePlatforms.map((p) => (
+                    <DestinationChip
+                      key={p}
+                      platform={p}
+                      selected={selectedPlatforms.has(p)}
+                      onToggle={() =>
+                        setSelectedPlatforms((prev) => {
+                          const next = new Set(prev);
+                          next.has(p) ? next.delete(p) : next.add(p);
+                          return next;
+                        })
+                      }
+                      disabled={isPublishing || isGitHubPublishing}
+                    />
+                  ))}
+                </div>
               )}
-              <div className="flex flex-col gap-1">
-                <button
-                  type="button"
-                  onClick={handleHeadlessPublish}
-                  disabled={isPublishing || isGitHubPublishing || isHeadlessPublishing}
-                  className={cn(
-                    "inline-flex items-center gap-2 px-5 py-2.5 border border-ink text-ink text-sm font-medium",
-                    "hover:bg-ink hover:text-white transition-colors",
-                    "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none",
-                    "disabled:opacity-50 disabled:cursor-not-allowed",
-                  )}
-                >
-                  {isHeadlessPublishing && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  <Database className="size-4" aria-hidden="true" />
-                  Headless Blog
-                </button>
-                {headlessResult && (
-                  <Link
-                    href={`/articles/${headlessResult.articleId}`}
-                    className="font-mono text-xs text-graphite underline hover:text-ink"
+              {nothingSelected && (
+                <p className="font-mono text-xs text-danger" role="alert">
+                  Select at least one destination to publish.
+                </p>
+              )}
+              {/* Action row */}
+              <div className="flex items-center gap-3 flex-wrap">
+                {githubPublishReady && (
+                  <button
+                    type="button"
+                    onClick={() => { setGithubResult(null); setShowGitHubPanel((v) => !v); }}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none"
                   >
-                    View in Blog ({headlessResult.slug})
-                  </Link>
+                    <GitBranch className="size-4" aria-hidden="true" />
+                    Publish to GitHub
+                  </button>
                 )}
-              </div>
-              <button
-                type="button"
-                onClick={() => { setScheduledAt(""); setShowSchedulePicker((v) => !v); }}
-                className="inline-flex items-center px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none"
-              >
-                Schedule
-              </button>
-              <div className="flex flex-col gap-1">
                 <button
                   type="button"
-                  onClick={handlePublishNow}
-                  disabled={isPublishing || isGitHubPublishing || isHeadlessPublishing}
-                  className={cn(
-                    "inline-flex items-center gap-2 px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent",
-                    "shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all",
-                    "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2",
-                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none",
-                  )}
+                  onClick={() => { setScheduledAt(""); setShowSchedulePicker((v) => !v); }}
+                  disabled={nothingSelected}
+                  className="inline-flex items-center px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isPublishing ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
-                  {isPublishing ? "Publishing..." : "Publish now"}
+                  Schedule
                 </button>
-                <p className="font-mono text-xs text-graphite">Publishes to platforms not yet reached</p>
+                <div className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={handlePublishNow}
+                    disabled={isPublishing || isGitHubPublishing || nothingSelected}
+                    className={cn(
+                      "inline-flex items-center gap-2 px-5 py-2.5 bg-ink text-paper text-sm font-medium border border-transparent",
+                      "shadow-[4px_4px_0px_#111111] hover:bg-white hover:text-ink hover:border-ink transition-all",
+                      "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2",
+                      "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none",
+                    )}
+                  >
+                    {isPublishing ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
+                    {isPublishing ? "Publishing..." : "Publish now"}
+                  </button>
+                  {!nothingSelected && <p className="font-mono text-xs text-graphite">{republishSubLabel}</p>}
+                </div>
               </div>
+              {headlessResult && (
+                <Link
+                  href={`/articles/${headlessResult.articleId}`}
+                  className="font-mono text-xs text-graphite underline hover:text-ink"
+                >
+                  View in Blog ({headlessResult.slug})
+                </Link>
+              )}
             </div>
 
             {showGitHubPanel && !githubResult && (

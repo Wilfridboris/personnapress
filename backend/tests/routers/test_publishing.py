@@ -611,3 +611,175 @@ async def test_publish_headless_404_wrong_owner():
             )
 
     assert exc_info.value.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Headless scheduling (AC 4, 10)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_publish_headless_immediate_no_body():
+    """No body (request=None) → publishes immediately, campaign marked published."""
+    from app.routers.publishing import publish_headless
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id, status="approved")
+    article = _make_headless_article()
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock()),
+        patch("app.routers.publishing.create_or_update_article_from_campaign", AsyncMock(return_value=article)),
+    ):
+        result = await publish_headless(
+            campaign_id=campaign.id,
+            current_user={"user_id": str(user_id)},
+            db=db,
+            # request=None → immediate publish path
+        )
+
+    assert result["article_id"] == str(article.id)
+    assert campaign.status == "published"
+    db.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_publish_headless_scheduled():
+    """Body with scheduled_at → article created as hidden, APScheduler job registered."""
+    from datetime import timedelta
+    from app.routers.publishing import publish_headless
+    from app.schemas.publishing import PublishHeadlessRequest
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id, status="approved")
+    article = _make_headless_article()
+    article.status = "hidden"
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    mock_scheduler = MagicMock()
+    future_dt = datetime.now(timezone.utc) + timedelta(hours=1)
+
+    with (
+        patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock()),
+        patch("app.routers.publishing.create_or_update_article_from_campaign", AsyncMock(return_value=article)),
+        patch("app.routers.publishing.scheduler", mock_scheduler),
+    ):
+        result = await publish_headless(
+            campaign_id=campaign.id,
+            current_user={"user_id": str(user_id)},
+            db=db,
+            request=PublishHeadlessRequest(scheduled_at=future_dt),
+        )
+
+    assert result["status"] == "scheduled"
+    assert result["article_id"] == str(article.id)
+    # Campaign must NOT be marked published yet
+    assert campaign.status != "published"
+    # APScheduler add_job must be called with headless job id
+    mock_scheduler.add_job.assert_called_once()
+    call_kwargs = mock_scheduler.add_job.call_args[1]
+    assert call_kwargs["id"] == f"headless_{campaign.id}"
+    assert str(campaign.id) in call_kwargs["args"]
+
+
+@pytest.mark.asyncio
+async def test_publish_headless_schedule_replace_existing():
+    """Scheduling headless twice uses replace_existing=True — no duplicate job."""
+    from datetime import timedelta
+    from app.routers.publishing import publish_headless
+    from app.schemas.publishing import PublishHeadlessRequest
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id, status="approved")
+    article = _make_headless_article()
+    article.status = "hidden"
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    mock_scheduler = MagicMock()
+    future_dt = datetime.now(timezone.utc) + timedelta(hours=2)
+
+    with (
+        patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.check_trial_not_expired", AsyncMock()),
+        patch("app.routers.publishing.create_or_update_article_from_campaign", AsyncMock(return_value=article)),
+        patch("app.routers.publishing.scheduler", mock_scheduler),
+    ):
+        for _ in range(2):
+            await publish_headless(
+                campaign_id=campaign.id,
+                current_user={"user_id": str(user_id)},
+                db=db,
+                request=PublishHeadlessRequest(scheduled_at=future_dt),
+            )
+
+    assert mock_scheduler.add_job.call_count == 2
+    for call in mock_scheduler.add_job.call_args_list:
+        assert call[1]["replace_existing"] is True
+
+
+# ---------------------------------------------------------------------------
+# run_publish_headless worker (AC 10)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_run_publish_headless_flips_status():
+    """Given article with status='hidden', run_publish_headless sets it to 'published'."""
+    from app.workers.publish import run_publish_headless
+
+    campaign_id = uuid.uuid4()
+    article = MagicMock()
+    article.id = uuid.uuid4()
+    article.status = "hidden"
+
+    db_mock = AsyncMock()
+    db_mock.commit = AsyncMock()
+
+    async def fake_get_article_by_campaign_id(db, cid):
+        return article
+
+    with (
+        patch("app.workers.publish.get_article_by_campaign_id", side_effect=fake_get_article_by_campaign_id),
+        patch("app.workers.publish.get_session_context") as mock_ctx,
+    ):
+        mock_ctx.return_value.__aenter__ = AsyncMock(return_value=db_mock)
+        mock_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        await run_publish_headless(str(campaign_id))
+
+    assert article.status == "published"
+    db_mock.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_run_publish_headless_missing_article():
+    """If no article exists for campaign, logs warning and returns without error."""
+    from app.workers.publish import run_publish_headless
+    import logging
+
+    campaign_id = uuid.uuid4()
+    db_mock = AsyncMock()
+    db_mock.commit = AsyncMock()
+
+    with (
+        patch("app.workers.publish.get_article_by_campaign_id", AsyncMock(return_value=None)),
+        patch("app.workers.publish.get_session_context") as mock_ctx,
+    ):
+        mock_ctx.return_value.__aenter__ = AsyncMock(return_value=db_mock)
+        mock_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        # Should not raise
+        await run_publish_headless(str(campaign_id))
+
+    db_mock.commit.assert_not_called()
