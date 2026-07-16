@@ -21,8 +21,9 @@ class ArticlePatch(BaseModel):
     slug: Optional[str] = Field(None, max_length=60)
     status: Optional[str] = Field(None)
     featured_image_url: Optional[str] = Field(None, max_length=1000)
+    featured_image_alt: Optional[str] = Field(None, max_length=500)
 
-    @field_validator("title", "excerpt", "meta_description", "category", "author", mode="before")
+    @field_validator("title", "excerpt", "meta_description", "category", "author", "featured_image_alt", mode="before")
     @classmethod
     def strip_text(cls, v: object) -> object:
         if isinstance(v, str):
@@ -91,6 +92,7 @@ class ArticleResponse(BaseModel):
     excerpt: Optional[str]
     meta_description: Optional[str]
     featured_image_url: Optional[str]
+    featured_image_alt: Optional[str]
     author: Optional[str]
     tags: Optional[list]
     category: Optional[str]

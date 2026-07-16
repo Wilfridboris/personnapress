@@ -220,6 +220,12 @@ async def patch_article_endpoint(
         article.updated_at = utcnow()
         db.add(article)
 
+    # Handle featured_image_alt separately (no revision)
+    if body.featured_image_alt is not None:
+        article.featured_image_alt = body.featured_image_alt
+        article.updated_at = utcnow()
+        db.add(article)
+
     await db.commit()
     await db.refresh(article)
     return ArticleResponse.model_validate(article).model_dump()

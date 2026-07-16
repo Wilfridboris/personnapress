@@ -173,6 +173,7 @@ class Article(SQLModel, table=True):
     excerpt: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     meta_description: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     featured_image_url: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    featured_image_alt: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     author: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     tags: Optional[list] = Field(default=None, sa_column=Column(JSONB, nullable=True))
     category: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))

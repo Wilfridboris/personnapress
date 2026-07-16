@@ -283,6 +283,7 @@ export const articlesApi = {
     slug?: string;
     status?: string;
     featured_image_url?: string;
+    featured_image_alt?: string;
   }) =>
     apiFetch<Article>(`/articles/${articleId}`, { method: "PATCH", body: JSON.stringify(data) }),
   listRevisions: (articleId: string) =>

@@ -292,6 +292,7 @@ export interface Article {
   excerpt: string | null;
   meta_description: string | null;
   featured_image_url: string | null;
+  featured_image_alt: string | null;
   author: string | null;
   tags: string[] | null;
   category: string | null;

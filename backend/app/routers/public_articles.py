@@ -197,6 +197,7 @@ def _article_list_item(article: Article) -> dict:
         "title": article.title,
         "excerpt": article.excerpt,
         "featured_image_url": article.featured_image_url,
+        "featured_image_alt": article.featured_image_alt,
         "author": article.author,
         "tags": article.tags or [],
         "category": article.category,

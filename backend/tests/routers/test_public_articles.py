@@ -57,6 +57,7 @@ def _make_article(
     excerpt=None,
     meta_description=None,
     featured_image_url=None,
+    featured_image_alt=None,
     author=None,
     reading_time_minutes=3,
     published_at=None,
@@ -74,6 +75,7 @@ def _make_article(
     a.excerpt = excerpt
     a.meta_description = meta_description
     a.featured_image_url = featured_image_url
+    a.featured_image_alt = featured_image_alt
     a.author = author
     a.reading_time_minutes = reading_time_minutes
     a.published_at = published_at or _utc()
@@ -572,3 +574,82 @@ def test_rate_limiter_key_falls_back_to_ip():
     key = _token_or_ip(req)
     # Should not start with ppd_ since the auth header doesn't start with ppd_
     assert not key.startswith("ppd_")
+
+
+# ---------------------------------------------------------------------------
+# featured_image_alt in list and detail responses
+# ---------------------------------------------------------------------------
+
+
+async def test_list_articles_includes_featured_image_alt():
+    """featured_image_alt must appear in every item of the list response."""
+    from app.routers.public_articles import list_published_articles
+    import json
+
+    client_id = uuid.uuid4()
+    article = _make_article(client_id=client_id)
+    article.featured_image_alt = "A person typing at a wooden desk"
+
+    with patch("app.routers.public_articles.list_articles", new=AsyncMock(return_value=([article], 1))):
+        req = MagicMock()
+        req.headers = {}
+        resp = await list_published_articles(
+            request=req,
+            client_id=client_id,
+            db=AsyncMock(),
+            page=1,
+            page_size=20,
+            tag=None,
+            category=None,
+        )
+
+    body = json.loads(resp.body)
+    assert resp.status_code == 200
+    assert body["data"][0]["featured_image_alt"] == "A person typing at a wooden desk"
+
+
+async def test_article_detail_includes_featured_image_alt():
+    """featured_image_alt must appear in the article detail response."""
+    from app.routers.public_articles import get_published_article
+    import json
+
+    article = _make_article(featured_image_url="https://example.com/img.png")
+    article.featured_image_alt = "A red lighthouse overlooking a stormy sea"
+
+    with patch("app.routers.public_articles.get_article_by_slug", new=AsyncMock(return_value=article)):
+        req = MagicMock()
+        req.headers = {}
+        resp = await get_published_article(
+            slug=article.slug, request=req, client_id=article.client_id, db=AsyncMock()
+        )
+
+    body = json.loads(resp.body)
+    assert resp.status_code == 200
+    assert body["featured_image_alt"] == "A red lighthouse overlooking a stormy sea"
+
+
+async def test_list_articles_featured_image_alt_null_when_unset():
+    """When featured_image_alt is None, the list response must include the key with null value."""
+    from app.routers.public_articles import list_published_articles
+    import json
+
+    client_id = uuid.uuid4()
+    article = _make_article(client_id=client_id)
+    article.featured_image_alt = None
+
+    with patch("app.routers.public_articles.list_articles", new=AsyncMock(return_value=([article], 1))):
+        req = MagicMock()
+        req.headers = {}
+        resp = await list_published_articles(
+            request=req,
+            client_id=client_id,
+            db=AsyncMock(),
+            page=1,
+            page_size=20,
+            tag=None,
+            category=None,
+        )
+
+    body = json.loads(resp.body)
+    assert "featured_image_alt" in body["data"][0]
+    assert body["data"][0]["featured_image_alt"] is None

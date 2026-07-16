@@ -21,6 +21,7 @@ interface ArticleDetail {
   title: string;
   excerpt: string;
   featured_image_url: string | null;
+  featured_image_alt: string | null;
   author: string;
   tags: string[];
   category: string | null;
@@ -180,7 +181,7 @@ export default async function BlogDetailPage({
           <div className="border border-border overflow-hidden relative aspect-video">
             <Image
               src={article.featured_image_url}
-              alt={article.title}
+              alt={article.featured_image_alt || article.title}
               fill
               style={{ objectFit: "cover" }}
               priority

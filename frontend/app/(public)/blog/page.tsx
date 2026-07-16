@@ -13,6 +13,7 @@ interface ArticleListItem {
   title: string;
   excerpt: string;
   featured_image_url: string | null;
+  featured_image_alt: string | null;
   author: string;
   tags: string[];
   category: string | null;
@@ -144,7 +145,7 @@ export default async function BlogListPage({
                     {featured.featured_image_url ? (
                       <Image
                         src={featured.featured_image_url}
-                        alt={featured.title}
+                        alt={featured.featured_image_alt || featured.title}
                         fill
                         priority
                         style={{ objectFit: "cover" }}
@@ -197,7 +198,7 @@ export default async function BlogListPage({
                         <div className="relative overflow-hidden aspect-video">
                           <Image
                             src={article.featured_image_url}
-                            alt={article.title}
+                            alt={article.featured_image_alt || article.title}
                             fill
                             style={{ objectFit: "cover" }}
                             sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"

@@ -46,6 +46,7 @@ def _make_article(client_id=None, article_id=None, slug="test-article", status="
     a.excerpt = "A short excerpt."
     a.meta_description = "Meta description"
     a.featured_image_url = None
+    a.featured_image_alt = None
     a.author = "Boris"
     a.tags = ["python"]
     a.category = "Tech"
@@ -869,3 +870,37 @@ def test_patch_article_featured_image_url_foreign_url_rejected():
             ArticlePatch(featured_image_url="https://evil.com/image.png")
     finally:
         settings.SUPABASE_URL = original_url
+
+
+# PATCH /articles/{id} — featured_image_alt
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_patch_article_featured_image_alt_success_no_revision():
+    """PATCH featured_image_alt updates the field without creating a revision."""
+    from app.routers.articles import patch_article_endpoint
+    from app.schemas.article import ArticlePatch
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    article = _make_article(client_id=client.id)
+    db = _make_db()
+
+    update_mock = AsyncMock()
+
+    with (
+        patch("app.routers.articles._get_owned_article", AsyncMock(return_value=article)),
+        patch("app.routers.articles.update_article_content", update_mock),
+    ):
+        await patch_article_endpoint(
+            article_id=article.id,
+            body=ArticlePatch(featured_image_alt="A cat sitting on a laptop"),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    # featured_image_alt is not a content field — update_article_content must not be called
+    update_mock.assert_not_called()
+    assert article.featured_image_alt == "A cat sitting on a laptop"
+    db.commit.assert_awaited()

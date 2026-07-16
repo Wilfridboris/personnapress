@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 13-2-featured-image-alt-seo (2026-07-15)
+
+- `max_length=500` on `featured_image_alt` not enforced at DB column level — pre-existing pattern; add `VARCHAR(500)` or CHECK constraint in a future hardening pass. [backend/app/schemas/article.py]
+- `og:image:alt` absent from `seo.og` block in public detail endpoint — add `og.image_alt` key to `_build_seo()` to let consumers avoid reconstructing it from the article payload. [backend/app/routers/public_articles.py]
+- No character count indicator for alt text input — add a visible counter (e.g., `X / 500`) below the alt field; SEO best practice is under 125 chars. [frontend/app/(app)/blog/[id]/article-editor.tsx]
+- `db.add(article)` called on already-tracked ORM object in both `featured_image_url` and `featured_image_alt` blocks — redundant; SQLAlchemy auto-tracks dirty objects. Remove in a future cleanup pass. [backend/app/routers/articles.py]
+
 ## Deferred from: code review of 12-5-user-image-uploads (2026-07-14)
 
 - No rate-limiting on `POST /clients/{client_id}/images` — no per-user upload quota or storage quota check; pre-existing infrastructure gap (all endpoints share global limiter with no per-endpoint burst limit). Add per-user daily upload limit when abuse becomes a concern. [backend/app/routers/images.py]

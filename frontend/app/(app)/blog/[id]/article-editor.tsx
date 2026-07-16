@@ -69,6 +69,10 @@ export function ArticleEditor({ articleId }: ArticleEditorProps) {
   const revisions = revisionsData?.items ?? [];
   const maxRevNum = revisions.length > 0 ? revisions[0].revision_number : 0;
 
+  // ── featured image alt ────────────────────────────────────────────────────
+  const [featuredImageAlt, setFeaturedImageAlt] = useState("");
+  const [imageJustReplaced, setImageJustReplaced] = useState(false);
+
   // ── local form state ──────────────────────────────────────────────────────
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -95,6 +99,7 @@ export function ArticleEditor({ articleId }: ArticleEditorProps) {
     setTagsInput(Array.isArray(article.tags) ? article.tags.join(", ") : "");
     setCategory(article.category ?? "");
     setAuthor(article.author ?? "");
+    setFeaturedImageAlt(article.featured_image_alt ?? "");
   }, [article]);
 
   // ── featured image ─────────────────────────────────────────────────────────
@@ -112,6 +117,7 @@ export function ArticleEditor({ articleId }: ArticleEditorProps) {
       qc.setQueryData(["article", articleId], (prev: Article | undefined) =>
         prev ? { ...prev, featured_image_url: url } : prev
       );
+      setImageJustReplaced(true);
       addToast("Featured image updated.", "success");
     } catch (err) {
       addToast(err instanceof APIError ? err.message : "Failed to update featured image.", "error");
@@ -133,6 +139,7 @@ export function ArticleEditor({ articleId }: ArticleEditorProps) {
       qc.setQueryData(["article", articleId], updated);
       loadedSlug.current = updated.slug;
       setSlug(updated.slug);
+      setImageJustReplaced(false);
       addToast("Article updated.", "success");
       try {
         qc.invalidateQueries({ queryKey: ["article-revisions", articleId] });
@@ -181,6 +188,7 @@ export function ArticleEditor({ articleId }: ArticleEditorProps) {
       category: category.trim() || undefined,
       author: author.trim() || undefined,
       slug: slug.trim() || undefined,
+      featured_image_alt: featuredImageAlt.trim() || undefined,
     };
 
     // If slug changed, show confirmation dialog
@@ -190,8 +198,9 @@ export function ArticleEditor({ articleId }: ArticleEditorProps) {
       return;
     }
 
+    setImageJustReplaced(false);
     saveMutation.mutate(patch);
-  }, [article, title, slug, excerpt, metaDescription, tagsInput, category, author, saveMutation]);
+  }, [article, title, slug, excerpt, metaDescription, tagsInput, category, author, featuredImageAlt, saveMutation]);
 
   // ── visibility toggle ──────────────────────────────────────────────────────
   const toggleMutation = useMutation({
@@ -402,6 +411,32 @@ export function ArticleEditor({ articleId }: ArticleEditorProps) {
                 <span className="text-[11px] text-[#BBBBBB]">No featured image</span>
               </div>
             )}
+            {/* Alt text input */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="article-featured-alt"
+                className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#555555]"
+              >
+                Image alt text
+              </label>
+              <input
+                id="article-featured-alt"
+                type="text"
+                value={featuredImageAlt}
+                onChange={(e) => {
+                  setFeaturedImageAlt(e.target.value);
+                  setImageJustReplaced(false);
+                }}
+                placeholder="Describe what the image shows…"
+                className="w-full text-sm text-[#111111] bg-transparent border-b border-[#E5E5E5] focus:border-[#111111] focus:outline-none py-1.5 transition-[border-color] duration-150 placeholder:text-[#BBBBBB]"
+                maxLength={500}
+              />
+              {imageJustReplaced && (
+                <p className="text-[11px] italic text-[#8B4513]">
+                  Update after replacing image.
+                </p>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => featuredFileRef.current?.click()}
