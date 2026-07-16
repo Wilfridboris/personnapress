@@ -18,6 +18,7 @@ from app.db.repositories.articles import (
     set_article_status,
     update_article_content,
 )
+from app.db.repositories.models import utcnow
 from app.db.repositories.clients import get_client
 from app.core.html_sanitize import is_allowed_image_src
 from app.schemas.article import (
@@ -193,7 +194,7 @@ async def patch_article_endpoint(
     if "html" in content_fields:
         content_fields["html"] = _sanitize_html(content_fields["html"])
 
-    # Handle slug change
+    # Handle slug change (not a content/revisioned field — update directly)
     if body.slug is not None and body.slug != article.slug:
         existing = await get_article_by_slug(db, article.client_id, body.slug)
         if existing and existing.id != article_id:
@@ -201,7 +202,9 @@ async def patch_article_endpoint(
                 status_code=409,
                 detail={"error": {"code": "SLUG_TAKEN", "message": "This slug is already used by another article.", "detail": {}}},
             )
-        content_fields["slug"] = body.slug
+        article.slug = body.slug
+        article.updated_at = utcnow()
+        db.add(article)
 
     # Apply content changes (creates revision if changed)
     if content_fields:

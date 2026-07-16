@@ -77,8 +77,8 @@ export function MobileDrawer() {
           ))}
           {activeClientId && (
             <NavItem
-              href="/blog"
-              label="Blog"
+              href="/articles"
+              label="Articles"
               icon={Newspaper}
               onClick={close}
               forceLabel

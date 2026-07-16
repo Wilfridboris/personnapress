@@ -25,8 +25,8 @@ export function Sidebar() {
         ))}
         {activeClientId && (
           <NavItem
-            href="/blog"
-            label="Blog"
+            href="/articles"
+            label="Articles"
             icon={Newspaper}
           />
         )}

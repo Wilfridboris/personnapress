@@ -21,7 +21,8 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/headless-blog-api") ||
     pathname.startsWith("/github-publisher") ||
     pathname.startsWith("/privacy") ||
-    pathname.startsWith("/terms");
+    pathname.startsWith("/terms") ||
+    pathname.startsWith("/blog");
 
   const sessionCookie = request.cookies.get("session")?.value;
 

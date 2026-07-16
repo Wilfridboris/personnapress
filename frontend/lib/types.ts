@@ -106,6 +106,8 @@ export interface Campaign {
   created_at: string;
   updated_at: string;
   publish_job?: PublishJobInfo | null;
+  article_id?: string | null;
+  article_slug?: string | null;
 }
 
 export interface VoiceScore {

@@ -303,7 +303,7 @@ export function ArticleEditor({ articleId }: ArticleEditorProps) {
   if (isError || !article) {
     return (
       <div className="space-y-4">
-        <Link href="/blog" className="inline-flex items-center gap-2 text-sm text-[#555555] hover:text-[#111111]">
+        <Link href="/articles" className="inline-flex items-center gap-2 text-sm text-[#555555] hover:text-[#111111]">
           <ArrowLeft className="size-4" aria-hidden="true" /> Back to Blog
         </Link>
         <p className="text-sm text-[#8B0000]">Failed to load article. Please go back and try again.</p>
@@ -316,11 +316,11 @@ export function ArticleEditor({ articleId }: ArticleEditorProps) {
       {/* Header */}
       <div className="mb-6 flex items-center gap-3">
         <Link
-          href="/blog"
+          href="/articles"
           className="inline-flex items-center gap-2 text-sm text-[#555555] hover:text-[#111111] focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:outline-none"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
-          Blog
+          Articles
         </Link>
       </div>
 
@@ -643,7 +643,7 @@ export function ArticleEditor({ articleId }: ArticleEditorProps) {
           setPendingPatch(null);
         }}
         title="Change the article slug?"
-        description={`Existing links to "/${loadedSlug.current}" will break — customer sites fetching by the old slug will receive a 404. Are you sure you want to change it?`}
+        description={`Existing links to "/${loadedSlug.current}" will break. Customer sites fetching by the old slug will receive a 404. Are you sure you want to change it?`}
         confirmLabel="Change slug"
         confirmVariant="danger"
         triggerRef={saveBtnRef}

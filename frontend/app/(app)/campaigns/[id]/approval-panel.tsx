@@ -134,7 +134,11 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
 
   // Headless blog publish state
   const [isHeadlessPublishing, setIsHeadlessPublishing] = useState(false);
-  const [headlessResult, setHeadlessResult] = useState<{ articleId: string; slug: string } | null>(null);
+  const [headlessResult, setHeadlessResult] = useState<{ articleId: string; slug: string } | null>(
+    campaign.article_id && campaign.article_slug
+      ? { articleId: campaign.article_id, slug: campaign.article_slug }
+      : null
+  );
 
   // GitHub pre-publish panel state
   const [showGitHubPanel, setShowGitHubPanel] = useState(false);
@@ -583,7 +587,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                 </button>
                 {headlessResult && (
                   <Link
-                    href={`/blog/${headlessResult.articleId}`}
+                    href={`/articles/${headlessResult.articleId}`}
                     className="font-mono text-xs text-graphite underline hover:text-ink"
                   >
                     View in Blog ({headlessResult.slug})
@@ -943,7 +947,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                 </button>
                 {headlessResult && (
                   <Link
-                    href={`/blog/${headlessResult.articleId}`}
+                    href={`/articles/${headlessResult.articleId}`}
                     className="font-mono text-xs text-graphite underline hover:text-ink"
                   >
                     View in Blog ({headlessResult.slug})

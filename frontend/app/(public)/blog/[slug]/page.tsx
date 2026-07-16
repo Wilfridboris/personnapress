@@ -162,12 +162,17 @@ export default async function BlogDetailPage({
           {article.title}
         </h1>
         <div className="flex items-center gap-3 font-mono text-xs text-graphite mt-6 flex-wrap">
-          <span>{article.author}</span>
+          <span>{article.author || "PersonnaPress Team"}</span>
           <span aria-hidden="true">&middot;</span>
           <time dateTime={article.published_at}>{formatDate(article.published_at)}</time>
           <span aria-hidden="true">&middot;</span>
           <span>{article.reading_time_minutes} min read</span>
         </div>
+        {!article.author && (
+          <p className="text-sm text-graphite mt-3 max-w-xl">
+            PersonnaPress Team helps founders and marketers turn their personal notes into blog posts that sound like them and are built to rank.
+          </p>
+        )}
       </header>
 
       {/* Featured image */}

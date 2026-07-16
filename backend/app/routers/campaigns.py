@@ -15,7 +15,7 @@ from app.db.connection import get_session
 from app.db.repositories.campaigns import create_campaign, get_campaign
 from app.db.repositories.clients import get_client
 from app.db.repositories.jobs import create_job, get_publish_job_for_campaign
-from app.db.repositories.models import Campaign, Client
+from app.db.repositories.models import Article, Campaign, Client
 from app.schemas.campaign import CampaignCreate, CampaignCreateResponse, CampaignDetailResponse, CampaignListResponse, CampaignPatch, CampaignResponse
 from app.services import image as image_service
 from app.services.subscription_service import check_campaign_limit, check_trial_not_expired
@@ -176,8 +176,19 @@ async def get_campaign_by_id(
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
 
     publish_job = await get_publish_job_for_campaign(db, campaign_id)
+
+    article_result = await db.execute(
+        select(Article.id, Article.slug).where(Article.campaign_id == campaign_id)
+    )
+    article_row = article_result.first()
+
     return CampaignDetailResponse.model_validate(
-        {**campaign.__dict__, "publish_job": publish_job}
+        {
+            **campaign.__dict__,
+            "publish_job": publish_job,
+            "article_id": article_row[0] if article_row else None,
+            "article_slug": article_row[1] if article_row else None,
+        }
     )
 
 

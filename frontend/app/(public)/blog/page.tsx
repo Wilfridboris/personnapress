@@ -165,7 +165,7 @@ export default async function BlogListPage({
                       {featured.excerpt}
                     </p>
                     <p className="font-mono text-xs text-graphite mb-6">
-                      {featured.author} &middot; {formatDate(featured.published_at)} &middot;{" "}
+                      {featured.author || "PersonnaPress Team"} &middot; {formatDate(featured.published_at)} &middot;{" "}
                       {featured.reading_time_minutes} min read
                     </p>
                     <Link
@@ -215,7 +215,7 @@ export default async function BlogListPage({
                           {article.excerpt}
                         </p>
                         <p className="font-mono text-xs text-graphite mt-4">
-                          {article.author} &middot; {formatDate(article.published_at)} &middot;{" "}
+                          {article.author || "PersonnaPress Team"} &middot; {formatDate(article.published_at)} &middot;{" "}
                           {article.reading_time_minutes} min read
                         </p>
                         <ArrowRight

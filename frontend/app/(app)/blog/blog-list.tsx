@@ -46,7 +46,7 @@ function ArticleRow({ article }: { article: ArticleListItem }) {
 
   return (
     <Link
-      href={`/blog/${article.id}`}
+      href={`/articles/${article.id}`}
       className="flex items-center gap-4 px-6 py-4 border-b border-[#E5E5E5] min-h-[44px] hover:bg-[#FFF1B8]/30 transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:outline-none"
     >
       <span className="flex-1 font-display font-semibold text-[#111111] text-sm leading-snug truncate">
@@ -99,8 +99,8 @@ export function BlogList() {
   return (
     <div>
       <header className="mb-8">
-        <h1 className="font-display text-3xl font-bold text-[#111111] mb-1">Blog</h1>
-        <p className="text-sm text-[#555555] font-mono">Your published articles — editable after publishing.</p>
+        <h1 className="font-display text-3xl font-bold text-[#111111] mb-1">Article Manager</h1>
+        <p className="text-sm text-[#555555] font-mono">Edit and manage your published articles.</p>
       </header>
 
       <div className="border border-[#111111]">

@@ -66,6 +66,8 @@ class CampaignResponse(BaseModel):
 
 class CampaignDetailResponse(CampaignResponse):
     publish_job: Optional[PublishJobInfo] = None
+    article_id: Optional[uuid.UUID] = None
+    article_slug: Optional[str] = None
 
 
 class CampaignListResponse(BaseModel):
