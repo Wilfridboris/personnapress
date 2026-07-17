@@ -20,7 +20,7 @@ import sentry_sdk
 from bs4 import BeautifulSoup
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.repositories.clients import update_client
+from app.db.repositories.clients import get_client, update_client
 from app.integrations import gemini  # AR-19: only called from ingestion.py / generation.py
 from app.services.stylometry import compute_stylometric_fields
 
@@ -43,6 +43,10 @@ _STRIP_CLASS_PATTERNS = re.compile(
     r"\b(menu|cookie|banner|ad|sidebar|social|widget|promo|popup|modal|overlay)\b",
     re.IGNORECASE,
 )
+
+
+# Array-typed BVP fields that are unioned (not replaced) on refresh
+_ARRAY_FIELDS: frozenset = frozenset({"banned_jargon", "signature_phrases", "voice_anchor_sentences"})
 
 
 class ScrapingError(Exception):
@@ -271,11 +275,46 @@ async def extract_voice_profile(
         logger.exception("stylometry failed; proceeding without computed fields")
         computed = {}
 
+    # Read existing BVP for enrichment merge (Story 16.2 AC 8/9)
+    existing_bvp: dict = {}
+    if session is not None:
+        try:
+            existing_client = await get_client(session, client_id)
+            if (
+                existing_client is not None
+                and isinstance(existing_client.brand_voice_profile, dict)
+                and existing_client.brand_voice_profile
+            ):
+                existing_bvp = dict(existing_client.brand_voice_profile)
+        except Exception:
+            logger.warning(
+                "extract_voice_profile: could not read existing BVP for client %s; treating as initial extraction",
+                client_id,
+            )
+
     last_error: Optional[Exception] = None
     for attempt in range(3):
         try:
             bvp = await gemini.extract_brand_voice(combined_text, thinking_tokens=1024)
             bvp.update(computed)
+
+            if existing_bvp:
+                merged: dict = dict(existing_bvp)
+                for key, value in bvp.items():
+                    if key in _ARRAY_FIELDS:
+                        existing_arr: list = existing_bvp.get(key) or []
+                        new_arr: list = value or []
+                        try:
+                            seen: set = set(existing_arr)
+                            merged[key] = existing_arr + [v for v in new_arr if v not in seen]
+                        except TypeError:
+                            # Fallback for unhashable items (e.g. nested dicts from model)
+                            merged[key] = existing_arr + [v for v in new_arr if v not in existing_arr]
+                    else:
+                        merged[key] = value
+                bvp = merged
+                # Regenerate voice_brief from the merged full BVP (AC 8: always from merged result)
+                bvp["voice_brief"] = await gemini.synthesize_voice_brief(bvp)
 
             if session is not None:
                 await update_client(session, client_id, brand_voice_profile=bvp)

@@ -22,7 +22,8 @@ logger.info("Gemini model: %s", _MODEL)
 
 _BVP_PROMPT_TEMPLATE = """Analyze the following text and extract a Brand Voice Profile.
 
-Return ONLY a valid JSON object with this exact schema:
+Return ONLY a valid JSON object with this exact schema. No markdown code blocks, no explanation. Raw JSON only.
+
 {{
   "tone": ["list", "of", "style", "descriptors"],
   "cadence": {{
@@ -31,19 +32,92 @@ Return ONLY a valid JSON object with this exact schema:
     "paragraph_structure": "<string>"
   }},
   "banned_jargon": ["words", "or", "phrases", "to", "avoid"],
-  "target_audience": "<one sentence describing who this brand writes for, inferred from the content, or null if unclear>"
+  "target_audience": "<one sentence describing who this brand writes for, inferred from the content, or null if unclear>",
+
+  "pronoun_preference": "<first_person | second_person | mixed>",
+  "formality_scale": <integer 1-5, where 1 = very casual and 5 = very formal>,
+  "humor_style": "<none | dry | playful | self_deprecating>",
+  "vocabulary_complexity": "<plain | mixed | technical>",
+
+  "example_style": "<analogy | data | story | direct>",
+  "specificity_preference": "<concrete_numbers | vague_quantifiers | mixed>",
+  "opening_pattern": "<question | bold_claim | anecdote | stat | problem>",
+  "closing_pattern": "<cta | question | summary | one_liner | none>",
+  "header_style": "<question | command | statement | mixed>",
+  "post_structure_template": "<free text, e.g. hook -- pain -- insight -- example -- CTA>",
+
+  "signature_phrases": ["5 to 10 short phrases pulled verbatim from the samples"],
+  "voice_anchor_sentences": ["3 to 5 complete sentences pulled verbatim that best represent the voice"],
+  "anti_pattern_example": "<one sentence this writer would never produce>"
 }}
 
-No markdown code blocks, no explanation. Raw JSON only.
+Field definitions:
+- pronoun_preference: how the author typically refers to themselves (first_person), the reader (second_person), or both (mixed)
+- formality_scale: 1 (very casual, contractions and slang) to 5 (very formal, no contractions, academic register)
+- humor_style: none if absent, or the predominant style of humor detected
+- vocabulary_complexity: plain (everyday words), mixed, or technical (domain-specific terminology)
+- example_style: the most common way this author illustrates a point
+- specificity_preference: whether the author uses concrete data and numbers or vague quantifiers
+- opening_pattern: how the author typically begins a post or article
+- closing_pattern: how the author typically ends a post or article
+- header_style: the pattern used for section headings
+- post_structure_template: the typical skeleton for a post, described as a flow in plain text
+- signature_phrases: repeated or distinctive short phrases pulled verbatim; aim for 5-10 items
+- voice_anchor_sentences: 3 to 5 verbatim sentences that best capture the voice
+- anti_pattern_example: one sentence that sounds nothing like this writer
 
 TEXT TO ANALYZE:
 {text}"""
+
+
+_QUALITATIVE_DEFAULTS: dict = {
+    "pronoun_preference": "mixed",
+    "formality_scale": 3,
+    "humor_style": "none",
+    "vocabulary_complexity": "plain",
+    "example_style": "direct",
+    "specificity_preference": "mixed",
+    "opening_pattern": "bold_claim",
+    "closing_pattern": "none",
+    "header_style": "statement",
+    "post_structure_template": "",
+    "signature_phrases": [],
+    "voice_anchor_sentences": [],
+    "anti_pattern_example": "",
+}
+
+_VOICE_BRIEF_PROMPT = """You are analyzing a Brand Voice Profile JSON and writing a third-person voice brief.
+
+BRAND VOICE PROFILE:
+{bvp_json}
+
+Write a plain prose paragraph of 150-250 words describing how this person writes.
+Cover: pronoun choice, formality, sentence rhythm, how they open and close posts,
+how they use examples, their vocabulary complexity, and what makes their writing distinctive.
+Do NOT use JSON, field names, or bullet points. Write in flowing prose.
+Do NOT use em-dashes. Use plain dashes (--) or restructure the sentence instead.
+Return ONLY the paragraph. No heading, no explanation."""
 
 
 def _thinking_config(thinking_tokens: int) -> types.GenerateContentConfig:
     return types.GenerateContentConfig(
         thinking_config=types.ThinkingConfig(thinking_budget=thinking_tokens)
     )
+
+
+async def synthesize_voice_brief(bvp: dict, thinking_tokens: int = 256) -> str:
+    prompt = _VOICE_BRIEF_PROMPT.format(bvp_json=json.dumps(bvp, indent=2))
+    try:
+        response = await _client.aio.models.generate_content(
+            model=_MODEL,
+            contents=prompt,
+            config=_thinking_config(thinking_tokens),
+        )
+        text = response.text.strip()
+        return text if text else ""
+    except Exception:
+        logger.exception("Voice brief synthesis failed")
+        return ""
 
 
 async def extract_brand_voice(text: str, thinking_tokens: int = 1024) -> dict:
@@ -82,6 +156,14 @@ async def extract_brand_voice(text: str, thinking_tokens: int = 1024) -> dict:
         data["target_audience"] = None
     elif data["target_audience"] is not None and not isinstance(data["target_audience"], str):
         data["target_audience"] = None  # coerce invalid type to None silently
+
+    for key, default in _QUALITATIVE_DEFAULTS.items():
+        if key not in data or data[key] is None:
+            data[key] = default
+
+    # Synthesize from qualitative fields only; ingestion.py re-synthesizes after
+    # merging computed stylometric fields and existing BVP arrays (AC 3 / AC 8).
+    data["voice_brief"] = await synthesize_voice_brief(data)
 
     return data
 
