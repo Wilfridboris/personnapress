@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories.clients import update_client
 from app.integrations import gemini  # AR-19: only called from ingestion.py / generation.py
+from app.services.stylometry import compute_stylometric_fields
 
 logger = logging.getLogger(__name__)
 
@@ -264,10 +265,17 @@ async def extract_voice_profile(
         len(combined_text),
     )
 
+    try:
+        computed = compute_stylometric_fields(combined_text)
+    except Exception:
+        logger.exception("stylometry failed; proceeding without computed fields")
+        computed = {}
+
     last_error: Optional[Exception] = None
     for attempt in range(3):
         try:
             bvp = await gemini.extract_brand_voice(combined_text, thinking_tokens=1024)
+            bvp.update(computed)
 
             if session is not None:
                 await update_client(session, client_id, brand_voice_profile=bvp)

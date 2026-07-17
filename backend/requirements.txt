@@ -45,6 +45,10 @@ nh3==0.3.6
 # Markdown conversion (GitHub publish pipeline)
 markdownify>=0.13.1
 
+# Stylometric analysis (Story 16.1)
+textstat
+spacy
+
 # Web scraping
 beautifulsoup4==4.13.4
 lxml==6.1.1

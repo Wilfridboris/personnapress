@@ -38,6 +38,7 @@ from app.schemas.client import (
     DeliveryTokenResponse,
     QuestionnaireRequest,
 )
+from app.services.stylometry import COMPUTED_FIELD_NAMES
 from app.services.subscription_service import check_client_limit, get_user_plan_info
 from app.workers.ingest import ingest_worker, questionnaire_worker
 
@@ -207,7 +208,13 @@ async def update_client_detail(
     if body.name is not None:
         update_fields["name"] = body.name
     if body.brand_voice_profile is not None:
-        update_fields["brand_voice_profile"] = body.brand_voice_profile
+        # Discard computed-only fields silently; they are set by the ingestion pipeline.
+        filtered_bvp = {
+            k: v for k, v in body.brand_voice_profile.items()
+            if k not in COMPUTED_FIELD_NAMES
+        }
+        if filtered_bvp:
+            update_fields["brand_voice_profile"] = filtered_bvp
 
     if not update_fields and not url_changed:
         # Nothing to change — return current state without touching the DB

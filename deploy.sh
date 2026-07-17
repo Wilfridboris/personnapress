@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Deploy runbook: after first deploy with spacy in requirements.txt, run once on the server:
+# python -m spacy download en_core_web_sm
 
 echo "Deploying PersonnaPress API to 134.209.72.22..."
 
