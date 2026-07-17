@@ -1,4 +1,4 @@
-import type { Article, ArticleListResponse, BrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, DeliveryToken, DeliveryTokenCreateResponse, DeliveryTokenListResponse, FileListResponse, GitHubDetectionResult, Job, PlatformConnectionStatus, PublishHeadlessResponse, QuestionnairePayload, RevisionDetail, RevisionListResponse, SubscriptionInfo } from "./types";
+import type { Article, ArticleListResponse, ExpandedBrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, DeliveryToken, DeliveryTokenCreateResponse, DeliveryTokenListResponse, FileListResponse, GitHubDetectionResult, Job, PlatformConnectionStatus, PublishHeadlessResponse, QuestionnairePayload, RevisionDetail, RevisionListResponse, SubscriptionInfo } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -73,7 +73,7 @@ export const clientsApi = {
       name?: string;
       website_url?: string;
       confirm_url_change?: boolean;
-      brand_voice_profile?: BrandVoiceProfile | null;
+      brand_voice_profile?: ExpandedBrandVoiceProfile | null;
     },
   ) =>
     apiFetch<ClientResponse | { requires_confirmation: boolean; domain: string }>(

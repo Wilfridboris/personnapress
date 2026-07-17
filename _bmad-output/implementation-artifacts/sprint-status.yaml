@@ -1,5 +1,5 @@
 # generated: 2026-06-14
-# last_updated: 2026-07-11
+# last_updated: 2026-07-17  # 16-3-expanded-bvp-review-edit-ui code-reviewed, marked done
 # project: PersonnaPress
 # project_key: NOKEY
 # tracking_system: file-system
@@ -185,6 +185,6 @@ development_status:
   epic-16: in-progress
   16-1-computed-stylometric-metrics-preprocessing: done
   16-2-gemini-qualitative-extraction-voice-brief: done
-  16-3-expanded-bvp-review-edit-ui: ready-for-dev
+  16-3-expanded-bvp-review-edit-ui: done
   16-4-voice-driven-blog-generation-update: ready-for-dev
   16-5-re-voice-existing-posts: ready-for-dev

@@ -23,7 +23,7 @@ export interface Client {
   user_id: string;
   name: string;
   website_url: string | null;
-  brand_voice_profile: BrandVoiceProfile | null;
+  brand_voice_profile: ExpandedBrandVoiceProfile | null;
   created_at: string;
   updated_at: string;
 }
@@ -32,7 +32,7 @@ export interface ClientResponse {
   id: string;
   name: string;
   website_url: string | null;
-  brand_voice_profile: BrandVoiceProfile | null;
+  brand_voice_profile: ExpandedBrandVoiceProfile | null;
   job_id: string | null;
   campaign_count: number;
   created_at: string;
@@ -49,7 +49,7 @@ export interface ClientListItem {
   website_url: string | null;
   brand_voice_profile_status: BrandVoiceProfileStatus;
   campaign_count: number;
-  brand_voice_profile?: BrandVoiceProfile | null;
+  brand_voice_profile?: ExpandedBrandVoiceProfile | null;
 }
 
 export interface ClientListResponse {
@@ -70,6 +70,39 @@ export interface BrandVoiceProfile {
   cadence: BrandVoiceCadence;
   banned_jargon: string[];
   target_audience?: string | null;
+}
+
+export interface ExpandedBrandVoiceProfile {
+  // Legacy fields (preserved)
+  tone?: string[];
+  cadence?: { avg_sentence_length: number; variation_pattern: string; paragraph_structure: string };
+  banned_jargon?: string[];
+  target_audience?: string | null;
+  // Computed (read-only)
+  sentence_length_avg?: number;
+  sentence_rhythm?: "uniform" | "varied";
+  paragraph_density?: "airy" | "moderate" | "dense";
+  contraction_frequency?: "never" | "occasional" | "frequent";
+  list_preference?: "rarely" | "sometimes" | "often";
+  low_confidence?: boolean;
+  // Qualitative identity
+  pronoun_preference?: "first_person" | "second_person" | "mixed";
+  formality_scale?: number;
+  humor_style?: "none" | "dry" | "playful" | "self_deprecating";
+  vocabulary_complexity?: "plain" | "mixed" | "technical";
+  // Qualitative patterns
+  example_style?: "analogy" | "data" | "story" | "direct";
+  specificity_preference?: "concrete_numbers" | "vague_quantifiers" | "mixed";
+  opening_pattern?: "question" | "bold_claim" | "anecdote" | "stat" | "problem";
+  closing_pattern?: "cta" | "question" | "summary" | "one_liner" | "none";
+  header_style?: "question" | "command" | "statement" | "mixed";
+  post_structure_template?: string;
+  // Anchors
+  signature_phrases?: string[];
+  voice_anchor_sentences?: string[];
+  anti_pattern_example?: string;
+  // Synthesized
+  voice_brief?: string;
 }
 
 export interface QuestionnairePayload {

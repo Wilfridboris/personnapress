@@ -1908,3 +1908,148 @@ Company blog powered by the PersonnaPress headless delivery API; showcases the p
 
 **Stories:**
 - Story 13.1: PersonnaPress Company Blog (ISR blog list + detail pages powered by headless delivery API)
+
+
+## Epic 15: Content Quality & UX Polish
+
+Targeted improvements across the article editor, client brand voice pipeline, and image uploads. No new features -- each story fixes a specific friction point surfaced in daily use.
+
+**Stories:**
+- Story 15.1: Upload Filename, Revision History Collapse & File Upload Relearn Trigger
+- Story 15.2: Excerpt vs Meta Description -- Distinct Content Quality
+
+
+## Epic 16: Deep Brand Voice Profile
+
+Expands the Brand Voice Profile from 3 fields (tone, cadence, banned_jargon) to a 20-field system covering computational stylometry and qualitative voice dimensions. Adds a Voice Brief synthesis step that generates a 150-250 word narrative injected into generation prompts. Converts the profile refresh from a destructive overwrite to an additive enrichment merge. Enables user-initiated re-voicing of existing published posts using an updated profile.
+
+**Stories:**
+- Story 16.1: Computed Stylometric Metrics Pre-processing
+- Story 16.2: Gemini Qualitative Extraction and Voice Brief Synthesis
+- Story 16.3: Expanded BVP Review and Edit UI
+- Story 16.4: Voice-Driven Blog Generation Update
+- Story 16.5: Re-voice Existing Posts
+
+---
+
+### Story 16.1: Computed Stylometric Metrics Pre-processing
+
+As a PersonnaPress system,
+I want to compute five measurable writing style metrics from raw text using Python libraries before Gemini extraction,
+so that the BVP contains objective, reproducible values that complement qualitative LLM analysis.
+
+**Acceptance Criteria:**
+
+1. **Given** `textstat` and `spacy` (with `en_core_web_sm` model) are added to `backend/requirements.txt`, **When** the backend starts, **Then** both packages load without errors.
+
+2. **Given** raw text from scrape (FR-8), file upload (FR-9), or refresh (FR-11), **When** passed to `compute_stylometric_fields(text: str) -> dict` in `backend/app/services/stylometry.py`, **Then** the function returns a dict with 5 fields computed without any API call: `sentence_length_avg` (int, avg words per sentence), `sentence_rhythm` ("uniform" if sentence length stddev < 4 else "varied"), `paragraph_density` ("airy" if avg sentences per paragraph <= 2, "moderate" if 3-4, "dense" if 5+), `contraction_frequency` ("never" if 0 contractions, "occasional" if rate < 0.05, "frequent" if >= 0.05), `list_preference` ("rarely" if < 5% of paragraphs contain list markers, "sometimes" if 5-20%, "often" if > 20%).
+
+3. **Given** fewer than 300 words of input, **When** `compute_stylometric_fields` is called, **Then** it returns the 5 fields computed from available text plus a `low_confidence: true` flag; it never raises an exception and never blocks extraction.
+
+4. **Given** the ingestion pipeline (`services/ingestion.py`), **When** website or upload content is collected, **Then** `compute_stylometric_fields` runs on the combined raw text BEFORE the Gemini extraction call; its 5 fields are merged into the BVP dict before storage.
+
+5. **Given** the FR-11 refresh pipeline, **When** re-extraction is triggered, **Then** computed fields run on the new text and each of the 5 fields is updated independently without wiping the rest of the BVP.
+
+6. **Given** a unit test file at `backend/tests/test_stylometry.py`, **When** run, **Then** tests cover: normal text (200+ words), short text (< 300 words returns low_confidence flag), text with no contractions (frequency = "never"), text with many bullets (list_preference = "often"), uniform vs. varied sentence rhythm.
+
+---
+
+### Story 16.2: Gemini Qualitative Extraction and Voice Brief Synthesis
+
+As a PersonnaPress system,
+I want Gemini to extract 15 qualitative voice dimensions from writing samples and synthesize them into a Voice Brief narrative,
+so that generation prompts have a rich prose reference instead of a sparse 3-field JSON blob.
+
+**Acceptance Criteria:**
+
+1. **Given** the existing `_BVP_PROMPT_TEMPLATE` in `backend/app/integrations/gemini.py`, **When** updated, **Then** it requests these 15 qualitative fields in addition to the existing schema:
+   Identity: `pronoun_preference` ("first_person"|"second_person"|"mixed"), `formality_scale` (int 1-5), `humor_style` ("none"|"dry"|"playful"|"self_deprecating"), `vocabulary_complexity` ("plain"|"mixed"|"technical").
+   Patterns: `example_style` ("analogy"|"data"|"story"|"direct"), `specificity_preference` ("concrete_numbers"|"vague_quantifiers"|"mixed"), `opening_pattern` ("question"|"bold_claim"|"anecdote"|"stat"|"problem"), `closing_pattern` ("cta"|"question"|"summary"|"one_liner"|"none"), `header_style` ("question"|"command"|"statement"|"mixed"), `post_structure_template` (free text, e.g. "hook -> pain -> insight -> example -> CTA").
+   Anchors: `signature_phrases` (array 5-10 strings), `voice_anchor_sentences` (array 3-5 verbatim sentences), `anti_pattern_example` (one string the writer would never produce).
+   Existing fields retained: `tone`, `cadence`, `banned_jargon`, `target_audience`.
+
+2. **Given** the Gemini response is parsed, **When** any field is missing or null, **Then** sensible defaults apply (pronoun_preference="mixed", formality_scale=3, humor_style="none", empty arrays for phrase fields) and parsing never raises for missing optional fields.
+
+3. **Given** the full BVP dict (5 computed + 15 qualitative), **When** stored, **Then** a second Gemini call with 256 thinking tokens synthesizes a `voice_brief` string of 150-250 words as a third-person prose narrative describing the writer's voice -- no JSON, no field labels -- suitable for direct inclusion in a generation system prompt.
+
+4. **Given** the FR-11 refresh flow, **When** triggered, **Then** scalar qualitative fields take the new extraction value (latest wins); array fields (`banned_jargon`, `signature_phrases`, `voice_anchor_sentences`) are merged and deduplicated with existing values; `voice_brief` is regenerated from the merged full BVP; computed fields from Story 16.1 are updated with the new text.
+
+5. **Given** a client with a legacy BVP (only tone, cadence, banned_jargon), **When** loading that client or generating content, **Then** no error occurs; legacy fields are preserved; new fields are absent until a refresh runs; generation falls back to the existing 3-field prompt format.
+
+6. **Given** the `clients.brand_voice_profile` JSONB column, **When** the new 20-field BVP plus `voice_brief` is stored, **Then** it writes to the same column with no schema migration required.
+
+7. **Given** unit tests at `backend/tests/test_voice_extraction.py`, **When** run, **Then** tests mock the Gemini client and verify: new field extraction mapping, default fallback for missing fields, refresh merge strategy for scalar vs. array fields, legacy BVP backward compatibility, voice_brief generation call fires after extraction.
+
+---
+
+### Story 16.3: Expanded BVP Review and Edit UI
+
+As a PersonnaPress user,
+I want to review and edit all 20 dimensions of my Brand Voice Profile including the Voice Brief,
+so that I can correct any field the system got wrong before it shapes my generated content.
+
+**Acceptance Criteria:**
+
+1. **Given** the `/clients/{id}/voice` page, **When** a BVP with expanded fields is present, **Then** the Voice Brief is displayed first in a highlighted panel (Highlighter background, 1px Ink border, Playfair Display label "Your Voice Brief"), followed by grouped field sections: Identity, Patterns, Anchors.
+
+2. **Given** a legacy BVP (missing new fields), **When** the page loads, **Then** only existing fields are shown; a subtle notice explains that refreshing the profile will unlock all voice dimensions; no broken or empty field errors appear.
+
+3. **Given** the Identity section, **When** in edit mode, **Then** `pronoun_preference` is a 3-option radio chip group; `formality_scale` is a 1-5 segmented control labeled "Casual" to "Formal"; `humor_style` is a 4-option radio chip group; `vocabulary_complexity` is a 3-option radio chip group.
+
+4. **Given** the Patterns section, **When** in edit mode, **Then** `example_style`, `opening_pattern`, `closing_pattern`, `header_style` are single-select chip groups; `post_structure_template` is a plain text input; computed fields (sentence_length_avg, sentence_rhythm, paragraph_density, contraction_frequency, list_preference) are displayed as read-only stat chips with a "Computed from your writing -- not editable" label.
+
+5. **Given** the Anchors section, **When** in edit mode, **Then** `signature_phrases`, `banned_jargon`, and `voice_anchor_sentences` use the existing TagChip add/remove pattern; `anti_pattern_example` is a plain textarea with a label "A sentence that would never sound like you."
+
+6. **Given** the user clicks "Save profile", **When** `PATCH /api/v1/clients/{client_id}` succeeds, **Then** the full expanded BVP (all editable fields) is saved; computed fields are never sent in the PATCH body; a success toast shows "Voice profile saved."
+
+7. **Given** the Paper Style design system, **When** the page renders, **Then** it uses Ink 1px borders, rounded-none surfaces, Lucide icons only (no emojis), 44px minimum touch targets, and visible focus-visible rings.
+
+---
+
+### Story 16.4: Voice-Driven Blog Generation Update
+
+As a PersonnaPress system,
+I want to inject the Voice Brief into blog and meta description generation prompts with explicit SEO priority rules,
+so that generated content sounds authentically like the writer while preserving the required SEO structure.
+
+**Acceptance Criteria:**
+
+1. **Given** the blog generation prompt in `backend/app/integrations/gemini.py`, **When** the client BVP contains a `voice_brief` field, **Then** the voice_brief is injected under a VOICE PROFILE section placed AFTER the SEO structure instructions, with this explicit priority note: "SEO structure is mandatory -- H1 title, meta description, H2/H3 headings, body, conclusion, 800-1500 words are non-negotiable. Voice fills within that structure."
+
+2. **Given** the VOICE PROFILE section in the prompt, **When** BVP fields are available, **Then** the following behavioral rules are also injected: `list_preference=rarely` means no bullet lists unless absolutely required for clarity; `opening_pattern` applies to the first body paragraph, not H1 or meta; `pronoun_preference` applies consistently throughout; `specificity_preference=concrete_numbers` means all quantifiable claims must use real numbers not vague phrases.
+
+3. **Given** the meta description prompt (the `<!-- meta: ... -->` HTML comment from Story 15.2), **When** BVP contains a voice_brief, **Then** the prompt includes a condensed voice note (max 50 words derived from voice_brief) so the meta sounds like the writer rather than generic AI copy.
+
+4. **Given** the voice fidelity scoring call (256t, after generation), **When** the BVP has expanded fields, **Then** the scoring prompt additionally checks: pronoun consistency, specificity match, closing pattern match. Existing pass thresholds (tone >= 7, cadence >= 6, jargon violations = 0) are unchanged.
+
+5. **Given** a client with a legacy BVP (no voice_brief), **When** generation is triggered, **Then** the prompt falls back to the existing 3-field format with no error.
+
+6. **Given** LinkedIn generation (FR-14), **When** BVP contains a voice_brief, **Then** the LinkedIn prompt also receives the voice_brief; X/Twitter prompt does not.
+
+7. **Given** all prompt strings, **When** written or updated, **Then** no em-dash characters appear; double hyphens or plain sentence breaks are used instead.
+
+8. **Given** a regression test suite, **When** run, **Then** tests verify: voice_brief in blog prompt when available, voice_brief in meta description prompt, fallback to legacy format when voice_brief is null, LinkedIn receives voice_brief, X does not.
+
+---
+
+### Story 16.5: Re-voice Existing Posts
+
+As a PersonnaPress user,
+I want to refresh any of my approved or published blog posts using my current Brand Voice Profile,
+so that older posts written with a weaker voice profile benefit from the richer extraction.
+
+**Acceptance Criteria:**
+
+1. **Given** `POST /api/v1/campaigns/{id}/revoice` is added to `backend/app/routers/campaigns.py`, **When** called by the authenticated owner, **Then** it retrieves the campaign's original `brain_dump`, triggers a new blog generation using the client's current BVP (including voice_brief if present), creates a new Campaign with status `pending_approval` linked to the same client, and returns `{new_campaign_id, job_id}` with HTTP 202; the original campaign is untouched.
+
+2. **Given** the revoice endpoint, **When** the campaign status is not `approved` or `published`, **Then** it returns 422 with error code `REVOICE_INVALID_STATUS`.
+
+3. **Given** the revoice endpoint, **When** the campaign has no `brain_dump` stored, **Then** it returns 422 with error code `REVOICE_NO_BRAIN_DUMP`.
+
+4. **Given** the Campaign list page (`/campaigns`), **When** a campaign has status `approved` or `published`, **Then** each campaign card shows a secondary action "Re-voice" (Lucide `RefreshCw` icon, visible on hover or always visible on mobile); clicking it opens a confirmation modal.
+
+5. **Given** the confirmation modal, **When** shown, **Then** it states: "This creates a new draft using your current voice profile. Your original post is not changed." with a primary "Create new draft" button and a secondary "Cancel" button.
+
+6. **Given** the revoice call succeeds, **When** the modal closes, **Then** the user navigates to the new campaign approval gate page (`/campaigns/{new_id}`).
+
+7. **Given** the Paper Style design system, **When** the Re-voice UI renders, **Then** it uses Lucide icons only (no emojis), rounded-none modal surfaces, Ink 1px borders, no em-dash in any visible text.

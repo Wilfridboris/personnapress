@@ -12,7 +12,7 @@ import { VoiceQuestionnaire } from "@/components/clients/VoiceQuestionnaire";
 import { ProgressIndicator } from "./ProgressIndicator";
 import { SkipLink } from "./SkipLink";
 import { OnboardingPlatformStep } from "./OnboardingPlatformStep";
-import type { BrandVoiceProfile, BrandVoiceCadence } from "@/lib/types";
+import type { ExpandedBrandVoiceProfile, BrandVoiceCadence } from "@/lib/types";
 
 type OnboardingStep = 1 | 2 | 3 | 4;
 type Step2View = "in-progress" | "questionnaire" | "review" | "failed";
@@ -22,7 +22,7 @@ const MIN_BRAIN_DUMP = 20;
 
 // ── Inline BVP Review for Step 2 ──────────────────────────────────────────────
 interface InlineProfileReviewProps {
-  bvp: BrandVoiceProfile;
+  bvp: ExpandedBrandVoiceProfile;
   clientId: string;
   onConfirmed: () => void;
 }
@@ -131,7 +131,7 @@ interface Step2ContentProps {
 function Step2Content({ view, jobId, clientId, websiteUrl, onStep2Complete, onJobStarted }: Step2ContentProps) {
   const { job } = useJobStatus(jobId);
   const [currentView, setCurrentView] = useState<Step2View>(view);
-  const [bvp, setBvp] = useState<BrandVoiceProfile | null>(null);
+  const [bvp, setBvp] = useState<ExpandedBrandVoiceProfile | null>(null);
   const [statusText, setStatusText] = useState(`Scraping ${websiteUrl}...`);
 
   useEffect(() => {

@@ -11,6 +11,7 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Input } from "@/components/ui/Input";
 import { TagChip } from "@/components/ui/TagChip";
 import { VoiceQuestionnaire } from "@/components/clients/VoiceQuestionnaire";
+import { ExpandedProfileReview } from "@/components/clients/ExpandedProfileReview";
 import type { BrandVoiceCadence, BrandVoiceProfile, ClientResponse } from "@/lib/types";
 
 interface Props {
@@ -398,7 +399,7 @@ export function VoiceSetupPage({ client }: Props) {
 
       {/* Content area */}
       {view === "review" && bvp && (
-        <ProfileReview
+        <ExpandedProfileReview
           bvp={bvp}
           clientId={client.id}
           onRefresh={() => setShowRefreshModal(true)}
@@ -426,7 +427,7 @@ export function VoiceSetupPage({ client }: Props) {
         onClose={() => { setShowRefreshModal(false); setRefreshError(null); }}
         onConfirm={handleRefreshConfirm}
         title="Re-analyze voice profile?"
-        description={`Re-analyzing ${client.name}'s voice profile will overwrite the current profile. This cannot be undone. Continue?`}
+        description={`This will update ${client.name}'s voice profile with insights from the new content. Existing values are preserved where possible.`}
         confirmLabel="Re-analyze"
         confirmVariant="primary"
         isLoading={refreshing}
