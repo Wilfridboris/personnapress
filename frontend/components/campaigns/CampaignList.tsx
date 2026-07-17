@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { extractTitle } from "@/lib/utils";
 import type { Campaign } from "@/lib/types";
+import { RevoiceButton } from "@/components/campaigns/RevoiceButton";
 
 const FILTER_OPTIONS = [
   { value: "", label: "All" },
@@ -134,8 +135,14 @@ export function CampaignList() {
                   <p className="font-medium text-ink text-sm truncate mb-1">{title}</p>
                   <p className="text-xs text-graphite font-mono">{formatDate(campaign.created_at)}</p>
                 </div>
-                <div className="flex items-center gap-3 ml-4 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 ml-4 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <StatusBadge status={campaign.status} />
+                  {(campaign.status === "approved" || campaign.status === "published") && (
+                    <RevoiceButton
+                      campaignId={campaign.id}
+                      campaignTitle={extractTitle(campaign.blog_html) ?? "Untitled"}
+                    />
+                  )}
                   {campaign.status === "published" && (
                     <div className="flex items-center gap-1">
                       {connectedPlatforms.map((p) => (

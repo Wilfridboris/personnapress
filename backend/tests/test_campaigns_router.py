@@ -685,6 +685,298 @@ async def test_regenerate_campaign_only_from_rejected_status():
     assert exc_info.value.detail["error"]["code"] == "INVALID_STATUS_TRANSITION"
 
 
+# ── POST /campaigns/{id}/revoice ─────────────────────────────────────────────
+
+
+async def test_revoice_campaign_approved_returns_202_with_ids():
+    from app.routers.campaigns import revoice_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    source = _make_campaign(client_id=client.id)
+    source.status = "approved"
+    source.brain_dump = "Original brain dump content for revoice."
+    new_campaign = _make_campaign(client_id=client.id)
+    new_job = _make_job(campaign_id=new_campaign.id)
+    db = AsyncMock()
+    background_tasks = MagicMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=source)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.create_campaign", AsyncMock(return_value=new_campaign)),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=new_job)),
+    ):
+        result = await revoice_campaign(
+            campaign_id=source.id,
+            background_tasks=background_tasks,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.new_campaign_id == new_campaign.id
+    assert result.job_id == new_job.id
+    db.commit.assert_awaited_once()
+    background_tasks.add_task.assert_called_once()
+
+
+async def test_revoice_campaign_published_returns_202():
+    from app.routers.campaigns import revoice_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    source = _make_campaign(client_id=client.id)
+    source.status = "published"
+    source.brain_dump = "Original brain dump content."
+    new_campaign = _make_campaign(client_id=client.id)
+    new_job = _make_job(campaign_id=new_campaign.id)
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=source)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.create_campaign", AsyncMock(return_value=new_campaign)),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=new_job)),
+    ):
+        result = await revoice_campaign(
+            campaign_id=source.id,
+            background_tasks=MagicMock(),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.new_campaign_id == new_campaign.id
+    assert result.job_id == new_job.id
+
+
+async def test_revoice_campaign_original_unchanged():
+    from app.routers.campaigns import revoice_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    source = _make_campaign(client_id=client.id)
+    source.status = "approved"
+    source.brain_dump = "Do not touch this."
+    original_status = source.status
+    original_brain_dump = source.brain_dump
+    new_campaign = _make_campaign(client_id=client.id)
+    new_job = _make_job(campaign_id=new_campaign.id)
+    db = AsyncMock()
+    mock_create_campaign = AsyncMock(return_value=new_campaign)
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=source)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.create_campaign", mock_create_campaign),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=new_job)),
+    ):
+        await revoice_campaign(
+            campaign_id=source.id,
+            background_tasks=MagicMock(),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert source.status == original_status
+    assert source.brain_dump == original_brain_dump
+    mock_create_campaign.assert_awaited_once_with(db, source.client_id, original_brain_dump)
+
+
+async def test_revoice_campaign_invalid_status_returns_422():
+    from app.routers.campaigns import revoice_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "pending_approval"
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await revoice_campaign(
+                campaign_id=campaign.id,
+                background_tasks=MagicMock(),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error"]["code"] == "REVOICE_INVALID_STATUS"
+
+
+async def test_revoice_campaign_rejected_status_returns_422():
+    from app.routers.campaigns import revoice_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "rejected"
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await revoice_campaign(
+                campaign_id=campaign.id,
+                background_tasks=MagicMock(),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error"]["code"] == "REVOICE_INVALID_STATUS"
+
+
+async def test_revoice_campaign_null_brain_dump_returns_422():
+    from app.routers.campaigns import revoice_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "approved"
+    campaign.brain_dump = None
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await revoice_campaign(
+                campaign_id=campaign.id,
+                background_tasks=MagicMock(),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error"]["code"] == "REVOICE_NO_BRAIN_DUMP"
+
+
+async def test_revoice_campaign_empty_brain_dump_returns_422():
+    from app.routers.campaigns import revoice_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "approved"
+    campaign.brain_dump = ""
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await revoice_campaign(
+                campaign_id=campaign.id,
+                background_tasks=MagicMock(),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error"]["code"] == "REVOICE_NO_BRAIN_DUMP"
+
+
+async def test_revoice_campaign_whitespace_brain_dump_returns_422():
+    from app.routers.campaigns import revoice_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "approved"
+    campaign.brain_dump = "   \n\t  "
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await revoice_campaign(
+                campaign_id=campaign.id,
+                background_tasks=MagicMock(),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error"]["code"] == "REVOICE_NO_BRAIN_DUMP"
+
+
+async def test_revoice_campaign_failed_status_returns_422():
+    from app.routers.campaigns import revoice_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "failed"
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await revoice_campaign(
+                campaign_id=campaign.id,
+                background_tasks=MagicMock(),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error"]["code"] == "REVOICE_INVALID_STATUS"
+
+
+async def test_revoice_campaign_unauthenticated_returns_401():
+    from app.routers.campaigns import revoice_campaign
+
+    with pytest.raises(HTTPException) as exc_info:
+        await revoice_campaign(
+            campaign_id=uuid.uuid4(),
+            background_tasks=MagicMock(),
+            current_user={},
+            db=AsyncMock(),
+        )
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail["error"]["code"] == "INVALID_SESSION"
+
+
+async def test_revoice_campaign_wrong_user_returns_403():
+    from app.routers.campaigns import revoice_campaign
+
+    owner_id = uuid.uuid4()
+    requester_id = uuid.uuid4()
+    client = _make_client(user_id=owner_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "approved"
+    campaign.brain_dump = "some content"
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await revoice_campaign(
+                campaign_id=campaign.id,
+                background_tasks=MagicMock(),
+                current_user={"user_id": str(requester_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["error"]["code"] == "FORBIDDEN"
+
+
 # ── Campaign blog_html sanitizer — image handling ─────────────────────────────
 
 

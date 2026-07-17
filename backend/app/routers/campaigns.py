@@ -58,6 +58,11 @@ class ImageRegenerateResponse(BaseModel):
     image_regen_count: int
 
 
+class RevoiceResponse(BaseModel):
+    new_campaign_id: uuid.UUID
+    job_id: uuid.UUID
+
+
 class ApproveResponse(BaseModel):
     id: uuid.UUID
     status: str
@@ -368,3 +373,45 @@ async def regenerate_campaign(
     background_tasks.add_task(run_generation, new_job.id)
 
     return CampaignCreateResponse(campaign_id=new_campaign.id, job_id=new_job.id)
+
+
+@router.post("/{campaign_id}/revoice", response_model=RevoiceResponse, status_code=202)
+async def revoice_campaign(
+    campaign_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> RevoiceResponse:
+    try:
+        user_id = uuid.UUID(current_user["user_id"])
+    except (ValueError, KeyError):
+        raise HTTPException(status_code=401, detail=_INVALID_SESSION)
+
+    campaign = await get_campaign(db, campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+
+    client = await get_client(db, campaign.client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(status_code=403, detail={"error": {"code": "FORBIDDEN", "message": "Access denied.", "detail": {}}})
+
+    if campaign.status not in ("approved", "published"):
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": "REVOICE_INVALID_STATUS", "message": "Only approved or published campaigns can be re-voiced."}},
+        )
+
+    if not campaign.brain_dump or not campaign.brain_dump.strip():
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": "REVOICE_NO_BRAIN_DUMP", "message": "This campaign has no brain dump to re-generate from."}},
+        )
+
+    new_campaign = await create_campaign(db, campaign.client_id, campaign.brain_dump)
+    new_job = await create_job(db, job_type="generation", status="pending", campaign_id=new_campaign.id)
+
+    await db.commit()
+
+    background_tasks.add_task(run_generation, new_job.id)
+
+    return RevoiceResponse(new_campaign_id=new_campaign.id, job_id=new_job.id)
