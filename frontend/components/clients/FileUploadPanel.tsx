@@ -1,12 +1,16 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { filesApi } from "@/lib/api";
+import { AnimatePresence, motion } from "framer-motion";
+import { Loader2, Check, AlertTriangle } from "lucide-react";
+import { filesApi, clientsApi } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import type { FileItem } from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+type RelearningStatus = "idle" | "learning" | "success" | "error";
 const FILE_LIMIT = 10;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_EXTENSIONS = /\.(txt|md|docx)$/i;
@@ -34,6 +38,10 @@ export function FileUploadPanel({ clientId }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [uploading, setUploading] = useState<FileProgress[]>([]);
+
+  const [relearning, setRelearning] = useState<RelearningStatus>("idle");
+  const [relearningError, setRelearningError] = useState<string | null>(null);
+  const relearningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: fileList, isLoading } = useQuery({
     queryKey: ["files", clientId],
@@ -125,6 +133,26 @@ export function FileUploadPanel({ clientId }: Props) {
     [clientId],
   );
 
+  const triggerRelearn = useCallback(async () => {
+    if (relearningTimerRef.current) clearTimeout(relearningTimerRef.current);
+    setRelearning("learning");
+    setRelearningError(null);
+    try {
+      await clientsApi.ingest(clientId);
+      setRelearning("success");
+      relearningTimerRef.current = setTimeout(() => setRelearning("idle"), 3000);
+    } catch {
+      setRelearning("error");
+      setRelearningError("Failed to start relearning. Try again.");
+    }
+  }, [clientId]);
+
+  useEffect(() => {
+    return () => {
+      if (relearningTimerRef.current) clearTimeout(relearningTimerRef.current);
+    };
+  }, []);
+
   const handleFilesSelected = useCallback(
     async (selectedFiles: FileList | null) => {
       if (!selectedFiles || selectedFiles.length === 0) return;
@@ -187,10 +215,12 @@ export function FileUploadPanel({ clientId }: Props) {
       ]);
 
       if (toUpload.length > 0) {
-        // Upload valid files sequentially
+        // Upload valid files sequentially; track how many actually landed
+        let successCount = 0;
         for (const file of toUpload) {
           try {
             await uploadWithProgress(file);
+            successCount += 1;
           } catch {
             // Error already reflected in uploading state
           }
@@ -198,6 +228,11 @@ export function FileUploadPanel({ clientId }: Props) {
 
         // Refresh the file list after all uploads finish
         await queryClient.invalidateQueries({ queryKey: ["files", clientId] });
+
+        // Trigger AI voice relearn from newly uploaded files (only if at least one succeeded)
+        if (successCount > 0) {
+          triggerRelearn();
+        }
 
         // Clear successfully-done entries after a brief pause so user sees 100%.
         // Keep error entries visible until the next selection attempt.
@@ -211,7 +246,7 @@ export function FileUploadPanel({ clientId }: Props) {
         fileInputRef.current.value = "";
       }
     },
-    [currentCount, uploadWithProgress, queryClient, clientId],
+    [currentCount, uploadWithProgress, queryClient, clientId, triggerRelearn],
   );
 
   return (
@@ -275,6 +310,47 @@ export function FileUploadPanel({ clientId }: Props) {
           {inlineError}
         </p>
       )}
+
+      {/* AI relearn status banner */}
+      <AnimatePresence>
+        {relearning !== "idle" && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="mt-3 border border-[#111111] p-3 flex items-center gap-3"
+            role="status"
+            aria-live="polite"
+          >
+            {relearning === "learning" && (
+              <>
+                <Loader2 className="size-4 text-[#555555] animate-spin shrink-0" aria-hidden="true" />
+                <p className="text-[13px] text-[#555555] font-sans">Relearning voice from new content…</p>
+              </>
+            )}
+            {relearning === "success" && (
+              <>
+                <Check className="size-4 text-[#2E4F2E] shrink-0" aria-hidden="true" />
+                <p className="text-[13px] text-[#2E4F2E] font-sans">Voice profile updated.</p>
+              </>
+            )}
+            {relearning === "error" && (
+              <>
+                <AlertTriangle className="size-4 text-[#8B1A1A] shrink-0" aria-hidden="true" />
+                <p className="text-[13px] text-[#8B1A1A] font-sans flex-1">{relearningError}</p>
+                <button
+                  type="button"
+                  onClick={triggerRelearn}
+                  className="text-[12px] font-medium text-[#111111] underline underline-offset-2 hover:text-[#555555] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-1 shrink-0"
+                >
+                  Retry
+                </button>
+              </>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Upload button */}
       {currentCount < FILE_LIMIT && (

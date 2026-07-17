@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 15-1-upload-revision-relearn-ux (2026-07-16)
+
+- No concurrency guard in `triggerRelearn` — backend ingest is idempotent so duplicate calls are safe, but a rapid double-upload could fire two in-flight ingest requests. [frontend/components/clients/FileUploadPanel.tsx:135]
+- Stale `historyExpanded` if revision count drops ≤5 then bounces back above 5 — revisions only grow in normal flow; would auto-open panel unexpectedly if somehow count oscillated. [frontend/app/(app)/blog/[id]/article-editor.tsx]
+- `clientId` in-flight ingest race on prop change — if component remounts with a different clientId during ingest, setState fires stale context; useEffect cleanup already cancels the 3s dismiss timer, so impact is minimal. [frontend/components/clients/FileUploadPanel.tsx]
+- Relearn error state does not auto-clear between upload batches — error banner persists until next triggerRelearn fires and clears it immediately; minimal UX impact. [frontend/components/clients/FileUploadPanel.tsx]
+
 ## Deferred from: code review of 14-1-platform-destination-picker (2026-07-16)
 
 - Atomicity hole: `create_or_update_article_from_campaign` committed before `scheduler.add_job` in `publish_headless` scheduled branch — if scheduler raises, article is stranded as `hidden` with no job to flip it; recoverable manually; architectural change needed to fix cleanly. [backend/app/routers/publishing.py]

@@ -4,7 +4,10 @@ POST /api/v1/clients/{client_id}/images  — upload a single user image (png/jpg
 """
 
 import logging
+import re
+import unicodedata
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi import status as http_status
@@ -51,6 +54,15 @@ def _get_ext(filename: str) -> str:
         if lower.endswith(ext):
             return ext
     return ""
+
+
+def _slugify_filename(name: str) -> str:
+    """Lowercase, ASCII-only, spaces to hyphens, max 80 chars."""
+    name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    name = name.lower()
+    name = re.sub(r"[^a-z0-9\-]", "-", name)
+    name = re.sub(r"-{2,}", "-", name).strip("-")
+    return name[:80] or "image"
 
 
 def _check_magic(ext: str, data: bytes) -> bool:
@@ -120,7 +132,8 @@ async def upload_image(
             detail={"error": {"code": "INVALID_IMAGE", "message": "File content does not match the declared image type.", "detail": {}}},
         )
 
-    object_path = f"{client_id}/{uuid.uuid4()}{ext}"
+    stem = _slugify_filename(Path(file.filename).stem if file.filename else "image")
+    object_path = f"{client_id}/{uuid.uuid4()}_{stem}{ext}"
     try:
         await supabase_storage.upload_file(BUCKET, object_path, file_bytes, public=True)
     except Exception as exc:

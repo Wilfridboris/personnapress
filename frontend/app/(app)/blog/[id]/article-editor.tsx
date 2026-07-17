@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import type { Article, RevisionListItem, RevisionDetail } from "@/lib/types";
 
 const META_MAX = 160;
+const HISTORY_VISIBLE = 5;
 
 interface ArticleEditorProps {
   articleId: string;
@@ -125,6 +126,10 @@ export function ArticleEditor({ articleId }: ArticleEditorProps) {
       setIsUploadingFeatured(false);
     }
   }, [article, articleId, qc, addToast]);
+
+  // ── revision history collapse ──────────────────────────────────────────────
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  useEffect(() => { setHistoryExpanded(false); }, [articleId]);
 
   // ── slug-change dialog ─────────────────────────────────────────────────────
   const [showSlugDialog, setShowSlugDialog] = useState(false);
@@ -617,53 +622,121 @@ export function ArticleEditor({ articleId }: ArticleEditorProps) {
               <p className="text-[13px] text-[#555555]">No revisions yet.</p>
             )}
 
-            {revisions.map((rev) => {
-              const isCurrent = rev.revision_number === maxRevNum;
-              return (
-                <div
-                  key={rev.revision_number}
-                  className="flex items-center gap-2 min-h-[44px]"
-                >
-                  <History className="size-3.5 text-[#555555] shrink-0" aria-hidden="true" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[13px] font-semibold text-[#111111]">
-                        Rev {rev.revision_number}
-                      </span>
-                      {sourceBadge(rev.source)}
+            {/* Visible revisions: always show 5 most recent */}
+            <div>
+              {revisions.slice(0, HISTORY_VISIBLE).map((rev) => {
+                const isCurrent = rev.revision_number === maxRevNum;
+                return (
+                  <div
+                    key={rev.revision_number}
+                    className="flex items-center gap-2 min-h-[44px]"
+                  >
+                    <History className="size-3.5 text-[#555555] shrink-0" aria-hidden="true" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[13px] font-semibold text-[#111111]">
+                          Rev {rev.revision_number}
+                        </span>
+                        {sourceBadge(rev.source)}
+                      </div>
+                      <p className="font-mono text-[11px] text-[#555555]">
+                        {relativeDate(rev.created_at)}
+                      </p>
                     </div>
-                    <p className="font-mono text-[11px] text-[#555555]">
-                      {relativeDate(rev.created_at)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      aria-label={`Preview revision ${rev.revision_number}`}
-                      onClick={() => openPreview(rev.revision_number)}
-                      className="p-1.5 text-[#555555] hover:text-[#111111] transition-colors focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:outline-none"
-                    >
-                      <Eye className="size-4" aria-hidden="true" />
-                    </button>
-                    {isCurrent ? (
-                      <span className="text-[11px] font-medium text-[#2E4F2E] px-1.5 py-0.5 border border-[#2E4F2E]">
-                        Current
-                      </span>
-                    ) : (
+                    <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
-                        aria-label={`Restore revision ${rev.revision_number}`}
-                        onClick={() => { setRestoreRevNum(rev.revision_number); setShowRestoreDialog(true); }}
-                        disabled={restoreMutation.isPending}
-                        className="p-1.5 text-[#555555] hover:text-[#111111] transition-colors focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-40"
+                        aria-label={`Preview revision ${rev.revision_number}`}
+                        onClick={() => openPreview(rev.revision_number)}
+                        className="p-1.5 text-[#555555] hover:text-[#111111] transition-colors focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:outline-none"
                       >
-                        <RotateCcw className="size-4" aria-hidden="true" />
+                        <Eye className="size-4" aria-hidden="true" />
                       </button>
-                    )}
+                      {isCurrent ? (
+                        <span className="text-[11px] font-medium text-[#2E4F2E] px-1.5 py-0.5 border border-[#2E4F2E]">
+                          Current
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label={`Restore revision ${rev.revision_number}`}
+                          onClick={() => { setRestoreRevNum(rev.revision_number); setShowRestoreDialog(true); }}
+                          disabled={restoreMutation.isPending}
+                          className="p-1.5 text-[#555555] hover:text-[#111111] transition-colors focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-40"
+                        >
+                          <RotateCcw className="size-4" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+
+            {/* Expanded overflow: scrollable area for older revisions */}
+            {historyExpanded && revisions.length > HISTORY_VISIBLE && (
+              <div className="max-h-[260px] overflow-y-auto border-t border-[#E5E5E5] pt-3 mt-1">
+                {revisions.slice(HISTORY_VISIBLE).map((rev) => {
+                  const isCurrent = rev.revision_number === maxRevNum;
+                  return (
+                    <div
+                      key={rev.revision_number}
+                      className="flex items-center gap-2 min-h-[44px]"
+                    >
+                      <History className="size-3.5 text-[#555555] shrink-0" aria-hidden="true" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[13px] font-semibold text-[#111111]">
+                            Rev {rev.revision_number}
+                          </span>
+                          {sourceBadge(rev.source)}
+                        </div>
+                        <p className="font-mono text-[11px] text-[#555555]">
+                          {relativeDate(rev.created_at)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          aria-label={`Preview revision ${rev.revision_number}`}
+                          onClick={() => openPreview(rev.revision_number)}
+                          className="p-1.5 text-[#555555] hover:text-[#111111] transition-colors focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:outline-none"
+                        >
+                          <Eye className="size-4" aria-hidden="true" />
+                        </button>
+                        {isCurrent ? (
+                          <span className="text-[11px] font-medium text-[#2E4F2E] px-1.5 py-0.5 border border-[#2E4F2E]">
+                            Current
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            aria-label={`Restore revision ${rev.revision_number}`}
+                            onClick={() => { setRestoreRevNum(rev.revision_number); setShowRestoreDialog(true); }}
+                            disabled={restoreMutation.isPending}
+                            className="p-1.5 text-[#555555] hover:text-[#111111] transition-colors focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-40"
+                          >
+                            <RotateCcw className="size-4" aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Toggle link */}
+            {revisions.length > HISTORY_VISIBLE && (
+              <button
+                type="button"
+                aria-expanded={historyExpanded}
+                onClick={() => setHistoryExpanded((v) => !v)}
+                className="text-[12px] text-[#555555] hover:text-[#111111] transition-colors underline underline-offset-2 mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-1"
+              >
+                {historyExpanded ? "Show less" : `Show all ${revisions.length} revisions`}
+              </button>
+            )}
           </div>
         </div>
       </div>
