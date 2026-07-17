@@ -855,3 +855,276 @@ async def test_generate_blog_prompt_applies_bvp_variation_pattern(mock_client):
     prompt_text = captured_prompt[0]
     assert 'sentence variation: "short"' in prompt_text   # variation_pattern value
     assert 'paragraph structure: "3-5 sentences"' in prompt_text  # paragraph_structure value
+
+
+# ── Story 16.4: Voice-driven blog generation update ───────────────────────────
+
+_VOICE_BRIEF = (
+    "Boris writes in first person with punchy short sentences. "
+    "He mixes casual contractions with specific numbers. "
+    "His opening always hooks the reader immediately."
+)
+
+_BVP_WITH_VOICE_BRIEF = {
+    "tone": ["direct", "casual"],
+    "cadence": {"avg_sentence_length": 14, "variation_pattern": "punchy", "paragraph_structure": "short"},
+    "banned_jargon": ["leverage"],
+    "voice_brief": _VOICE_BRIEF,
+    "list_preference": "rarely",
+    "pronoun_preference": "first_person",
+    "specificity_preference": "concrete_numbers",
+    "closing_pattern": "cta",
+    "header_style": "question",
+}
+
+_BVP_WITH_VOICE_BRIEF_NO_LIST_PREF = {
+    **_BVP_WITH_VOICE_BRIEF,
+    "list_preference": "normal",
+}
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_voice_brief_present_in_prompt(mock_client):
+    """AC 1: voice_brief text appears in the blog generation prompt when BVP has it."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("My brain dump", _BVP_WITH_VOICE_BRIEF)
+
+    prompt_text = captured_prompt[0]
+    assert _VOICE_BRIEF in prompt_text
+    assert "VOICE APPLICATION RULES" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_voice_brief_meta_note_in_prompt(mock_client):
+    """AC 3: condensed voice note appears in the meta description instruction when BVP has voice_brief."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("My brain dump", _BVP_WITH_VOICE_BRIEF)
+
+    prompt_text = captured_prompt[0]
+    assert "write it in this voice:" in prompt_text
+    # The meta line should include the voice note
+    assert "<!-- meta:" in prompt_text
+    meta_start = prompt_text.index("<!-- meta:")
+    meta_end = prompt_text.index("-->", meta_start)
+    meta_line = prompt_text[meta_start:meta_end]
+    assert "write it in this voice:" in meta_line
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_no_voice_brief_uses_legacy_format(mock_client):
+    """AC 6: when voice_brief is absent, prompt uses legacy JSON format with no empty sections."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    # _VALID_BVP has no voice_brief
+    await gemini.generate_blog("My brain dump", _VALID_BVP)
+
+    prompt_text = captured_prompt[0]
+    # No voice injection sections should appear
+    assert "VOICE APPLICATION RULES" not in prompt_text
+    assert "write it in this voice:" not in prompt_text
+    # Legacy BVP JSON should be in the prompt
+    assert "authoritative" in prompt_text  # from tone field
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_list_rarely_inserts_no_bullet_rule(mock_client):
+    """AC 1: list_preference='rarely' inserts the no-bullet-list rule."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("My brain dump", _BVP_WITH_VOICE_BRIEF)
+
+    prompt_text = captured_prompt[0]
+    assert "Use NO bullet lists" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_specificity_concrete_numbers_inserts_rule(mock_client):
+    """AC 1: specificity_preference='concrete_numbers' inserts the numbers-required rule."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("My brain dump", _BVP_WITH_VOICE_BRIEF)
+
+    prompt_text = captured_prompt[0]
+    assert "MUST use specific numbers" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_social_linkedin_prompt_receives_voice_brief(mock_client):
+    """AC 5: LinkedIn prompt receives voice_brief when BVP has it."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_SOCIAL_JSON)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_social("brain dump", "Title", _BVP_WITH_VOICE_BRIEF)
+
+    prompt_text = captured_prompt[0]
+    assert _VOICE_BRIEF in prompt_text
+    assert "LINKEDIN BRAND VOICE" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_social_x_post_prompt_does_not_receive_voice_brief(mock_client):
+    """AC 9: X post does NOT receive voice_brief -- it appears only in the LinkedIn section."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_SOCIAL_JSON)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_social("brain dump", "Title", _BVP_WITH_VOICE_BRIEF)
+
+    prompt_text = captured_prompt[0]
+    # voice_brief appears only in the LINKEDIN BRAND VOICE section, not in the main bvp_json
+    # (bvp_json strips voice_brief key so X post doesn't receive it in the core BRAND VOICE section)
+    assert '"voice_brief"' not in prompt_text  # voice_brief key not serialized into bvp_json
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_list_normal_inserts_permissive_rule(mock_client):
+    """list_preference other than 'rarely' produces the permissive list rule."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("My brain dump", _BVP_WITH_VOICE_BRIEF_NO_LIST_PREF)
+
+    prompt_text = captured_prompt[0]
+    assert "Lists may appear where natural" in prompt_text
+    assert "Use NO bullet lists" not in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_header_style_question_inserts_rule(mock_client):
+    """header_style='question' inserts the H2/H3 phrased-as-questions rule."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("My brain dump", _BVP_WITH_VOICE_BRIEF)
+
+    prompt_text = captured_prompt[0]
+    assert "phrased as questions" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_check_fidelity_expanded_fields_returned_when_bvp_has_them(mock_client):
+    """Advisory fields pronoun_score, specificity_score, closing_match are returned when BVP has them."""
+    from app.integrations.gemini import check_fidelity
+
+    fidelity_with_advisory = json.dumps({
+        **json.loads(_VALID_FIDELITY_JSON),
+        "pronoun_score": 8,
+        "specificity_score": 9,
+        "closing_match": True,
+    })
+    mock_client.aio.models.generate_content = _mock_aio_generate(fidelity_with_advisory)
+    result = await check_fidelity(_VALID_BLOG_HTML, _BVP_WITH_VOICE_BRIEF)
+    assert result["pronoun_score"] == 8
+    assert result["specificity_score"] == 9
+    assert result["closing_match"] is True
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_check_fidelity_advisory_fields_coerced_to_none_on_wrong_type(mock_client):
+    """Invalid type for advisory fields is coerced to None without raising."""
+    from app.integrations.gemini import check_fidelity
+
+    fidelity_wrong_types = json.dumps({
+        **json.loads(_VALID_FIDELITY_JSON),
+        "pronoun_score": "nine",
+        "specificity_score": "high",
+        "closing_match": "yes",
+    })
+    mock_client.aio.models.generate_content = _mock_aio_generate(fidelity_wrong_types)
+    result = await check_fidelity(_VALID_BLOG_HTML, _BVP_WITH_VOICE_BRIEF)
+    assert result["pronoun_score"] is None
+    assert result["specificity_score"] is None
+    assert result["closing_match"] is None
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_check_fidelity_expanded_scoring_prompt_includes_advisory_instructions(mock_client):
+    """When BVP has expanded fields, the prompt instructs Gemini to score pronoun, specificity, closing."""
+    from app.integrations.gemini import check_fidelity
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_FIDELITY_JSON)
+
+    mock_client.aio.models.generate_content = capture
+    await check_fidelity(_VALID_BLOG_HTML, _BVP_WITH_VOICE_BRIEF)
+
+    prompt_text = captured_prompt[0]
+    assert "pronoun_score" in prompt_text
+    assert "first_person" in prompt_text
+    assert "specificity_score" in prompt_text
+    assert "closing_match" in prompt_text

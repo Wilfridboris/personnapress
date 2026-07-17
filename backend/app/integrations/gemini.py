@@ -172,10 +172,76 @@ _DEFAULT_VOICE = (
     "professional, clear, and authoritative tone; moderate cadence; avoid jargon"
 )
 
+
+def _build_voice_injection(bvp: dict) -> str:
+    """Build Part A + Part B voice injection string for blog generation prompts.
+
+    Returns empty string when voice_brief is absent (legacy BVP fallback path).
+    All strings use double hyphens (--) not em-dashes.
+    """
+    voice_brief = bvp.get("voice_brief") or ""
+    if not voice_brief:
+        return ""
+
+    list_pref = bvp.get("list_preference", "")
+    list_rule = (
+        "Use NO bullet lists unless a list is the only clear way to present the information"
+        if list_pref == "rarely"
+        else "Lists may appear where natural"
+    )
+
+    pronoun = bvp.get("pronoun_preference") or "mixed"
+    spec_pref = bvp.get("specificity_preference") or "mixed"
+    spec_rule = (
+        "All quantifiable claims MUST use specific numbers, not vague phrases like 'many' or 'a lot'"
+        if spec_pref == "concrete_numbers"
+        else "Use the level of specificity that fits each claim"
+    )
+
+    header_style = bvp.get("header_style", "")
+    header_rule = ""
+    if header_style and header_style != "mixed":
+        header_rule = f"\n- H2 and H3 headers should be phrased as {header_style}s"
+
+    closing_pat = bvp.get("closing_pattern") or ""
+    closing_rule = ""
+    if closing_pat:
+        closing_rule = f"\n- Conclusion should follow a {closing_pat} closing pattern"
+
+    return (
+        f"{voice_brief}\n\n"
+        "VOICE APPLICATION RULES (apply within the SEO structure -- do not override structure):\n"
+        "- SEO structure is mandatory: H1, meta description, H2/H3 headings, body, conclusion, "
+        "800-1500 words are non-negotiable\n"
+        f"- {list_rule}\n"
+        "- Opening pattern applies to the FIRST BODY PARAGRAPH, not the H1 or meta description\n"
+        f"- Pronoun preference applies consistently throughout: {pronoun}\n"
+        f"- {spec_rule}"
+        f"{header_rule}"
+        f"{closing_rule}"
+    )
+
+
+def _meta_voice_note(bvp: dict) -> str:
+    """Return the condensed voice note for the meta description instruction.
+
+    Returns empty string when voice_brief is absent.
+    The note is the first complete sentence of voice_brief, capped at 50 words.
+    """
+    brief = (bvp or {}).get("voice_brief") or ""
+    if not brief:
+        return ""
+    first_sentence = brief.split(".")[0].strip()
+    words = first_sentence.split()[:50]
+    if not words:
+        return ""
+    return " -- write it in this voice: " + " ".join(words)
+
+
 _BLOG_PROMPT = """You are a direct, expert blog writer. Write a blog post that sounds like a human expert, not an AI assistant.
 
 BRAND VOICE PROFILE:
-{bvp_json}
+{voice_section}
 
 BRAIN DUMP (author's raw ideas: build the blog around the core argument, but RETAIN all first-person experiences, specific numbers, dates, named tools, or unique outcomes. These are E-E-A-T and Information Gain signals; do not generalize or anonymize them):
 {brain_dump}
@@ -185,7 +251,7 @@ BRAIN DUMP (author's raw ideas: build the blog around the core argument, but RET
 
 MANDATORY STRUCTURE (HTML only, no markdown; follow this EXACTLY):
 <h1>[Keyword-first title, specific and direct]</h1>
-<!-- meta: [One sentence meta description, max 150 chars, ends with action phrase] -->
+<!-- meta: [One sentence meta description, max 150 chars, ends with action phrase{meta_voice_note}] -->
 <!-- excerpt: [One engaging editorial hook, max 240 chars, conversational -- open with a provocative question, a surprising fact, or an intriguing observation; NOT a summary or restatement of the title] -->
 <div class="tldr"><p><strong>TL;DR:</strong> [2-3 bold sentences that directly answer the post's core question. Specific. No filler.]</p></div>
 <p>[BLUF intro paragraph: Start with a specific fact, number, or bold claim. Never start with "In today's..." or similar openers. State the core takeaway in the first sentence.]</p>
@@ -256,13 +322,13 @@ Return ONLY a valid JSON object (no markdown):
   "seo_fluff_detected": <boolean: true if any banned opener phrase like "In today's fast-paced world", "As we all know", "It's no secret that" appears anywhere in the content>,
   "tags": [<list of 3-5 concise lowercase SEO tags relevant to this specific post, e.g. ["brand voice", "content marketing", "ai tools"]>]
 }}
-"""
+{expanded_scoring_section}"""
 
 _SOCIAL_PROMPT = """Based on the brain dump and brand voice, write two social media posts.
 
 BRAND VOICE PROFILE:
 {bvp_json}
-
+{linkedin_voice_section}
 BRAIN DUMP:
 {brain_dump}
 
@@ -341,7 +407,6 @@ async def generate_blog(
     secondary_keywords: str | None = None,
 ) -> str:
     if brand_voice_profile:
-        bvp_json = json.dumps(brand_voice_profile)
         tone_list = ", ".join(str(t) for t in brand_voice_profile.get("tone", []))
         cadence = brand_voice_profile.get("cadence") or {}
         avg_sentence_length = cadence.get("avg_sentence_length") or 15
@@ -356,16 +421,24 @@ async def generate_blog(
         if variation_pattern or paragraph_structure:
             cadence_instruction += ". Apply all of these patterns literally in the prose."
         banned_jargon_list = ", ".join(str(j) for j in brand_voice_profile.get("banned_jargon", []))
+        # Use voice injection when voice_brief is present; fall back to JSON for legacy BVPs
+        if brand_voice_profile.get("voice_brief"):
+            voice_section = _build_voice_injection(brand_voice_profile)
+        else:
+            voice_section = json.dumps(brand_voice_profile)
     else:
-        bvp_json = _DEFAULT_VOICE
+        voice_section = _DEFAULT_VOICE
         tone_list = "professional, clear, authoritative"
         cadence_instruction = "avg sentence length 15 words"
         banned_jargon_list = "none specified"
 
+    meta_voice_note = _meta_voice_note(brand_voice_profile or {})
+
     seo_target_section, audience_section = _build_seo_section(target_keyword, target_audience, secondary_keywords)
 
     prompt = _BLOG_PROMPT.format(
-        bvp_json=bvp_json,
+        voice_section=voice_section,
+        meta_voice_note=meta_voice_note,
         brain_dump=brain_dump,
         tone_list=tone_list,
         cadence_instruction=cadence_instruction,
@@ -426,9 +499,37 @@ async def check_fidelity(
             "tags": [],
         }
 
+    # Build expanded scoring instructions for new BVP fields (advisory -- no pass/fail impact)
+    bvp = brand_voice_profile
+    expanded_parts: list[str] = []
+    if bvp.get("pronoun_preference"):
+        pronoun = bvp["pronoun_preference"]
+        expanded_parts.append(
+            f'  "pronoun_score": <integer 0-10, how consistently does the post use {pronoun} pronouns?>'
+        )
+    if bvp.get("specificity_preference"):
+        spec_pref = bvp["specificity_preference"]
+        expanded_parts.append(
+            f'  "specificity_score": <integer 0-10, how well does the post match the "{spec_pref}" specificity preference?>'
+        )
+    if bvp.get("closing_pattern"):
+        closing = bvp["closing_pattern"]
+        expanded_parts.append(
+            f'  "closing_match": <boolean, does the conclusion match the expected "{closing}" closing pattern?>'
+        )
+
+    if expanded_parts:
+        expanded_scoring_section = (
+            "\nAlso add these advisory fields to the JSON object above:\n"
+            + "\n".join(expanded_parts)
+        )
+    else:
+        expanded_scoring_section = ""
+
     prompt = _FIDELITY_PROMPT.format(
         bvp_json=json.dumps(brand_voice_profile),
         blog_html=blog_html,
+        expanded_scoring_section=expanded_scoring_section,
     )
 
     response = await _client.aio.models.generate_content(
@@ -478,6 +579,14 @@ async def check_fidelity(
                 if isinstance(t, str)
             ][:5]
 
+    # Advisory fields: store if present, no validation failure if missing or wrong type.
+    # These do NOT affect the pass/fail badge (tone >= 7, cadence >= 6, jargon_violations == 0 unchanged).
+    for advisory_key in ("pronoun_score", "specificity_score"):
+        if advisory_key in data and not isinstance(data[advisory_key], (int, float)):
+            data[advisory_key] = None  # coerce invalid type silently
+    if "closing_match" in data and not isinstance(data["closing_match"], bool):
+        data["closing_match"] = None  # coerce invalid type silently
+
     return data
 
 
@@ -487,10 +596,27 @@ async def generate_social(
     brand_voice_profile: dict | None,
     thinking_tokens: int = 0,
 ) -> dict:
-    bvp_json = json.dumps(brand_voice_profile) if brand_voice_profile else _DEFAULT_VOICE
+    # Build bvp_json for the BRAND VOICE PROFILE section.
+    # voice_brief is excluded from bvp_json (X post must not receive it per AC 9).
+    # A separate linkedin_voice_section injects Part A (prose only) for LinkedIn.
+    if brand_voice_profile:
+        bvp_without_voice = {k: v for k, v in brand_voice_profile.items() if k != "voice_brief"}
+        bvp_json = json.dumps(bvp_without_voice)
+    else:
+        bvp_json = _DEFAULT_VOICE
+
+    voice_brief = (brand_voice_profile or {}).get("voice_brief") or ""
+    if voice_brief:
+        linkedin_voice_section = (
+            "\nLINKEDIN BRAND VOICE (apply to linkedin_post only -- do not apply to x_post):\n"
+            f"{voice_brief}\n"
+        )
+    else:
+        linkedin_voice_section = ""
 
     prompt = _SOCIAL_PROMPT.format(
         bvp_json=bvp_json,
+        linkedin_voice_section=linkedin_voice_section,
         brain_dump=brain_dump,
         blog_title=blog_title,
     )

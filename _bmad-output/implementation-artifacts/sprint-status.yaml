@@ -1,5 +1,5 @@
 # generated: 2026-06-14
-# last_updated: 2026-07-17  # 16-3-expanded-bvp-review-edit-ui code-reviewed, marked done
+# last_updated: 2026-07-17  # 16-4-voice-driven-blog-generation-update code review complete: 6 patches applied (None guard for pronoun/specificity, closing_pattern rule in blog prompt, empty-first-sentence guard in meta note, 3 new tests for list/header/fidelity branches), marked done
 # project: PersonnaPress
 # project_key: NOKEY
 # tracking_system: file-system
@@ -186,5 +186,5 @@ development_status:
   16-1-computed-stylometric-metrics-preprocessing: done
   16-2-gemini-qualitative-extraction-voice-brief: done
   16-3-expanded-bvp-review-edit-ui: done
-  16-4-voice-driven-blog-generation-update: ready-for-dev
+  16-4-voice-driven-blog-generation-update: done
   16-5-re-voice-existing-posts: ready-for-dev
