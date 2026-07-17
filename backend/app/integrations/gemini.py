@@ -104,6 +104,7 @@ BRAIN DUMP (author's raw ideas: build the blog around the core argument, but RET
 MANDATORY STRUCTURE (HTML only, no markdown; follow this EXACTLY):
 <h1>[Keyword-first title, specific and direct]</h1>
 <!-- meta: [One sentence meta description, max 150 chars, ends with action phrase] -->
+<!-- excerpt: [One engaging editorial hook, max 240 chars, conversational -- open with a provocative question, a surprising fact, or an intriguing observation; NOT a summary or restatement of the title] -->
 <div class="tldr"><p><strong>TL;DR:</strong> [2-3 bold sentences that directly answer the post's core question. Specific. No filler.]</p></div>
 <p>[BLUF intro paragraph: Start with a specific fact, number, or bold claim. Never start with "In today's..." or similar openers. State the core takeaway in the first sentence.]</p>
 <h2>[Main topic, actionable heading]</h2>

@@ -226,3 +226,93 @@ async def test_idempotency_second_call_no_revision():
     assert result2 is existing
     # No new rows created on idempotent calls
     session.add.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# _extract_excerpt
+# ---------------------------------------------------------------------------
+
+def test_extract_excerpt_uses_comment_when_present():
+    from app.services.articles import _extract_excerpt
+
+    html = (
+        '<h1>Title</h1>'
+        '<!-- excerpt: Have you ever wondered why some blogs instantly hook you? -->'
+        '<div class="tldr"><p>TL;DR content</p></div>'
+        '<p>First paragraph body.</p>'
+    )
+    assert _extract_excerpt(html) == "Have you ever wondered why some blogs instantly hook you?"
+
+
+def test_extract_excerpt_falls_back_to_first_paragraph_when_no_comment():
+    from app.services.articles import _extract_excerpt
+
+    html = (
+        '<h1>Title</h1>'
+        '<div class="tldr"><p>TL;DR summary</p></div>'
+        '<p>BLUF intro paragraph here.</p>'
+    )
+    assert _extract_excerpt(html) == "BLUF intro paragraph here."
+
+
+def test_extract_excerpt_comment_case_insensitive():
+    from app.services.articles import _extract_excerpt
+
+    html = '<!-- EXCERPT: Upper case excerpt comment --><p>Body</p>'
+    assert _extract_excerpt(html) == "Upper case excerpt comment"
+
+
+def test_extract_excerpt_strips_whitespace():
+    from app.services.articles import _extract_excerpt
+
+    html = '<!--  excerpt:   Padded excerpt content   --><p>Body</p>'
+    assert _extract_excerpt(html) == "Padded excerpt content"
+
+
+def test_extract_excerpt_returns_empty_when_no_comment_and_no_paragraph():
+    from app.services.articles import _extract_excerpt
+
+    html = '<h1>Title</h1>'
+    assert _extract_excerpt(html) == ""
+
+
+def test_extract_excerpt_truncates_at_300_chars():
+    from app.services.articles import _extract_excerpt
+
+    long_text = "A" * 350
+    html = f'<!-- excerpt: {long_text} -->'
+    result = _extract_excerpt(html)
+    assert len(result) == 300
+    assert result == "A" * 300
+
+
+def test_extract_excerpt_whitespace_only_falls_back_to_paragraph():
+    from app.services.articles import _extract_excerpt
+
+    html = '<!--  excerpt:      --><p>Fallback paragraph.</p>'
+    assert _extract_excerpt(html) == "Fallback paragraph."
+
+
+def test_extract_excerpt_strips_html_tags_from_comment():
+    from app.services.articles import _extract_excerpt
+
+    html = '<!-- excerpt: <b>Bold</b> hook text --><p>Body</p>'
+    assert _extract_excerpt(html) == "Bold hook text"
+
+
+def test_excerpt_and_meta_description_differ_when_both_comments_present():
+    from app.services.articles import _extract_excerpt
+    from app.services.publishing import _extract_meta_description
+
+    html = (
+        '<h1>Title</h1>'
+        '<!-- meta: Learn how to double your content ROI with AI-assisted writing. -->'
+        '<!-- excerpt: Have you spent hours writing content that nobody reads? -->'
+        '<div class="tldr"><p>TL;DR content.</p></div>'
+        '<p>First paragraph.</p>'
+    )
+    excerpt = _extract_excerpt(html)
+    meta = _extract_meta_description(html)
+    assert excerpt != meta
+    assert "Have you spent" in excerpt
+    assert "Learn how to" in meta

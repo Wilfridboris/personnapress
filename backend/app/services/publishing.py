@@ -29,18 +29,15 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_meta_description(blog_html: str) -> str:
-    """Extract the <!-- meta: ... --> comment, falling back to the first paragraph."""
+    """Extract the <!-- meta: ... --> comment.
+
+    Returns empty string if the comment is absent rather than falling back
+    to the first paragraph -- the fallback previously caused meta description
+    and excerpt to share identical content.
+    """
     match = re.search(r"<!--\s*meta:\s*(.+?)\s*-->", blog_html, re.IGNORECASE | re.DOTALL)
     if match:
         return " ".join(match.group(1).split())[:160]
-    # Gemini sometimes omits the comment; fall back to the first <p> outside the TL;DR block.
-    soup = BeautifulSoup(blog_html, "html.parser")
-    tldr = soup.find("div", class_="tldr")
-    if tldr:
-        tldr.decompose()
-    first_p = soup.find("p")
-    if first_p:
-        return " ".join(first_p.get_text(separator=" ", strip=True).split())[:160]
     return ""
 
 

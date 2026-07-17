@@ -1,6 +1,7 @@
 """Article creation service — converts published campaigns into first-class articles."""
 
 import logging
+import re
 from typing import Optional
 
 from bs4 import BeautifulSoup
@@ -17,11 +18,18 @@ _WORDS_PER_MINUTE = 225
 
 
 def _extract_excerpt(html: str) -> str:
-    """Return the first substantive paragraph (BLUF intro) as the article excerpt.
+    """Extract the dedicated <!-- excerpt: ... --> comment.
 
-    Strips the TL;DR block before searching so the excerpt is the real opening
-    paragraph, not the summary callout.
+    Falls back to the first <p> after TL;DR strip for articles generated
+    before this story shipped.
     """
+    match = re.search(r"<!--\s*excerpt:\s*(.+?)\s*-->", html, re.IGNORECASE | re.DOTALL)
+    if match:
+        raw = BeautifulSoup(match.group(1), "html.parser").get_text(separator=" ")
+        text = " ".join(raw.split())[:300]
+        if text:
+            return text
+    # Legacy fallback: first paragraph after stripping TL;DR
     soup = BeautifulSoup(html, "html.parser")
     tldr = soup.find("div", class_="tldr")
     if tldr:

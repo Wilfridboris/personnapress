@@ -1,5 +1,9 @@
 # Deferred Work
 
+## Deferred from: code review of 15-2-excerpt-meta-description-content-quality (2026-07-17)
+
+- AC 1.2 — Meta prompt `<!-- meta: ... -->` instruction missing concrete CTA examples ("Learn how to…", "Discover why…") — pre-existing, meta line was not modified by this story; consider adding in a future prompt quality pass. [backend/app/integrations/gemini.py:106]
+
 ## Deferred from: code review of 15-1-upload-revision-relearn-ux (2026-07-16)
 
 - No concurrency guard in `triggerRelearn` — backend ingest is idempotent so duplicate calls are safe, but a rapid double-upload could fire two in-flight ingest requests. [frontend/components/clients/FileUploadPanel.tsx:135]
