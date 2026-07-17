@@ -110,7 +110,7 @@ MANDATORY STRUCTURE (HTML only, no markdown; follow this EXACTLY):
 [GEO RULE: If this H2 implies a direct question (How to, Why, What is, When should you): open with a direct 1–3 sentence answer paragraph (max ~60 words) BEFORE the H3 (this is the AI Overview citation extract). If the H2 is built around examples, comparisons, step-by-step processes, or data: skip the answer block and lead straight into the H3. Never force an answer block where it does not arise naturally.]
 <h3>[Sub-topic]</h3>
 <p>...</p>
-[Repeat this H2 pattern for each main content section (3 to 4 total, not counting the FAQ and Key Takeaways sections below)]
+[Write 3 to 4 main content H2 sections. VARY THE STRUCTURE of each section -- do not repeat the same H2 to H3 to paragraph pattern every time. Choose a different structural approach for each section. Options: (a) open with a <ol> numbered process (no H3 needed); (b) open with a bold single-sentence claim in <p><strong>...</strong></p> before the first H3; (c) use H3 subheadings with 2-3 short paragraphs each; (d) write as flowing paragraphs with no H3 at all. Never use the same structure twice in a row across the 3-4 sections.]
 <h2>Frequently Asked Questions</h2>
 <dl class="faq">
   <dt>[Question 1 related to the post topic]</dt>
@@ -120,17 +120,23 @@ MANDATORY STRUCTURE (HTML only, no markdown; follow this EXACTLY):
   <dt>[Question 3]</dt>
   <dd><strong>[Direct one-sentence answer.]</strong> [1-2 sentence explanation.]</dd>
 </dl>
-<h2>Key Takeaways</h2>
-<p>[Conclusion paragraph that leads with the single most important action the reader should take. Do not restate the intro.]</p>
+<h2>[Conclusion heading chosen to fit this specific article and voice -- e.g. "What to Do Next", "My Recommendation", "The Bottom Line on [Topic]", or any heading that fits naturally. Never use "Key Takeaways" or "In Conclusion".]</h2>
+<p>[Closing paragraph: lead with the single most important action the reader should take. No section recap. End with forward momentum, not a summary.]</p>
 
 REQUIREMENTS:
 - Target 900-1,500 words
 - Use H2 and H3 for structure; only one H1 (the title)
 - Match the tone: {tone_list}
-- Match the cadence: avg sentence length {avg_sentence_length} words
+- Match the cadence: {cadence_instruction}
 - Never use these jargon terms: {banned_jargon_list}
 - If the Brain Dump says "I found X", "I tested X", or "I built X": use first-person voice in the post. Never convert "I found conversion increased 40%" into "conversion rates can increase up to 40%". The author's direct experience is the E-E-A-T signal.
 - If the Brain Dump contains proprietary data, A/B test results, client outcomes, or specific findings not commonly known: surface these in the opening of the relevant H2 section. Do not bury unique data behind generic context-setting paragraphs.
+- Sentence length must vary dramatically within each paragraph. Mix short punches (3-8 words) with longer explanatory sentences (20+ words) in the same paragraph. Uniform sentence rhythm -- every sentence near the same length -- is the clearest measurable AI writing signal. Aim for a range of at least 12 words between your shortest and longest sentence within any given paragraph.
+- Vary how paragraphs begin. Not every paragraph should open with its topic sentence. Some may open with a specific example, a concrete number, a named tool or outcome, or a conjunction (But, So, Because, And) when continuing a thought directly from the prior sentence. Aim for at least two paragraphs in the article that begin with a conjunction.
+- Before writing the FAQ section: identify the most likely follow-up question a reader still has after finishing the body. If it is not answered, add it as an additional FAQ entry. A reader who searched for your focus keyword should not need to open another tab. Never write "for more information, see..." -- answer it here.
+- Never write "many", "several", "some", "most", "often", "significant", "considerable", or "various" without attaching a specific number, timeframe, or qualifier from the brain dump. If the brain dump does not supply the data: either omit the claim entirely or hedge it explicitly ("in my experience", "from what I've seen", "your results may vary depending on").
+- Contractions: if the brand tone list includes "casual", "friendly", "conversational", or "approachable" -- use contractions naturally throughout (don't, can't, I've, you'll, it's). If the tone list includes "formal", "professional", "authoritative", or "corporate" -- avoid contractions entirely.
+- When making a claim not directly supported by specific data in the brain dump: use first-person hedging ("in my experience", "from what I've seen", "based on the above") rather than stating it as universal fact. Never assert something is always true when the brain dump only documents a single case.
 - Output ONLY valid HTML tags. NEVER use markdown syntax like **bold**, *italic*, ##, ###
 - Bold text must use <strong>, italics must use <em>
 
@@ -143,7 +149,7 @@ BANNED OPENERS, never start any paragraph or sentence with these phrases:
 - "Standing out requires more than"
 - "Now more than ever"
 
-BANNED WORDS, do not use anywhere: delve, moreover, testament, comprehensive, furthermore, tapestry, paradigm, bespoke, unlock, supercharge, navigate (as metaphor), em-dash
+BANNED WORDS, do not use anywhere: delve, moreover, testament, comprehensive, furthermore, tapestry, paradigm, bespoke, unlock, supercharge, navigate (as metaphor), em-dash, it's worth noting, it's important to, plays a crucial role, serves as a reminder, Key Takeaways (as heading), in conclusion, in essence, moving forward, game-changer, leveraging, at the end of the day, the reality is, needless to say
 
 Every sentence must earn its place. If a sentence does not give the reader new information or a specific action, cut it.
 """
@@ -254,13 +260,23 @@ async def generate_blog(
     if brand_voice_profile:
         bvp_json = json.dumps(brand_voice_profile)
         tone_list = ", ".join(str(t) for t in brand_voice_profile.get("tone", []))
-        cadence = brand_voice_profile.get("cadence", {})
-        avg_sentence_length = cadence.get("avg_sentence_length", 15)
+        cadence = brand_voice_profile.get("cadence") or {}
+        avg_sentence_length = cadence.get("avg_sentence_length") or 15
+        variation_pattern = str(cadence.get("variation_pattern") or "").strip()
+        paragraph_structure = str(cadence.get("paragraph_structure") or "").strip()
+        cadence_parts = [f"avg sentence length {avg_sentence_length} words"]
+        if variation_pattern:
+            cadence_parts.append(f'sentence variation: "{variation_pattern}"')
+        if paragraph_structure:
+            cadence_parts.append(f'paragraph structure: "{paragraph_structure}"')
+        cadence_instruction = "; ".join(cadence_parts)
+        if variation_pattern or paragraph_structure:
+            cadence_instruction += ". Apply all of these patterns literally in the prose."
         banned_jargon_list = ", ".join(str(j) for j in brand_voice_profile.get("banned_jargon", []))
     else:
         bvp_json = _DEFAULT_VOICE
         tone_list = "professional, clear, authoritative"
-        avg_sentence_length = 15
+        cadence_instruction = "avg sentence length 15 words"
         banned_jargon_list = "none specified"
 
     seo_target_section, audience_section = _build_seo_section(target_keyword, target_audience, secondary_keywords)
@@ -269,7 +285,7 @@ async def generate_blog(
         bvp_json=bvp_json,
         brain_dump=brain_dump,
         tone_list=tone_list,
-        avg_sentence_length=avg_sentence_length,
+        cadence_instruction=cadence_instruction,
         banned_jargon_list=banned_jargon_list,
         seo_target_section=seo_target_section,
         audience_section=audience_section,

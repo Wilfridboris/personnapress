@@ -106,7 +106,9 @@ async def test_generate_blog_prompt_includes_mandatory_structure(mock_client):
     assert "BLUF intro paragraph" in prompt_text
     assert 'class="faq"' in prompt_text
     assert "Frequently Asked Questions" in prompt_text
-    assert "Key Takeaways" in prompt_text
+    assert "Key Takeaways" in prompt_text  # appears as a BANNED term, not as a mandatory heading
+    assert "<h2>Key Takeaways</h2>" not in prompt_text
+    assert "In Conclusion" in prompt_text or "in conclusion" in prompt_text  # appears in banned list
     assert "<!-- meta:" in prompt_text
 
 
@@ -753,3 +755,103 @@ async def test_generate_blog_no_supporting_keywords_when_null(mock_client):
 
     prompt_text = captured_prompt[0]
     assert "SUPPORTING KEYWORDS" not in prompt_text
+
+
+# -- Story 3-11: Human content quality pass ──────────────────────────────────
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_prompt_includes_burstiness_instruction(mock_client):
+    """AC 1: REQUIREMENTS must instruct Gemini to vary sentence lengths dramatically."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("My brain dump", _VALID_BVP)
+
+    prompt_text = captured_prompt[0]
+    assert "uniform sentence" in prompt_text.lower() or "3-8 words" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_prompt_includes_section_structural_variation(mock_client):
+    """AC 2: MANDATORY STRUCTURE must instruct Gemini to vary section structure."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("My brain dump", _VALID_BVP)
+
+    prompt_text = captured_prompt[0]
+    assert "different structural approach" in prompt_text.lower() or "never use the same structure" in prompt_text.lower()
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_prompt_no_key_takeaways_as_mandatory_heading(mock_client):
+    """AC 3: <h2>Key Takeaways</h2> must not appear as a mandatory structure element."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("My brain dump", _VALID_BVP)
+
+    prompt_text = captured_prompt[0]
+    assert "<h2>Key Takeaways</h2>" not in prompt_text
+    assert "Key Takeaways" in prompt_text  # still appears in the banned list
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_prompt_includes_intent_completion_rule(mock_client):
+    """AC 4: REQUIREMENTS must include intent-completion rule (no unanswered follow-ups)."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("My brain dump", _VALID_BVP)
+
+    prompt_text = captured_prompt[0]
+    assert "follow-up" in prompt_text.lower() or "open another tab" in prompt_text.lower()
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_prompt_applies_bvp_variation_pattern(mock_client):
+    """AC 6: variation_pattern and paragraph_structure from BVP cadence must appear in the prompt."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_BLOG_HTML)
+
+    mock_client.aio.models.generate_content = capture
+    # _VALID_BVP has variation_pattern: "short" and paragraph_structure: "3-5 sentences"
+    await gemini.generate_blog("My brain dump", _VALID_BVP)
+
+    prompt_text = captured_prompt[0]
+    assert 'sentence variation: "short"' in prompt_text   # variation_pattern value
+    assert 'paragraph structure: "3-5 sentences"' in prompt_text  # paragraph_structure value
