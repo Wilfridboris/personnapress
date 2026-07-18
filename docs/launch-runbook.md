@@ -231,7 +231,15 @@ cd /var/www/personnapress/backend
 /var/www/personnapress/.venv/bin/alembic upgrade head
 ```
 
-### 3.5 Install and Start the Service
+### 3.5 Install the spaCy Model
+
+```bash
+/var/www/personnapress/.venv/bin/python -m spacy download en_core_web_sm
+```
+
+> **Required:** the API will crash-loop on startup without this. The `deploy.sh` script runs this automatically on every deploy, but it must be done manually on first install.
+
+### 3.6 Install and Start the Service
 
 ```bash
 # Install systemd service
