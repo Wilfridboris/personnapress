@@ -173,8 +173,10 @@ async def run_publish_headless(campaign_id_str: str) -> None:
         if str(getattr(article.status, "value", article.status)) == "published":
             logger.info("run_publish_headless: article=%s already published — skipping", article.id)
             return
+        now = utcnow()
         article.status = "published"
-        article.updated_at = utcnow()
+        article.published_at = now
+        article.updated_at = now
         db.add(article)
         await db.commit()
         logger.info("run_publish_headless: article=%s published (campaign=%s)", article.id, campaign_id)

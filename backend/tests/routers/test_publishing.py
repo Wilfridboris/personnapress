@@ -759,6 +759,7 @@ async def test_run_publish_headless_flips_status():
         await run_publish_headless(str(campaign_id))
 
     assert article.status == "published"
+    assert article.published_at is not None
     db_mock.commit.assert_called_once()
 
 
