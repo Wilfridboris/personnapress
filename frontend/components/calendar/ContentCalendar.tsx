@@ -32,14 +32,17 @@ function toDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-// Slices the ISO string directly to avoid local-timezone shift when mapping
-// UTC backend timestamps to calendar date keys.
+function asUtcDate(iso: string): Date {
+  const s = iso.endsWith("Z") || iso.includes("+") ? iso : iso + "Z";
+  return new Date(s);
+}
+
 function campaignCalendarDateKey(campaign: Campaign): string | null {
   if (campaign.status === "published") {
-    return campaign.updated_at.slice(0, 10);
+    return toDateKey(asUtcDate(campaign.updated_at));
   }
   if (campaign.status === "approved" && campaign.scheduled_at) {
-    return campaign.scheduled_at.slice(0, 10);
+    return toDateKey(asUtcDate(campaign.scheduled_at));
   }
   return null;
 }
@@ -81,7 +84,11 @@ function CalendarEntry({
       ? new Intl.DateTimeFormat("en-US", {
           hour: "numeric",
           minute: "2-digit",
-        }).format(new Date(campaign.scheduled_at))
+        }).format(new Date(
+          campaign.scheduled_at.endsWith("Z") || campaign.scheduled_at.includes("+")
+            ? campaign.scheduled_at
+            : campaign.scheduled_at + "Z"
+        ))
       : null;
 
   const ariaLabel = `${shortTitle}: ${
