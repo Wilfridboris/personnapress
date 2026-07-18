@@ -777,6 +777,21 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                 className="border-b border-ink focus:border-b-2 outline-none bg-transparent py-2 text-sm text-ink w-full"
               />
             </div>
+            {scheduledAt && !isPastTime && (
+              <p className="text-xs font-medium text-ink">
+                Will publish:{" "}
+                {new Intl.DateTimeFormat("en-US", {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true,
+                  timeZoneName: "short",
+                }).format(new Date(scheduledAt))}
+              </p>
+            )}
             <p className="text-xs text-graphite">Schedules in {userTimezone}</p>
             {isPastTime && (
               <p className="text-xs text-danger" role="alert">
