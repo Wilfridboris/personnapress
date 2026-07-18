@@ -50,6 +50,7 @@ class CampaignResponse(BaseModel):
 
     id: uuid.UUID
     client_id: uuid.UUID
+    client_name: Optional[str] = None
     brain_dump: str
     blog_html: Optional[str]
     x_post: Optional[str]

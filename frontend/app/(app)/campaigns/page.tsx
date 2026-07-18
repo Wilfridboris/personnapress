@@ -3,6 +3,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { Plus, ArrowRight, FileText } from "lucide-react";
 import type { Campaign } from "@/lib/types";
+import { extractTitle } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Campaigns",
@@ -90,10 +91,10 @@ export default async function CampaignsPage() {
             >
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-ink text-sm truncate mb-1">
-                  {campaign.blog_html ? "Campaign Ready" : "Generating..."}
+                  {extractTitle(campaign.blog_html)}
                 </p>
                 <p className="text-xs text-graphite font-mono">
-                  Client #{campaign.client_id.slice(0, 8)}
+                  {campaign.client_name ?? `Client #${campaign.client_id.slice(0, 8)}`}
                 </p>
               </div>
               <div className="flex items-center gap-4 ml-4 shrink-0">

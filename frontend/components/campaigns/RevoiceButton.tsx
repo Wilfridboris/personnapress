@@ -132,10 +132,10 @@ export function RevoiceButton({ campaignId, campaignTitle }: RevoiceButtonProps)
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error?.message ?? "Failed to create re-voiced draft. Try again.");
       }
-      const { new_campaign_id } = await res.json();
+      const { new_campaign_id, job_id } = await res.json();
       setLoading(false);
       setShowModal(false);
-      router.push(`/campaigns/${new_campaign_id}`);
+      router.push(`/campaigns/${new_campaign_id}?job_id=${job_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create re-voiced draft. Try again.");
       setLoading(false);

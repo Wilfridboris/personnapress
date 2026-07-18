@@ -298,7 +298,9 @@ BANNED OPENERS, never start any paragraph or sentence with these phrases:
 - "Standing out requires more than"
 - "Now more than ever"
 
-BANNED WORDS, do not use anywhere: delve, moreover, testament, comprehensive, furthermore, tapestry, paradigm, bespoke, unlock, supercharge, navigate (as metaphor), em-dash, it's worth noting, it's important to, plays a crucial role, serves as a reminder, Key Takeaways (as heading), in conclusion, in essence, moving forward, game-changer, leveraging, at the end of the day, the reality is, needless to say
+BANNED CHARACTER: Never use the em-dash character (—) anywhere in the output. Rewrite the sentence so it flows naturally without one — split it into two sentences, use a subordinate clause, or restructure the phrasing. Do not mechanically substitute a comma or colon; the sentence must read naturally on its own.
+
+BANNED WORDS, do not use anywhere: delve, moreover, testament, comprehensive, furthermore, tapestry, paradigm, bespoke, unlock, supercharge, navigate (as metaphor), it's worth noting, it's important to, plays a crucial role, serves as a reminder, Key Takeaways (as heading), in conclusion, in essence, moving forward, game-changer, leveraging, at the end of the day, the reality is, needless to say
 
 Every sentence must earn its place. If a sentence does not give the reader new information or a specific action, cut it.
 """
@@ -453,6 +455,8 @@ async def generate_blog(
         config=_thinking_config(thinking_tokens),
     )
     result = _md_to_html(_strip_fences(response.text.strip()))
+    # Belt-and-suspenders: replace any em-dashes the model emitted despite the ban
+    result = result.replace("—", ", ")
 
     # Post-processing validation pass
     if "<h1" not in result.lower():

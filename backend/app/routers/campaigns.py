@@ -159,7 +159,22 @@ async def list_campaigns(
              .limit(per_page)
     )
     campaigns = result.scalars().all()
-    return CampaignListResponse(items=[CampaignResponse.model_validate(c) for c in campaigns], total=total)
+
+    client_ids = list({c.client_id for c in campaigns})
+    client_name_map: dict[uuid.UUID, str] = {}
+    if client_ids:
+        name_rows = await db.execute(
+            select(Client.id, Client.name).where(Client.id.in_(client_ids))
+        )
+        client_name_map = {row.id: row.name for row in name_rows.all()}
+
+    return CampaignListResponse(
+        items=[
+            CampaignResponse.model_validate({**c.__dict__, "client_name": client_name_map.get(c.client_id)})
+            for c in campaigns
+        ],
+        total=total,
+    )
 
 
 @router.get("/{campaign_id}", response_model=CampaignDetailResponse)
