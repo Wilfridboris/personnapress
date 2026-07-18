@@ -334,7 +334,7 @@ export function ArticleEditor({ articleId }: ArticleEditorProps) {
           className="inline-flex items-center gap-2 text-sm text-[#555555] hover:text-[#111111] focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:outline-none"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
-          Articles
+          My Blog
         </Link>
       </div>
 
