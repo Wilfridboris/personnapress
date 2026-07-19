@@ -24,6 +24,7 @@ const mockEditor = {
   isActive: vi.fn(() => false),
   can: vi.fn(() => ({ undo: () => true })),
   getHTML: vi.fn(() => "<p>edited content</p>"),
+  getAttributes: vi.fn(() => ({})),
   isEmpty: false,
   destroy: vi.fn(),
   state: { selection: { from: 0 }, doc: { nodeAt: vi.fn(() => null) } },
@@ -37,6 +38,9 @@ vi.mock("@tiptap/react", () => ({
     }
     return mockEditor;
   }),
+  useEditorState: vi.fn(({ selector }: { editor: unknown; selector: (ctx: { editor: typeof mockEditor }) => unknown }) =>
+    selector({ editor: mockEditor }),
+  ),
   EditorContent: ({ editor }: { editor: unknown }) =>
     editor ? <div data-testid="editor-content">editor</div> : null,
 }));
@@ -177,5 +181,144 @@ describe("BlogEditor", () => {
   it("renders Insert image toolbar button", () => {
     render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
     expect(screen.getByRole("button", { name: /insert image/i })).toBeInTheDocument();
+  });
+
+  // ── Link dialog tests ──────────────────────────────────────────────────────
+
+  it("clicking Link2 toolbar button opens the link modal with Nofollow selected by default", () => {
+    mockEditor.isActive.mockReturnValue(false);
+    mockEditor.getAttributes.mockReturnValue({});
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /insert or edit link/i }));
+    expect(screen.getByTestId("modal")).toBeInTheDocument();
+    expect(screen.getByText("Insert link")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^nofollow$/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /^dofollow$/i })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("confirming with valid URL and Nofollow (default) calls setLink with nofollow rel", () => {
+    mockEditor.isActive.mockReturnValue(false);
+    mockEditor.getAttributes.mockReturnValue({});
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /insert or edit link/i }));
+    fireEvent.change(screen.getByPlaceholderText("https://example.com"), {
+      target: { value: "https://example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /insert link/i }));
+    expect(mockChain.setLink).toHaveBeenCalledWith({
+      href: "https://example.com",
+      rel: "nofollow noopener noreferrer",
+    });
+    expect(mockChain.run).toHaveBeenCalled();
+  });
+
+  it("switching to Dofollow and confirming calls setLink with noopener rel only", () => {
+    mockEditor.isActive.mockReturnValue(false);
+    mockEditor.getAttributes.mockReturnValue({});
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /insert or edit link/i }));
+    fireEvent.change(screen.getByPlaceholderText("https://example.com"), {
+      target: { value: "https://example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^dofollow$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /insert link/i }));
+    expect(mockChain.setLink).toHaveBeenCalledWith({
+      href: "https://example.com",
+      rel: "noopener noreferrer",
+    });
+    expect(mockChain.run).toHaveBeenCalled();
+  });
+
+  it("pre-populates URL and selects Nofollow when editing an existing nofollow link", () => {
+    mockEditor.isActive.mockImplementation((type: string) => type === "link");
+    mockEditor.getAttributes.mockReturnValue({ href: "https://x.com", rel: "nofollow noopener noreferrer" });
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /insert or edit link/i }));
+    const urlInput = screen.getByPlaceholderText("https://example.com") as HTMLInputElement;
+    expect(urlInput.value).toBe("https://x.com");
+    const nofollowBtn = screen.getByRole("button", { name: /^nofollow$/i });
+    expect(nofollowBtn).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("shows Remove link button when editing existing link; clicking it calls unsetLink", () => {
+    mockEditor.isActive.mockImplementation((type: string) => type === "link");
+    mockEditor.getAttributes.mockReturnValue({ href: "https://x.com", rel: "nofollow noopener noreferrer" });
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /insert or edit link/i }));
+    const removeBtn = screen.getByRole("button", { name: /remove link/i });
+    expect(removeBtn).toBeInTheDocument();
+    fireEvent.click(removeBtn);
+    expect(mockChain.unsetLink).toHaveBeenCalled();
+    expect(mockChain.run).toHaveBeenCalled();
+  });
+
+  it("confirm button is disabled when URL is empty", () => {
+    mockEditor.isActive.mockReturnValue(false);
+    mockEditor.getAttributes.mockReturnValue({});
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /insert or edit link/i }));
+    const confirmBtn = screen.getByRole("button", { name: /insert link/i });
+    expect(confirmBtn).toBeDisabled();
+  });
+
+  it("confirm button is disabled when URL starts with javascript:", () => {
+    mockEditor.isActive.mockReturnValue(false);
+    mockEditor.getAttributes.mockReturnValue({});
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /insert or edit link/i }));
+    fireEvent.change(screen.getByPlaceholderText("https://example.com"), {
+      target: { value: "javascript:alert(1)" },
+    });
+    expect(screen.getByRole("button", { name: /insert link/i })).toBeDisabled();
+  });
+
+  it("confirm button is enabled when URL starts with https://", () => {
+    mockEditor.isActive.mockReturnValue(false);
+    mockEditor.getAttributes.mockReturnValue({});
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /insert or edit link/i }));
+    fireEvent.change(screen.getByPlaceholderText("https://example.com"), {
+      target: { value: "https://valid.com" },
+    });
+    expect(screen.getByRole("button", { name: /insert link/i })).not.toBeDisabled();
+  });
+
+  it("pre-populates URL and selects Dofollow when editing an existing dofollow link", () => {
+    mockEditor.isActive.mockImplementation((type: string) => type === "link");
+    mockEditor.getAttributes.mockReturnValue({ href: "https://y.com", rel: "noopener noreferrer" });
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /insert or edit link/i }));
+    const urlInput = screen.getByPlaceholderText("https://example.com") as HTMLInputElement;
+    expect(urlInput.value).toBe("https://y.com");
+    expect(screen.getByRole("button", { name: /^dofollow$/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /^nofollow$/i })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it.each([
+    ["mailto:user@example.com"],
+    ["/relative-path"],
+    ["#anchor"],
+  ])("confirm button is enabled for valid prefix: %s", (url) => {
+    mockEditor.isActive.mockReturnValue(false);
+    mockEditor.getAttributes.mockReturnValue({});
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /insert or edit link/i }));
+    fireEvent.change(screen.getByPlaceholderText("https://example.com"), { target: { value: url } });
+    expect(screen.getByRole("button", { name: /insert link/i })).not.toBeDisabled();
+  });
+
+  it("pressing Enter with a valid URL submits the link", () => {
+    mockEditor.isActive.mockReturnValue(false);
+    mockEditor.getAttributes.mockReturnValue({});
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /insert or edit link/i }));
+    const urlInput = screen.getByPlaceholderText("https://example.com");
+    fireEvent.change(urlInput, { target: { value: "https://enter-test.com" } });
+    fireEvent.keyDown(urlInput, { key: "Enter" });
+    expect(mockChain.setLink).toHaveBeenCalledWith({
+      href: "https://enter-test.com",
+      rel: "nofollow noopener noreferrer",
+    });
+    expect(mockChain.run).toHaveBeenCalled();
   });
 });

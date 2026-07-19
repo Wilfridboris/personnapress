@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState, useEffect, useRef, useCallback } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, EditorContent, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import type { Config } from "dompurify";
@@ -33,6 +33,12 @@ export const _DOMPURIFY_CONFIG: Config = {
   FORBID_ATTR: ["target", "style", "srcset", "onerror", "onload", "onclick"],
 };
 
+const _SAFE_URL_PREFIXES = ["http://", "https://", "mailto:", "/", "#", "./", "../"];
+function isValidLinkUrl(url: string): boolean {
+  const t = url.trim();
+  return t.length > 0 && _SAFE_URL_PREFIXES.some((p) => t.startsWith(p));
+}
+
 // ── Image dialog state ────────────────────────────────────────────────────────
 
 type ImageDialogMode = "insert" | "replace" | "edit-alt";
@@ -55,6 +61,16 @@ const CLOSED_DIALOG: ImageDialogState = {
   isUploading: false,
 };
 
+// ── Link dialog state ─────────────────────────────────────────────────────────
+
+interface LinkDialogState {
+  open: boolean;
+  url: string;
+  nofollow: boolean;
+}
+
+const CLOSED_LINK_DIALOG: LinkDialogState = { open: false, url: "", nofollow: true };
+
 const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
   ({ initialHtml, campaignId, clientId, readOnly = false, hideSaveButton = false }, ref) => {
     const [isDirty, setIsDirty] = useState(false);
@@ -66,6 +82,8 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
     const fileInputModeRef = useRef<ImageDialogMode>("insert");
     const altInputRef = useRef<HTMLInputElement>(null);
     const confirmBtnRef = useRef<HTMLButtonElement>(null);
+    const linkUrlInputRef = useRef<HTMLInputElement>(null);
+    const [linkDialog, setLinkDialog] = useState<LinkDialogState>(CLOSED_LINK_DIALOG);
 
     useEffect(() => { setIsMounted(true); }, []);
 
@@ -129,6 +147,20 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
     useImperativeHandle(ref, () => ({
       getCurrentHtml: () => editor?.getHTML() ?? "",
     }));
+
+    const editorState = useEditorState({
+      editor,
+      selector: (ctx) => ({
+        isBold:       ctx.editor?.isActive("bold") ?? false,
+        isItalic:     ctx.editor?.isActive("italic") ?? false,
+        isLink:       ctx.editor?.isActive("link") ?? false,
+        isH2:         ctx.editor?.isActive("heading", { level: 2 }) ?? false,
+        isH3:         ctx.editor?.isActive("heading", { level: 3 }) ?? false,
+        isBlockquote: ctx.editor?.isActive("blockquote") ?? false,
+        isImage:      ctx.editor?.isActive("image") ?? false,
+        canUndo:      ctx.editor?.can().undo() ?? false,
+      }),
+    });
 
     // ── Image dialog helpers ───────────────────────────────────────────────────
 
@@ -206,6 +238,32 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
       fileInputRef.current?.click();
     }, []);
 
+    // ── Link dialog helpers ───────────────────────────────────────────────────
+
+    const openLinkDialog = useCallback(() => {
+      if (!editor) return;
+      const attrs = editor.getAttributes("link");
+      const currentRel = (attrs.rel as string | undefined) ?? "";
+      setLinkDialog({
+        open: true,
+        url: (attrs.href as string | undefined) ?? "",
+        nofollow: !currentRel || currentRel.includes("nofollow"),
+      });
+    }, [editor]);
+
+    const closeLinkDialog = useCallback(() => {
+      setLinkDialog(CLOSED_LINK_DIALOG);
+    }, []);
+
+    const handleLinkConfirm = useCallback(() => {
+      if (!editor || !isValidLinkUrl(linkDialog.url)) return;
+      editor.chain().focus().setLink({
+        href: linkDialog.url.trim(),
+        rel: linkDialog.nofollow ? "nofollow noopener noreferrer" : "noopener noreferrer",
+      }).run();
+      closeLinkDialog();
+    }, [editor, linkDialog, closeLinkDialog]);
+
     // ── Save ──────────────────────────────────────────────────────────────────
 
     async function handleSave() {
@@ -226,7 +284,7 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
       }
     }
 
-    const isImageActive = editor?.isActive("image") ?? false;
+    const isImageActive = editorState?.isImage ?? false;
 
     return (
       <div>
@@ -253,7 +311,7 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
               onClick={() => editor.chain().focus().toggleBold().run()}
               className={cn(
                 "p-1.5 text-sm font-mono hover:bg-border transition-colors focus-visible:ring-2 focus-visible:ring-ink",
-                editor.isActive("bold") && "bg-highlighter",
+                editorState?.isBold && "bg-highlighter",
               )}
             >
               <Bold size={16} aria-hidden="true" />
@@ -264,25 +322,18 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
               onClick={() => editor.chain().focus().toggleItalic().run()}
               className={cn(
                 "p-1.5 text-sm font-mono hover:bg-border transition-colors focus-visible:ring-2 focus-visible:ring-ink",
-                editor.isActive("italic") && "bg-highlighter",
+                editorState?.isItalic && "bg-highlighter",
               )}
             >
               <Italic size={16} aria-hidden="true" />
             </button>
             <button
               type="button"
-              aria-label="Set link"
-              onClick={() => {
-                const url = window.prompt("URL:");
-                if (url) {
-                  editor.chain().focus().setLink({ href: url }).run();
-                } else {
-                  editor.chain().focus().unsetLink().run();
-                }
-              }}
+              aria-label="Insert or edit link"
+              onClick={openLinkDialog}
               className={cn(
                 "p-1.5 text-sm font-mono hover:bg-border transition-colors focus-visible:ring-2 focus-visible:ring-ink",
-                editor.isActive("link") && "bg-highlighter",
+                editorState?.isLink && "bg-highlighter",
               )}
             >
               <Link2 size={16} aria-hidden="true" />
@@ -293,7 +344,7 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
               onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
               className={cn(
                 "p-1.5 text-sm font-mono hover:bg-border transition-colors focus-visible:ring-2 focus-visible:ring-ink",
-                editor.isActive("heading", { level: 2 }) && "bg-highlighter",
+                editorState?.isH2 && "bg-highlighter",
               )}
             >
               <Heading2 size={16} aria-hidden="true" />
@@ -306,7 +357,7 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
               }
               className={cn(
                 "p-1.5 text-sm font-mono hover:bg-border transition-colors focus-visible:ring-2 focus-visible:ring-ink",
-                editor.isActive("heading", { level: 3 }) && "bg-highlighter",
+                editorState?.isH3 && "bg-highlighter",
               )}
             >
               <span className="text-xs font-bold">H3</span>
@@ -317,7 +368,7 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
               onClick={() => editor.chain().focus().toggleBlockquote().run()}
               className={cn(
                 "p-1.5 text-sm font-mono hover:bg-border transition-colors focus-visible:ring-2 focus-visible:ring-ink",
-                editor.isActive("blockquote") && "bg-highlighter",
+                editorState?.isBlockquote && "bg-highlighter",
               )}
             >
               <Quote size={16} aria-hidden="true" />
@@ -326,7 +377,7 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
               type="button"
               aria-label="Undo"
               onClick={() => editor.chain().focus().undo().run()}
-              disabled={!editor.can().undo()}
+              disabled={!editorState?.canUndo}
               className="p-1.5 text-sm font-mono hover:bg-border transition-colors focus-visible:ring-2 focus-visible:ring-ink disabled:opacity-40"
             >
               <RotateCcw size={16} aria-hidden="true" />
@@ -471,6 +522,118 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
                 {dialog.isUploading && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
                 {dialog.mode === "edit-alt" ? "Update alt text" : dialog.mode === "replace" ? "Replace image" : "Insert image"}
               </button>
+            </div>
+          </div>
+        </Modal>
+
+        {/* Link insert / edit dialog */}
+        <Modal
+          isOpen={linkDialog.open}
+          onClose={closeLinkDialog}
+          title={editorState?.isLink ? "Edit link" : "Insert link"}
+          initialFocusRef={linkUrlInputRef}
+        >
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="link-url"
+                className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#555555]"
+              >
+                URL
+              </label>
+              <input
+                ref={linkUrlInputRef}
+                id="link-url"
+                type="url"
+                value={linkDialog.url}
+                onChange={(e) => setLinkDialog((d) => ({ ...d, url: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && isValidLinkUrl(e.currentTarget.value)) handleLinkConfirm();
+                }}
+                placeholder="https://example.com"
+                className="w-full text-sm text-[#111111] bg-transparent border-b border-[#E5E5E5] focus:border-[#111111] focus:outline-none py-1.5 transition-[border-color] duration-150 placeholder:text-[#BBBBBB]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#555555]">
+                Link type
+              </span>
+              <div className="flex border border-[#E5E5E5]" role="group" aria-label="Link type">
+                <button
+                  type="button"
+                  aria-pressed={linkDialog.nofollow}
+                  onClick={() => setLinkDialog((d) => ({ ...d, nofollow: true }))}
+                  className={cn(
+                    "flex-1 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2",
+                    linkDialog.nofollow
+                      ? "bg-[#111111] text-white"
+                      : "text-[#555555] hover:text-[#111111]",
+                  )}
+                >
+                  Nofollow
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={!linkDialog.nofollow}
+                  onClick={() => setLinkDialog((d) => ({ ...d, nofollow: false }))}
+                  className={cn(
+                    "flex-1 py-2 text-sm font-medium border-l border-[#E5E5E5] transition-colors focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2",
+                    !linkDialog.nofollow
+                      ? "bg-[#111111] text-white"
+                      : "text-[#555555] hover:text-[#111111]",
+                  )}
+                >
+                  Dofollow
+                </button>
+              </div>
+              <p className="text-[11px] text-[#999999]">
+                {linkDialog.nofollow
+                  ? "Does not pass SEO ranking authority to the linked page."
+                  : "Passes SEO ranking authority to the linked page."}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              {editorState?.isLink && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    editor!.chain().focus().unsetLink().run();
+                    closeLinkDialog();
+                  }}
+                  className="px-3 py-2 text-sm font-medium text-[#555555] hover:text-[#111111] transition-colors focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 min-h-[44px]"
+                >
+                  Remove link
+                </button>
+              )}
+              <div
+                className={cn(
+                  "flex items-center gap-3",
+                  !editorState?.isLink && "ml-auto",
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={closeLinkDialog}
+                  className="px-4 py-2 text-sm font-medium text-[#555555] hover:text-[#111111] transition-colors focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 min-h-[44px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLinkConfirm}
+                  disabled={!isValidLinkUrl(linkDialog.url)}
+                  className={cn(
+                    "inline-flex items-center gap-2 px-4 py-2 bg-[#111111] text-white text-sm font-medium",
+                    "shadow-[4px_4px_0px_0px_#111111] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all",
+                    "focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2",
+                    "disabled:opacity-40 disabled:shadow-none disabled:cursor-not-allowed min-h-[44px]",
+                  )}
+                >
+                  {editorState?.isLink ? "Update link" : "Insert link"}
+                </button>
+              </div>
             </div>
           </div>
         </Modal>

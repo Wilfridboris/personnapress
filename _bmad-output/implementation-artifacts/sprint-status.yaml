@@ -1,5 +1,5 @@
 # generated: 2026-06-14
-# last_updated: 2026-07-17  # 16-4-voice-driven-blog-generation-update code review complete: 6 patches applied (None guard for pronoun/specificity, closing_pattern rule in blog prompt, empty-first-sentence guard in meta note, 3 new tests for list/header/fidelity branches), marked done
+# last_updated: 2026-07-18  # 4-5-blog-editor-link-rel-control code review complete: 6 patches applied (editorState?.isLink in modal JSX ×4, onKeyDown e.currentTarget.value, dofollow pre-populate test, nofollow-default test, mailto/slash/hash URL prefix tests, Enter-key submit test), marked done
 # project: PersonnaPress
 # project_key: NOKEY
 # tracking_system: file-system
@@ -77,6 +77,7 @@ development_status:
   4-2-blog-post-wysiwyg-editing: done
   4-3-social-post-editing-with-character-counters: done
   4-4-approve-reject-campaign: done
+  4-5-blog-editor-link-rel-control: done
   epic-4-retrospective: optional
 
   # Epic 5: Platform Connections & Publishing

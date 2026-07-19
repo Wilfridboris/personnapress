@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of 4-5-blog-editor-link-rel-control (2026-07-18)
+
+- `can().undo()` in `useEditorState` selector creates a temporary transaction on every editor state update — minor performance concern; pre-existing Tiptap pattern, acceptable for this editor size. [frontend/components/campaigns/BlogEditor.tsx:161]
+- `handleLinkConfirm` useCallback recreated on every URL keystroke because `linkDialog` is in its dependency array — non-issue since the callback is not passed to memoized children. [frontend/components/campaigns/BlogEditor.tsx:~264]
+
 ## Deferred from: code review of 15-2-excerpt-meta-description-content-quality (2026-07-17)
 
 - AC 1.2 — Meta prompt `<!-- meta: ... -->` instruction missing concrete CTA examples ("Learn how to…", "Discover why…") — pre-existing, meta line was not modified by this story; consider adding in a future prompt quality pass. [backend/app/integrations/gemini.py:106]
