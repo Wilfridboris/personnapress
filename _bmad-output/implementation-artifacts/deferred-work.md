@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 8-9-pricing-tier-revision (2026-07-20)
+
+- Race condition: `current + 1` read-modify-write in `check_campaign_limit` campaign counter — pre-existing pattern used identically in `check_image_limit` and the non-agency path of `check_campaign_limit`; atomic SQL increment would be the proper fix. [backend/app/services/subscription_service.py:153]
+- Starter client reduction 3→2 may affect existing starter users already at 3 clients — acknowledged in spec as intentional correction of landing page/code mismatch (page already said "2 clients"); existing users are not ejected, just blocked from adding more. [backend/app/core/constants.py:4]
+- `UNLIMITED = 999_999` sentinel is a leaky abstraction — proper fix is `Optional[int]` in `PlanLimits` schema with `is_unlimited` flag in API response; out of scope for this pricing-change story. [backend/app/core/constants.py:1]
+
 ## Deferred from: code review of 4-5-blog-editor-link-rel-control (2026-07-18)
 
 - `can().undo()` in `useEditorState` selector creates a temporary transaction on every editor state update — minor performance concern; pre-existing Tiptap pattern, acceptable for this editor size. [frontend/components/campaigns/BlogEditor.tsx:161]

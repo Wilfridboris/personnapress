@@ -10,6 +10,9 @@ export const metadata: Metadata = {
   title: "Account | PersonnaPress",
 };
 
+const UNLIMITED_SENTINEL = 999_999;
+const fmtLimit = (n: number) => (n >= UNLIMITED_SENTINEL ? "Unlimited" : String(n));
+
 export default async function AccountPage() {
   const cookieStore = await cookies();
   const session = cookieStore.get("session")?.value;
@@ -68,13 +71,13 @@ export default async function AccountPage() {
         </p>
         <div className="space-y-1">
           <p className="font-body text-sm text-graphite">
-            Campaigns: {subscription.campaigns_used} / {subscription.plan_limits.campaigns}
+            Campaigns: {subscription.campaigns_used} / {fmtLimit(subscription.plan_limits.campaigns)}
           </p>
           <p className="font-body text-sm text-graphite">
-            Clients: {subscription.clients_count} / {subscription.plan_limits.clients}
+            Clients: {subscription.clients_count} / {fmtLimit(subscription.plan_limits.clients)}
           </p>
           <p className="font-body text-sm text-graphite">
-            Image generations: {subscription.image_gen_used} / {subscription.plan_limits.image_gens}
+            Image generations: {subscription.image_gen_used} / {fmtLimit(subscription.plan_limits.image_gens)}
           </p>
         </div>
         <p className="font-body text-sm text-graphite mt-3">

@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlmodel import select
 
 from app.core.config import settings
-from app.core.constants import PLAN_LIMITS, get_stripe_price_to_tier
+from app.core.constants import PLAN_LIMITS, UNLIMITED, get_stripe_price_to_tier
 from app.db.repositories.models import Campaign, Client, GenerationLog, Subscription, User
 from app.schemas.subscription import PlanLimits, SubscriptionResponse
 
@@ -146,6 +146,13 @@ async def check_campaign_limit(db: AsyncSession, user_id: uuid.UUID) -> None:
             .where(Client.user_id == user_id)
         )
         current = count_result.scalar() or 0
+
+    if limit >= UNLIMITED:
+        # Agency: no campaign cap; still increment counter so account screen stays accurate
+        if sub:
+            sub.campaigns_used = current + 1
+            await db.flush()
+        return
 
     if current >= limit:
         next_tier_map = {"starter": "growth", "growth": "agency"}

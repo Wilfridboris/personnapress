@@ -1,7 +1,9 @@
+UNLIMITED = 999_999
+
 PLAN_LIMITS: dict[str, dict[str, int]] = {
-    "starter": {"clients": 3, "campaigns": 10, "image_gens": 10},
+    "starter": {"clients": 2, "campaigns": 10, "image_gens": 10},
     "growth":  {"clients": 5, "campaigns": 30, "image_gens": 30},
-    "agency":  {"clients": 15, "campaigns": 100, "image_gens": 100},
+    "agency":  {"clients": 20, "campaigns": UNLIMITED, "image_gens": 100},
 }
 
 

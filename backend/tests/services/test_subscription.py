@@ -6,8 +6,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
+from app.core.constants import PLAN_LIMITS, UNLIMITED
 from app.services.subscription_service import (
     check_and_expire_trial,
+    check_campaign_limit,
     check_trial_not_expired,
     handle_stripe_webhook,
 )
@@ -203,3 +205,51 @@ async def test_handle_subscription_updated_clears_deletion_scheduled_at():
     assert sub.status == "active"
     assert sub.deletion_scheduled_at is None
     db.commit.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# PLAN_LIMITS constants (Story 8-9: pricing tier revision)
+# ---------------------------------------------------------------------------
+
+def test_plan_limits_starter_clients_is_2():
+    assert PLAN_LIMITS["starter"]["clients"] == 2
+
+
+def test_plan_limits_agency_clients_is_20():
+    assert PLAN_LIMITS["agency"]["clients"] == 20
+
+
+def test_plan_limits_agency_unlimited_sentinel():
+    assert PLAN_LIMITS["agency"]["campaigns"] >= UNLIMITED
+
+
+# ---------------------------------------------------------------------------
+# check_campaign_limit — Agency bypass (Story 8-9)
+# ---------------------------------------------------------------------------
+
+def _make_agency_sub(campaigns_used: int):
+    sub = MagicMock()
+    sub.status = "active"
+    sub.plan_tier = "agency"
+    sub.campaigns_used = campaigns_used
+    return sub
+
+
+def _db_with_for_update_sub(sub):
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalars.return_value.first.return_value = sub
+    db.execute = AsyncMock(return_value=result)
+    return db
+
+
+async def test_check_campaign_limit_agency_bypasses_limit():
+    """Agency plan must never raise even when campaigns_used is at the sentinel."""
+    sub = _make_agency_sub(campaigns_used=999_999)
+    db = _db_with_for_update_sub(sub)
+
+    # Must not raise HTTPException
+    await check_campaign_limit(db, uuid.uuid4())
+
+    assert sub.campaigns_used == 1_000_000
+    db.flush.assert_awaited_once()
