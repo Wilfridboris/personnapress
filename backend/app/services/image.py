@@ -1,7 +1,7 @@
 """Image generation service.
 
-Orchestrates featured image generation via Replicate's FLUX.1 [pro] model
-and stores results in Supabase Storage.
+Orchestrates featured image generation via a configurable image provider
+(Replicate or Gemini) and stores results in Supabase Storage.
 
 Called ONLY from workers/generate.py and the regenerate endpoint (AR-19).
 """
@@ -17,15 +17,40 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.core.config import settings
 from app.db.repositories import generation_logs as generation_logs_repo
 from app.db.repositories.models import Campaign, Client, Job
-from app.integrations import replicate as replicate_integration
 from app.integrations import supabase_storage
 from app.services import subscription_service
+
+if settings.IMAGE_PROVIDER == "gemini":
+    from app.integrations import gemini_image as _img
+else:
+    from app.integrations import replicate as _img  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
 _IMAGE_REGEN_LIMIT = 3
+
+
+def _slugify(text: str) -> str:
+    """Convert blog title to SEO-friendly filename slug."""
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = text.replace("_", "-")
+    text = re.sub(r"[-\s]+", "-", text)
+    text = text.strip("-")
+    return text[:60] or "featured"
+
+
+def _build_image_alt(blog_title: str) -> str:
+    """Generate SEO-compliant alt text from blog title.
+
+    Format: "{title} – featured article image"
+    Capped at 125 chars (screen reader truncation threshold).
+    """
+    alt = f"{blog_title} – featured article image"
+    return alt[:125]
 
 
 def _build_image_prompt(blog_title: str, brand_voice_profile: dict | None) -> str:
@@ -46,23 +71,23 @@ def _build_image_prompt(blog_title: str, brand_voice_profile: dict | None) -> st
             tone_sentence = f" The image has a {combined}."
 
     return (
-        f"A professional editorial photograph for a blog post titled '{blog_title}'."
+        f"A professional editorial image for the article titled '{blog_title}'."
         f"{tone_sentence}"
         " The composition is clean, with no text overlays, watermarks, or logos."
         " Sharp focus, natural lighting, suitable as a 16:9 hero banner."
     )
 
 
-async def _replicate_with_retry(prompt: str, max_retries: int = 3) -> str:
-    """Call Replicate with exponential backoff (8s, 16s between attempts). Returns image URL."""
+async def _generate_with_retry(prompt: str, max_retries: int = 3) -> str | bytes:
+    """Call image provider with exponential backoff (8s, 16s between attempts)."""
     last_exc: Exception | None = None
     for attempt in range(max_retries):
         try:
-            return await replicate_integration.generate_image(prompt)
+            return await _img.generate_image(prompt)
         except Exception as exc:
             last_exc = exc
             logger.warning(
-                "_replicate_with_retry: attempt %d/%d failed: %s",
+                "_generate_with_retry: attempt %d/%d failed: %s",
                 attempt + 1,
                 max_retries,
                 exc,
@@ -70,6 +95,13 @@ async def _replicate_with_retry(prompt: str, max_retries: int = 3) -> str:
             if attempt < max_retries - 1:
                 await asyncio.sleep(8 * (2 ** attempt))  # 8s, 16s
     raise last_exc  # type: ignore[misc]
+
+
+async def _upload_generated_image(result: str | bytes, storage_path: str) -> str:
+    """Upload the image result (URL or bytes) to Supabase Storage."""
+    if isinstance(result, bytes):
+        return await supabase_storage.upload_image_bytes(result, storage_path)
+    return await supabase_storage.upload_image_from_url(result, storage_path)
 
 
 async def run_image_generation(
@@ -80,9 +112,9 @@ async def run_image_generation(
     Steps:
       1. Subscription quota check.
       2. Build image prompt from blog H1 + brand tone.
-      3. Call Replicate with retry.
-      4. Download + re-upload to Supabase Storage.
-      5. Update campaign.image_url, job.status=complete, generation_log.
+      3. Call image provider with retry.
+      4. Upload to Supabase Storage with SEO filename.
+      5. Update campaign.image_url, campaign.image_alt, job.status=complete, generation_log.
 
     On image failure: job is set to complete (text content is done);
     error_details notes the image failure so the campaign can proceed.
@@ -137,12 +169,16 @@ async def run_image_generation(
     blog_title = re.sub(r"<[^>]+>", "", blog_title_raw).strip() or "Untitled"
     prompt = _build_image_prompt(blog_title, brand_voice_profile)
 
-    # ── Step 4: Call Replicate ────────────────────────────────────────────────
+    image_alt = _build_image_alt(blog_title)
+    title_slug = _slugify(blog_title)
+    storage_path = f"generated-images/{campaign_id}/{title_slug}.png"
+
+    # ── Step 4: Call image provider ───────────────────────────────────────────
     try:
-        replicate_url = await _replicate_with_retry(prompt)
+        provider_result = await _generate_with_retry(prompt)
     except Exception as exc:
         logger.exception(
-            "run_image_generation: Replicate failed after retries for campaign %s: %s",
+            "run_image_generation: provider failed after retries for campaign %s: %s",
             campaign_id,
             exc,
         )
@@ -153,10 +189,9 @@ async def run_image_generation(
         await db.commit()
         return
 
-    # ── Step 5: Download + re-upload to Supabase Storage ─────────────────────
-    storage_path = f"generated-images/{campaign_id}/featured.png"
+    # ── Step 5: Upload to Supabase Storage ───────────────────────────────────
     try:
-        public_url = await supabase_storage.upload_image_from_url(replicate_url, storage_path)
+        public_url = await _upload_generated_image(provider_result, storage_path)
     except Exception as exc:
         logger.exception(
             "run_image_generation: Supabase upload failed for campaign %s: %s",
@@ -172,6 +207,7 @@ async def run_image_generation(
 
     # ── Step 6: Update campaign + job + generation_log ───────────────────────
     campaign.image_url = public_url
+    campaign.image_alt = image_alt
     job.status = "complete"
     job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
@@ -192,11 +228,11 @@ async def run_image_generation(
 
 async def regenerate_image(
     campaign_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
-) -> tuple[str, int]:
+) -> tuple[str, str, int]:
     """Regenerate the featured image for a campaign.
 
     Returns:
-        (new_image_url, updated_image_regen_count)
+        (new_image_url, image_alt, updated_image_regen_count)
 
     Raises:
         HTTPException 400 IMAGE_REGEN_LIMIT_REACHED if at limit.
@@ -238,18 +274,20 @@ async def regenerate_image(
     blog_title = re.sub(r"<[^>]+>", "", blog_title_raw).strip() or "Untitled"
     prompt = _build_image_prompt(blog_title, brand_voice_profile)
 
-    # Call Replicate
-    replicate_url = await _replicate_with_retry(prompt)
-
-    # Upload to a version-specific path so the public URL changes with every
-    # regeneration, busting the browser/CDN cache that would otherwise serve
-    # the previous image (same URL → cached bytes, even after file overwrite).
+    image_alt = _build_image_alt(blog_title)
+    title_slug = _slugify(blog_title)
     new_regen_count = campaign.image_regen_count + 1
-    storage_path = f"generated-images/{campaign_id}/featured_{new_regen_count}.png"
-    public_url = await supabase_storage.upload_image_from_url(replicate_url, storage_path)
+    storage_path = f"generated-images/{campaign_id}/{title_slug}-{new_regen_count}.png"
+
+    # Call provider
+    provider_result = await _generate_with_retry(prompt)
+
+    # Upload
+    public_url = await _upload_generated_image(provider_result, storage_path)
 
     # Update campaign
     campaign.image_url = public_url
+    campaign.image_alt = image_alt
     campaign.image_regen_count += 1
     await db.commit()
 
@@ -261,4 +299,4 @@ async def regenerate_image(
     )
     await db.commit()
 
-    return public_url, campaign.image_regen_count
+    return public_url, image_alt, campaign.image_regen_count

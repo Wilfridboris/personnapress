@@ -55,6 +55,7 @@ def _sanitize_blog_html(html: str) -> str:
 
 class ImageRegenerateResponse(BaseModel):
     image_url: str
+    image_alt: str
     image_regen_count: int
 
 
@@ -276,8 +277,8 @@ async def regenerate_campaign_image(
 
     await check_trial_not_expired(user_id, db, "generate content")
 
-    new_url, regen_count = await image_service.regenerate_image(campaign_id, user_id, db)
-    return ImageRegenerateResponse(image_url=new_url, image_regen_count=regen_count)
+    new_url, image_alt, regen_count = await image_service.regenerate_image(campaign_id, user_id, db)
+    return ImageRegenerateResponse(image_url=new_url, image_alt=image_alt, image_regen_count=regen_count)
 
 
 _INVALID_TRANSITION = {"error": {"code": "INVALID_STATUS_TRANSITION", "message": "Campaign can only be approved from pending_approval status.", "detail": {}}}

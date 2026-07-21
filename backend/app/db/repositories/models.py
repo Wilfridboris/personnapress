@@ -112,6 +112,7 @@ class Campaign(SQLModel, table=True):
     x_post: Optional[str] = None
     linkedin_post: Optional[str] = None
     image_url: Optional[str] = None
+    image_alt: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     status: str = Field(
         default=CampaignStatus.pending_approval,
         sa_column=Column(

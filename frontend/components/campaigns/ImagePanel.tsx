@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 interface ImagePanelProps {
   campaignId: string;
   imageUrl: string | null;
+  imageAlt?: string;
   imageRegenCount: number;
   jobErrorDetails: string | null;
   isGenerating?: boolean;
@@ -17,11 +18,13 @@ interface ImagePanelProps {
 export function ImagePanel({
   campaignId,
   imageUrl,
+  imageAlt,
   imageRegenCount,
   jobErrorDetails,
   isGenerating = false,
 }: ImagePanelProps) {
   const [currentImageUrl, setCurrentImageUrl] = useState(imageUrl);
+  const [currentImageAlt, setCurrentImageAlt] = useState(imageAlt);
   const [currentRegenCount, setCurrentRegenCount] = useState(imageRegenCount);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +43,7 @@ export function ImagePanel({
     try {
       const result = await campaignsApi.regenerateImage(campaignId);
       setCurrentImageUrl(result.image_url);
+      setCurrentImageAlt(result.image_alt);
       setCurrentRegenCount(result.image_regen_count);
     } catch (err) {
       const message =
@@ -120,7 +124,7 @@ export function ImagePanel({
         <div className="relative w-full" style={{ aspectRatio: "1200/630" }}>
           <Image
             src={currentImageUrl}
-            alt="Featured image"
+            alt={currentImageAlt ?? "Featured article image"}
             fill
             className="object-cover"
             sizes="(max-width: 768px) 100vw, 40vw"

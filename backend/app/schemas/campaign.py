@@ -56,6 +56,7 @@ class CampaignResponse(BaseModel):
     x_post: Optional[str]
     linkedin_post: Optional[str]
     image_url: Optional[str]
+    image_alt: Optional[str] = None
     status: str
     voice_score: Optional[dict]
     rejection_reason: Optional[str]

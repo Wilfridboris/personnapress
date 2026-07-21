@@ -44,6 +44,7 @@ function makeCampaign(overrides: Partial<Campaign> = {}): Campaign {
     x_post: "x post",
     linkedin_post: "linkedin post",
     image_url: null,
+    image_alt: null,
     status: "failed",
     voice_score: null,
     rejection_reason: null,

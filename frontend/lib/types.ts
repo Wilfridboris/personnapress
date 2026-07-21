@@ -131,6 +131,7 @@ export interface Campaign {
   x_post: string | null;
   linkedin_post: string | null;
   image_url: string | null;
+  image_alt: string | null;
   status: CampaignStatus;
   voice_score: VoiceScore | null;
   rejection_reason: string | null;

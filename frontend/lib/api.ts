@@ -139,7 +139,7 @@ export const campaignsApi = {
       ...(platforms !== undefined ? { body: JSON.stringify({ platforms }) } : {}),
     }),
   regenerateImage: (id: string) =>
-    apiFetch<{ image_url: string; image_regen_count: number }>(
+    apiFetch<{ image_url: string; image_alt: string; image_regen_count: number }>(
       `/campaigns/${id}/image/regenerate`,
       { method: "POST" }
     ),

@@ -167,6 +167,26 @@ async def upload_image_from_url(replicate_url: str, storage_path: str) -> str:
     return public_object_url(bucket, object_path)
 
 
+async def upload_image_bytes(image_bytes: bytes, storage_path: str) -> str:
+    """Upload raw image bytes to Supabase Storage. Returns public CDN URL.
+
+    Used by the Gemini image provider path (which returns bytes, not a URL).
+    """
+    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
+        raise RuntimeError(
+            "Supabase storage not configured — cannot upload image bytes directly"
+        )
+
+    bucket = "generated-images"
+    prefix = f"{bucket}/"
+    if not storage_path.startswith(prefix):
+        raise ValueError(f"storage_path must start with '{prefix}', got: {storage_path!r}")
+    object_path = storage_path[len(prefix):]
+
+    await upload_file(bucket, object_path, image_bytes)
+    return public_object_url(bucket, object_path)
+
+
 async def delete_file(bucket: str, path: str) -> None:
     """Delete a file from Supabase Storage."""
     url = _storage_url(f"/object/{bucket}/{path}")

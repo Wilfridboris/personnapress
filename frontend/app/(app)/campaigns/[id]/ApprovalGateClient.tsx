@@ -116,6 +116,7 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
           <ImagePanel
             campaignId={campaign.id}
             imageUrl={campaign.image_url}
+            imageAlt={campaign.image_alt ?? undefined}
             imageRegenCount={campaign.image_regen_count}
             jobErrorDetails={jobErrorDetails ?? null}
             isGenerating={jobIsActive}

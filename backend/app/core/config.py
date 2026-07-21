@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
     REPLICATE_API_TOKEN: str = ""
+    IMAGE_PROVIDER: str = "replicate"  # "replicate" | "gemini"
+    IMAGE_MODEL: str = "google/nano-banana-pro"
 
     SENTRY_DSN: str = ""
     RESEND_API_KEY: str = ""
