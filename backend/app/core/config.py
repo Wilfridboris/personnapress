@@ -32,6 +32,9 @@ class Settings(BaseSettings):
 
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.5-flash"
+    LLM_PROVIDER: str = "anthropic"    # "anthropic" | "gemini"
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
     REPLICATE_API_TOKEN: str = ""
 
     SENTRY_DSN: str = ""

@@ -24,6 +24,7 @@ httpx==0.28.1
 
 # LLM
 google-genai
+anthropic
 
 # Image generation
 replicate==1.0.7

@@ -17,9 +17,14 @@ import sentry_sdk
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.core.config import settings
 from app.db.repositories import generation_logs as generation_logs_repo
 from app.db.repositories.models import Campaign, Client, Job
-from app.integrations import gemini
+
+if settings.LLM_PROVIDER == "anthropic":
+    from app.integrations import anthropic_client as _llm
+else:
+    from app.integrations import gemini as _llm  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +51,21 @@ except ImportError:
     def _is_transient_genai_error(exc: Exception) -> bool:  # type: ignore[misc]
         return False
 
+try:
+    import anthropic as _anthropic_mod
+    _RETRY_TRANSIENT_EXCEPTIONS_ANTHROPIC: tuple[type[Exception], ...] = (
+        _anthropic_mod.RateLimitError,       # 429
+        _anthropic_mod.InternalServerError,  # 500
+        _anthropic_mod.OverloadedError,      # 529
+    )
+except ImportError:
+    _RETRY_TRANSIENT_EXCEPTIONS_ANTHROPIC = ()
 
-async def _gemini_with_retry(fn, *args, max_retries: int = 4, **kwargs):
-    """Call an async Gemini function with exponential backoff on transient errors.
 
-    Catches ServiceUnavailable (5xx) and ResourceExhausted (429).
+async def _llm_with_retry(fn, *args, max_retries: int = 4, **kwargs):
+    """Call an async LLM function with exponential backoff on transient errors.
+
+    Catches Gemini ServiceUnavailable/ResourceExhausted and Anthropic RateLimitError/InternalServerError.
     4 total attempts with 1s, 2s, 4s between them.
     Re-raises on max_retries exhaustion.
     """
@@ -62,10 +77,11 @@ async def _gemini_with_retry(fn, *args, max_retries: int = 4, **kwargs):
             if (
                 (_RETRY_TRANSIENT_EXCEPTIONS and isinstance(exc, _RETRY_TRANSIENT_EXCEPTIONS))
                 or _is_transient_genai_error(exc)
+                or (_RETRY_TRANSIENT_EXCEPTIONS_ANTHROPIC and isinstance(exc, _RETRY_TRANSIENT_EXCEPTIONS_ANTHROPIC))
             ):
                 last_exc = exc
                 logger.warning(
-                    "_gemini_with_retry: transient error on attempt %d/%d: %s",
+                    "_llm_with_retry: transient error on attempt %d/%d: %s",
                     attempt + 1,
                     max_retries,
                     exc,
@@ -82,7 +98,7 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
 
     Steps:
       1. Load job + campaign + client (BVP); mark job in_progress.
-      2. Generate blog HTML via Gemini (512t, 3-retry).
+      2. Generate blog HTML via LLM provider (512t, 3-retry).
       3. Run voice fidelity check (256t).
       4. Generate social posts (0t).
       5. Commit all campaign text fields in a single write.
@@ -133,8 +149,8 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
         logger.info(
             "run_generation_pipeline: generating blog for campaign %s", campaign.id
         )
-        blog_html: str = await _gemini_with_retry(
-            gemini.generate_blog,
+        blog_html: str = await _llm_with_retry(
+            _llm.generate_blog,
             campaign.brain_dump,
             brand_voice_profile,
             _BLOG_THINKING_TOKENS,
@@ -151,8 +167,8 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
         blog_title_raw = h1_match.group(1).strip() if h1_match else "Untitled"
         blog_title = re.sub(r"<[^>]+>", "", blog_title_raw).strip() or "Untitled"
 
-        voice_score: dict = await _gemini_with_retry(
-            gemini.check_fidelity,
+        voice_score: dict = await _llm_with_retry(
+            _llm.check_fidelity,
             blog_html,
             brand_voice_profile,
             _FIDELITY_THINKING_TOKENS,
@@ -164,8 +180,8 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
             "run_generation_pipeline: generating social posts for campaign %s",
             campaign.id,
         )
-        social: dict = await _gemini_with_retry(
-            gemini.generate_social,
+        social: dict = await _llm_with_retry(
+            _llm.generate_social,
             campaign.brain_dump,
             blog_title,
             brand_voice_profile,

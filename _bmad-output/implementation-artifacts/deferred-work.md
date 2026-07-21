@@ -173,3 +173,9 @@
 - No mobile/responsive navigation in PublicHeader — pre-existing, inline header had the same issue; add hamburger menu below md breakpoint when mobile nav is prioritized
 - Logo intrinsic dimensions `width={128} height={128}` are square for a wide logo — pre-existing, spec-prescribed extraction; update to match actual logo aspect ratio when image assets are audited
 - `priority` on logo image in PublicHeader applies to all public pages — logo is above fold on all pages (sticky header) so acceptable; revisit if CWV regression observed on inner pages
+
+## Deferred from: code review of 3-12-anthropic-content-generation-provider (2026-07-20)
+
+- Unpinned `anthropic` in requirements.txt — pre-existing pattern (`google-genai` also unpinned); add version pin when stabilizing dependency tree. [backend/requirements.txt:27]
+- `_md_to_html` DOTALL flag can span multi-line bold across tag boundaries — pre-existing behaviour moved unchanged from gemini.py; assess if LLM output ever triggers this. [backend/app/integrations/generation_prompts.py:232]
+- `_strip_fences` no mid-output closing fence detection — pre-existing behaviour moved from gemini.py; only last-line ```` check implemented. [backend/app/integrations/generation_prompts.py:217]
