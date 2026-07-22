@@ -164,6 +164,11 @@ export const campaignsApi = {
       method: "POST",
       ...(scheduledAt !== undefined ? { body: JSON.stringify({ scheduled_at: scheduledAt }) } : {}),
     }),
+  patchImage: (id: string, body: { image_url?: string; image_alt?: string }) =>
+    apiFetch<{ image_url: string | null; image_alt: string | null }>(`/campaigns/${id}/image`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
 };
 
 export const dashboardApi = {

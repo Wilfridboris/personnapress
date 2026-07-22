@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
-import { campaignsApi, APIError } from "@/lib/api";
+import { campaignsApi, imagesApi, APIError } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
+import { useUIStore } from "@/lib/stores/useUIStore";
 
 interface ImagePanelProps {
   campaignId: string;
+  clientId: string;
   imageUrl: string | null;
   imageAlt?: string;
   imageRegenCount: number;
@@ -17,22 +19,35 @@ interface ImagePanelProps {
 
 export function ImagePanel({
   campaignId,
+  clientId,
   imageUrl,
   imageAlt,
   imageRegenCount,
   jobErrorDetails,
   isGenerating = false,
 }: ImagePanelProps) {
+  const addToast = useUIStore((s) => s.addToast);
   const [currentImageUrl, setCurrentImageUrl] = useState(imageUrl);
   const [currentImageAlt, setCurrentImageAlt] = useState(imageAlt);
   const [currentRegenCount, setCurrentRegenCount] = useState(imageRegenCount);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSavingAlt, setIsSavingAlt] = useState(false);
+  const [altText, setAltText] = useState(imageAlt ?? "");
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastSavedAlt = useRef(imageAlt ?? "");
 
   // Sync state when image arrives post-generation (null → value transition only)
   useEffect(() => {
     if (imageUrl && !currentImageUrl) setCurrentImageUrl(imageUrl);
   }, [imageUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync alt text when prop changes externally (e.g. parent re-fetches campaign)
+  useEffect(() => {
+    setAltText(imageAlt ?? "");
+    lastSavedAlt.current = imageAlt ?? "";
+  }, [imageAlt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const remainingRegens = Math.max(0, 3 - currentRegenCount);
   const isAtLimit = currentRegenCount >= 3;
@@ -44,6 +59,8 @@ export function ImagePanel({
       const result = await campaignsApi.regenerateImage(campaignId);
       setCurrentImageUrl(result.image_url);
       setCurrentImageAlt(result.image_alt);
+      setAltText(result.image_alt ?? "");
+      lastSavedAlt.current = result.image_alt ?? "";
       setCurrentRegenCount(result.image_regen_count);
     } catch (err) {
       const message =
@@ -51,6 +68,38 @@ export function ImagePanel({
       setError(message);
     } finally {
       setIsRegenerating(false);
+    }
+  }
+
+  async function handleSaveAlt() {
+    if (altText === lastSavedAlt.current || isSavingAlt) return;
+    setIsSavingAlt(true);
+    try {
+      await campaignsApi.patchImage(campaignId, { image_alt: altText });
+      lastSavedAlt.current = altText;
+      addToast("Alt text saved.", "success");
+    } catch (err) {
+      addToast(err instanceof APIError ? err.message : "Failed to save alt text.", "error");
+    } finally {
+      setIsSavingAlt(false);
+    }
+  }
+
+  async function handleReplaceImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setIsUploading(true);
+    setError(null);
+    try {
+      const { url } = await imagesApi.upload(clientId, file);
+      await campaignsApi.patchImage(campaignId, { image_url: url });
+      setCurrentImageUrl(url);
+      addToast("Featured image updated.", "success");
+    } catch (err) {
+      addToast(err instanceof APIError ? err.message : "Failed to replace image.", "error");
+    } finally {
+      setIsUploading(false);
     }
   }
 
@@ -75,8 +124,6 @@ export function ImagePanel({
   }
 
   // No image state — covers failed generation and no-context cases.
-  // The regenerate endpoint enforces the subscription limit and will surface a proper
-  // error message if the quota is genuinely exhausted.
   if (!currentImageUrl) {
     return (
       <div className="border border-border">
@@ -130,10 +177,59 @@ export function ImagePanel({
             sizes="(max-width: 768px) 100vw, 40vw"
           />
         </div>
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="sr-only"
+          aria-hidden="true"
+          tabIndex={-1}
+          onChange={handleReplaceImage}
+        />
+
+        {/* Alt text */}
+        <div className="space-y-1.5">
+          <label
+            htmlFor={`img-alt-${campaignId}`}
+            className="text-[11px] font-medium uppercase tracking-[0.06em] text-graphite"
+          >
+            Image alt text
+          </label>
+          <input
+            id={`img-alt-${campaignId}`}
+            type="text"
+            value={altText}
+            onChange={(e) => setAltText(e.target.value)}
+            onBlur={handleSaveAlt}
+            placeholder="Describe what the image shows…"
+            maxLength={500}
+            disabled={isSavingAlt}
+            className="w-full text-sm text-[#111111] bg-transparent border-b border-[#E5E5E5] focus:border-[#111111] focus:outline-none py-1.5 transition-[border-color] duration-150 placeholder:text-[#BBBBBB] disabled:opacity-50"
+          />
+        </div>
+
+        {/* Replace image */}
+        <Button
+          variant="secondary"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading || isAtLimit || isRegenerating}
+          aria-busy={isUploading}
+          className="w-full font-mono"
+        >
+          {isUploading ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          ) : (
+            "Replace image"
+          )}
+        </Button>
+
+        {/* Regen */}
         <Button
           variant="secondary"
           onClick={handleRegenerate}
-          disabled={isAtLimit || isRegenerating}
+          disabled={isAtLimit || isRegenerating || isUploading}
           aria-busy={isRegenerating}
           className="w-full font-mono"
         >

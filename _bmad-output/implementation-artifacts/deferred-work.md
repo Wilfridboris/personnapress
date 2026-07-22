@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 17-1-campaign-article-link-image-panel-nav-retention (2026-07-22)
+
+- Orphaned CDN file when `patchImage` PATCH fails after successful upload — pre-existing 2-step upload pattern; requires CDN cleanup/rollback infrastructure. [frontend/components/campaigns/ImagePanel.tsx:handleReplaceImage]
+- No rate-limiting on `PATCH /campaigns/{id}/image` — pre-existing, affects all endpoints. [backend/app/routers/campaigns.py:patch_campaign_image]
+- No client-side file size/MIME check before upload — pre-existing from story 12-5 upload pattern; server validates. [frontend/components/campaigns/ImagePanel.tsx:handleReplaceImage]
+- `db.refresh` on `AsyncMock` is a no-op in tests — pre-existing test infrastructure limitation. [backend/tests/test_campaigns_router.py]
+
 ## Deferred from: code review of 8-9-pricing-tier-revision (2026-07-20)
 
 - Race condition: `current + 1` read-modify-write in `check_campaign_limit` campaign counter — pre-existing pattern used identically in `check_image_limit` and the non-agency path of `check_campaign_limit`; atomic SQL increment would be the proper fix. [backend/app/services/subscription_service.py:153]

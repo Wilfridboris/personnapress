@@ -4,7 +4,7 @@ from typing import Optional
 import nh3
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -57,6 +57,25 @@ class ImageRegenerateResponse(BaseModel):
     image_url: str
     image_alt: str
     image_regen_count: int
+
+
+class CampaignImagePatchResponse(BaseModel):
+    image_url: Optional[str] = None
+    image_alt: Optional[str] = None
+
+
+class CampaignImagePatch(BaseModel):
+    image_url: Optional[str] = None
+    image_alt: Optional[str] = Field(None, max_length=500)
+
+    @field_validator("image_url")
+    @classmethod
+    def validate_image_url(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if not v.startswith(("https://", "http://")):
+            raise ValueError("image_url must be a valid HTTP or HTTPS URL")
+        return v
 
 
 class RevoiceResponse(BaseModel):
@@ -254,6 +273,42 @@ async def patch_campaign(
         await db.refresh(campaign)
 
     return CampaignResponse.model_validate(campaign)
+
+
+@router.patch("/{campaign_id}/image", response_model=CampaignImagePatchResponse)
+async def patch_campaign_image(
+    campaign_id: uuid.UUID,
+    body: CampaignImagePatch,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> CampaignImagePatchResponse:
+    """Update campaign image_url and/or image_alt — unrestricted by campaign status."""
+    try:
+        user_id = uuid.UUID(current_user["user_id"])
+    except (ValueError, KeyError):
+        raise HTTPException(status_code=401, detail=_INVALID_SESSION)
+
+    campaign = await get_campaign(db, campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+
+    client = await get_client(db, campaign.client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+
+    if body.image_url is None and body.image_alt is None:
+        return CampaignImagePatchResponse(image_url=campaign.image_url, image_alt=campaign.image_alt)
+
+    if body.image_url is not None:
+        campaign.image_url = body.image_url
+    if body.image_alt is not None:
+        campaign.image_alt = body.image_alt
+
+    db.add(campaign)
+    await db.commit()
+    await db.refresh(campaign)
+
+    return CampaignImagePatchResponse(image_url=campaign.image_url, image_alt=campaign.image_alt)
 
 
 @router.post("/{campaign_id}/image/regenerate", response_model=ImageRegenerateResponse)

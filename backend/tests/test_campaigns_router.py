@@ -1041,3 +1041,158 @@ def test_sanitize_blog_html_strips_srcset():
         assert src in result  # img itself is preserved; only srcset stripped
     finally:
         settings.SUPABASE_URL = original_url
+
+
+# ── PATCH /campaigns/{id}/image: happy path ───────────────────────────────────
+
+async def test_patch_campaign_image_updates_image_url_and_alt():
+    from app.routers.campaigns import patch_campaign_image, CampaignImagePatch
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.image_url = "https://example.com/old.png"
+    campaign.image_alt = "old alt"
+
+    db = AsyncMock()
+    body = CampaignImagePatch(image_url="https://example.com/new.png", image_alt="new alt")
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        result = await patch_campaign_image(
+            campaign_id=campaign.id,
+            body=body,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.image_url == "https://example.com/new.png"
+    assert result.image_alt == "new alt"
+    db.commit.assert_awaited_once()
+
+
+async def test_patch_campaign_image_updates_only_alt_when_url_absent():
+    from app.routers.campaigns import patch_campaign_image, CampaignImagePatch
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.image_url = "https://example.com/existing.png"
+    campaign.image_alt = "old"
+
+    db = AsyncMock()
+    body = CampaignImagePatch(image_alt="updated alt")
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        result = await patch_campaign_image(
+            campaign_id=campaign.id,
+            body=body,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.image_alt == "updated alt"
+    db.commit.assert_awaited_once()
+
+
+async def test_patch_campaign_image_works_regardless_of_status():
+    """Image patch is unrestricted by campaign status (unlike content patch)."""
+    from app.routers.campaigns import patch_campaign_image, CampaignImagePatch
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.status = "published"  # would block the normal PATCH endpoint
+    campaign.image_url = None
+    campaign.image_alt = None
+
+    db = AsyncMock()
+    body = CampaignImagePatch(image_url="https://example.com/img.png")
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        result = await patch_campaign_image(
+            campaign_id=campaign.id,
+            body=body,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.image_url == "https://example.com/img.png"
+    db.commit.assert_awaited_once()
+
+
+# ── PATCH /campaigns/{id}/image: wrong user → 404 ────────────────────────────
+
+async def test_patch_campaign_image_raises_404_for_non_owner():
+    from app.routers.campaigns import patch_campaign_image, CampaignImagePatch
+
+    owner_id = uuid.uuid4()
+    requester_id = uuid.uuid4()
+    client = _make_client(user_id=owner_id)
+    campaign = _make_campaign(client_id=client.id)
+
+    db = AsyncMock()
+    body = CampaignImagePatch(image_alt="hacked")
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await patch_campaign_image(
+                campaign_id=campaign.id,
+                body=body,
+                current_user={"user_id": str(requester_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail["error"]["code"] == "CAMPAIGN_NOT_FOUND"
+
+
+# ── PATCH /campaigns/{id}/image: campaign not found → 404 ────────────────────
+
+async def test_patch_campaign_image_raises_404_when_campaign_not_found():
+    from app.routers.campaigns import patch_campaign_image, CampaignImagePatch
+
+    user_id = uuid.uuid4()
+    db = AsyncMock()
+    body = CampaignImagePatch(image_alt="x")
+
+    with patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=None)):
+        with pytest.raises(HTTPException) as exc_info:
+            await patch_campaign_image(
+                campaign_id=uuid.uuid4(),
+                body=body,
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 404
+
+
+# ── PATCH /campaigns/{id}/image: unauthenticated → 401 ───────────────────────
+
+async def test_patch_campaign_image_raises_401_on_bad_session():
+    from app.routers.campaigns import patch_campaign_image, CampaignImagePatch
+
+    db = AsyncMock()
+    body = CampaignImagePatch(image_alt="x")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await patch_campaign_image(
+            campaign_id=uuid.uuid4(),
+            body=body,
+            current_user={},
+            db=db,
+        )
+
+    assert exc_info.value.status_code == 401

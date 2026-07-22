@@ -1,14 +1,17 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientStore } from "@/lib/stores/useClientStore";
 
+const SAFE_BASES = new Set(["/dashboard", "/articles", "/campaigns", "/calendar", "/connections"]);
+
 export function ClientSwitcher() {
   const router = useRouter();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -47,7 +50,8 @@ export function ClientSwitcher() {
   function selectClient(id: string) {
     setActiveClientId(id);
     setIsOpen(false);
-    router.push("/dashboard");
+    const base = "/" + (pathname.split("/")[1] ?? "dashboard");
+    router.push(SAFE_BASES.has(base) ? base : "/dashboard");
   }
 
   return (

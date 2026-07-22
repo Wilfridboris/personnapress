@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { BlogEditor } from "@/components/campaigns/BlogEditor";
 import { BlogHtmlRenderer } from "@/components/ui/BlogHtmlRenderer";
 import { ImagePanel } from "@/components/campaigns/ImagePanel";
@@ -10,6 +11,8 @@ import { useRouter } from "next/navigation";
 import { ApprovalPanel } from "./approval-panel";
 import { RetryPanel } from "@/components/publishing/RetryPanel";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { BookOpen, ArrowRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { Campaign, CampaignStatus } from "@/lib/types";
 import type { BlogEditorHandle } from "@/components/campaigns/BlogEditor";
 import type { SocialPostEditorsHandle } from "@/components/campaigns/SocialPostEditors";
@@ -83,6 +86,27 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
       {/* Content grid */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 pb-24">
         <section className="lg:col-span-3 space-y-6">
+          {campaign.article_id && (
+            <div className="flex items-center justify-between gap-3 border border-[#111111] bg-[#FFF1B8] px-4 py-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <BookOpen className="size-4 shrink-0 text-[#111111]" aria-hidden="true" />
+                <p className="font-mono text-xs text-[#111111] truncate">
+                  Live in headless blog. Content edits go here.
+                </p>
+              </div>
+              <Link
+                href={`/articles/${campaign.article_id}`}
+                className={cn(
+                  "shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#111111]",
+                  "bg-[#111111] text-white hover:bg-white hover:text-[#111111] transition-colors duration-150",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-1"
+                )}
+              >
+                Edit article
+                <ArrowRight className="size-3" aria-hidden="true" />
+              </Link>
+            </div>
+          )}
           <div className="border border-border">
             <div className="px-6 py-4 border-b border-border">
               <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
@@ -90,7 +114,7 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
               </h2>
             </div>
             {rawBlogHtml ? (
-              isPending ? (
+              (isPending && !campaign.article_id) ? (
                 <BlogEditor
                   ref={blogEditorRef}
                   initialHtml={rawBlogHtml}
@@ -115,6 +139,7 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
         <aside className="lg:col-span-2 space-y-8">
           <ImagePanel
             campaignId={campaign.id}
+            clientId={campaign.client_id}
             imageUrl={campaign.image_url}
             imageAlt={campaign.image_alt ?? undefined}
             imageRegenCount={campaign.image_regen_count}
