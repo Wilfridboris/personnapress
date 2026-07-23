@@ -13,6 +13,7 @@ import { Modal } from "@/components/ui/Modal";
 
 export interface BlogEditorHandle {
   getCurrentHtml: () => string;
+  isDirty: boolean;
 }
 
 interface BlogEditorProps {
@@ -146,6 +147,7 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
 
     useImperativeHandle(ref, () => ({
       getCurrentHtml: () => editor?.getHTML() ?? "",
+      isDirty,
     }));
 
     const editorState = useEditorState({

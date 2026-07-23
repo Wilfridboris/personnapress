@@ -34,6 +34,9 @@ def _extract_excerpt(html: str) -> str:
     tldr = soup.find("div", class_="tldr")
     if tldr:
         tldr.decompose()
+    for p in list(soup.find_all("p")):
+        if p.get_text(strip=True).lower().startswith("tl;dr:"):
+            p.decompose()
     first_p = soup.find("p")
     return first_p.get_text(separator=" ", strip=True)[:300] if first_p else ""
 

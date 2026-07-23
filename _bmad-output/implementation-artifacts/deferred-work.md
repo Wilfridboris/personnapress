@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of fix-excerpt-meta-generation-comments-stripped (2026-07-23)
+
+- TL;DR loop in `_extract_excerpt` fallback scans all `<p>` tags in the document rather than just the preamble — body paragraph starting "TL;DR:" would be incorrectly decomposed; fallback path only; Gemini-generated content never produces such a body paragraph in practice. [backend/app/services/articles.py:_extract_excerpt]
+- Excerpt `[:300]` truncation can split mid-word — pre-existing; replace with `textwrap.shorten` in a future quality pass. [backend/app/services/articles.py:_extract_excerpt]
+- Social editors (`socialEditorsRef`) have no dirty guard in `handleApprove` — every approval fires a social PATCH even when unchanged; pre-existing design, out of scope for this story. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx:handleApprove]
+- No TS unit tests for `isDirty` state transitions in `BlogEditor` or the conditional `blogHtml` path in `handleApprove` — pre-existing test gap; Python backend tests all pass. [frontend/components/campaigns/BlogEditor.tsx, frontend/app/(app)/campaigns/[id]/approval-panel.tsx]
+
 ## Deferred from: code review of 17-1-campaign-article-link-image-panel-nav-retention (2026-07-22)
 
 - Orphaned CDN file when `patchImage` PATCH fails after successful upload — pre-existing 2-step upload pattern; requires CDN cleanup/rollback infrastructure. [frontend/components/campaigns/ImagePanel.tsx:handleReplaceImage]

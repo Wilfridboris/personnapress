@@ -338,7 +338,8 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     setIsApproving(true);
     onOptimisticStatus?.("approved");
 
-    const blogHtml = blogEditorRef?.current?.getCurrentHtml();
+    const isDirtyBlog = blogEditorRef?.current?.isDirty ?? false;
+    const blogHtml = isDirtyBlog ? blogEditorRef?.current?.getCurrentHtml() : undefined;
     const socialValues = socialEditorsRef?.current?.getCurrentValues();
 
     let editsPatched = false;
