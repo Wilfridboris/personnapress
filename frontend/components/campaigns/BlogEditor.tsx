@@ -30,8 +30,8 @@ interface BlogEditorProps {
 // Allowed tags/attrs mirror the backend _ALLOWED_TAGS / _ALLOWED_ATTRS in articles.py and campaigns.py
 export const _DOMPURIFY_CONFIG: Config = {
   ALLOWED_TAGS: ["h1", "h2", "h3", "h4", "p", "ul", "ol", "li", "strong", "em", "a", "br", "blockquote", "code", "pre", "img", "figure", "figcaption"],
-  ALLOWED_ATTR: ["href", "title", "rel", "src", "alt", "width", "height"],
-  FORBID_ATTR: ["target", "style", "srcset", "onerror", "onload", "onclick"],
+  ALLOWED_ATTR: ["href", "title", "rel", "target", "src", "alt", "width", "height"],
+  FORBID_ATTR: ["style", "srcset", "onerror", "onload", "onclick"],
 };
 
 const _SAFE_URL_PREFIXES = ["http://", "https://", "mailto:", "/", "#", "./", "../"];
@@ -262,6 +262,7 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
       editor.chain().focus().setLink({
         href: linkDialog.url.trim(),
         rel: linkDialog.nofollow ? "nofollow noopener noreferrer" : "noopener noreferrer",
+        target: linkDialog.nofollow ? "_blank" : undefined,
       }).run();
       closeLinkDialog();
     }, [editor, linkDialog, closeLinkDialog]);

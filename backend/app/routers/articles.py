@@ -46,7 +46,7 @@ _ALLOWED_TAGS = {
     "img", "figure", "figcaption",
 }
 _ALLOWED_ATTRS: dict[str, list[str]] = {
-    "a": ["href", "title", "rel"],
+    "a": ["href", "title", "rel", "target"],
     "img": ["src", "alt", "width", "height"],
 }
 _BLOCK_TAGS = {
@@ -82,6 +82,10 @@ def _sanitize_html(raw: str) -> str:
             # Strip event attributes unconditionally
             for a in [k for k in list(tag.attrs) if k.startswith("on")]:
                 del tag[a]
+    # Restrict target to _blank only; remove any other value
+    for a_tag in soup.find_all("a"):
+        if a_tag.get("target") not in ("_blank", None):
+            del a_tag["target"]
     # Strip dangerous href schemes (javascript:, data:, vbscript:) from <a> tags
     for a_tag in soup.find_all("a"):
         href = a_tag.get("href", "")

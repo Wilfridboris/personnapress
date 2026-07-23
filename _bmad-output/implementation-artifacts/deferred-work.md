@@ -1,5 +1,13 @@
 # Deferred Work
 
+## Deferred from: code review of fix-nofollow-link-target-blank (2026-07-23)
+
+- No sanitizer-level enforcement that `target="_blank"` implies `rel="noopener noreferrer"` — API callers bypassing the editor can submit `target="_blank"` without noopener; editor always sets rel correctly so only a direct API caller is at risk. Add a post-sanitize transform enforcing rel when target is present if direct API access becomes a concern. [backend/app/routers/campaigns.py, backend/app/routers/articles.py]
+- No UI label in link dialog indicating nofollow links open in a new tab — silent coupling; accessibility improvement (screen readers, keyboard nav). [frontend/components/campaigns/BlogEditor.tsx]
+- `_DOMPURIFY_CONFIG` comment claims it "mirrors" backend — DOMPurify uses flat ALLOWED_ATTR (global) while backend uses per-element dicts; comment is misleading. Pre-existing. [frontend/components/campaigns/BlogEditor.tsx:30]
+- `articles.py` uses `list[str]` and `campaigns.py` uses `set[str]` for allowed-attr maps — structural drift risk; changes to one may miss the other. Pre-existing. [backend/app/routers/articles.py, backend/app/routers/campaigns.py]
+- No backend test coverage verifying `target="_blank"` passes through sanitizers and `target="other"` is stripped. Pre-existing test gap.
+
 ## Deferred from: code review of fix-excerpt-meta-generation-comments-stripped (2026-07-23)
 
 - TL;DR loop in `_extract_excerpt` fallback scans all `<p>` tags in the document rather than just the preamble — body paragraph starting "TL;DR:" would be incorrectly decomposed; fallback path only; Gemini-generated content never produces such a body paragraph in practice. [backend/app/services/articles.py:_extract_excerpt]

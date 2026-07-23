@@ -23,15 +23,17 @@ from app.workers.generate import run_generation
 
 
 _ALLOWED_HTML_TAGS = {"h1", "h2", "h3", "h4", "p", "ul", "ol", "li", "strong", "em", "a", "br", "blockquote", "code", "pre", "img", "figure", "figcaption"}
-_ALLOWED_HTML_ATTRS: dict[str, set[str]] = {"a": {"href", "title", "rel"}, "img": {"src", "alt", "width", "height"}}
+_ALLOWED_HTML_ATTRS: dict[str, set[str]] = {"a": {"href", "title", "rel", "target"}, "img": {"src", "alt", "width", "height"}}
 _ALLOWED_URL_SCHEMES = {"http", "https", "mailto"}
 _PATCHABLE_FIELDS = frozenset({"blog_html", "x_post", "linkedin_post"})
 
 
 def _nh3_attribute_filter(tag: str, attr: str, value: str) -> Optional[str]:
-    """Filter img src to own-bucket URLs only; pass all other attributes through."""
+    """Filter img src to own-bucket URLs only; restrict target to _blank only."""
     if tag == "img" and attr == "src":
         return value if is_allowed_image_src(value) else None
+    if tag == "a" and attr == "target":
+        return value if value == "_blank" else None
     return value
 
 
