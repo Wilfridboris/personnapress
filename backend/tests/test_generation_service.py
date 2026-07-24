@@ -86,7 +86,7 @@ _SOCIAL = {"x_post": "Tweet!", "linkedin_post": "LinkedIn post " * 40}
 
 @pytest.mark.asyncio
 @patch("app.services.generation.generation_logs_repo")
-@patch("app.services.generation.gemini")
+@patch("app.services.generation._llm")
 async def test_happy_path_all_fields_updated(mock_gemini, mock_logs_repo):
     from app.services.generation import run_generation_pipeline
 
@@ -114,7 +114,7 @@ async def test_happy_path_all_fields_updated(mock_gemini, mock_logs_repo):
 
 @pytest.mark.asyncio
 @patch("app.services.generation.generation_logs_repo")
-@patch("app.services.generation.gemini")
+@patch("app.services.generation._llm")
 async def test_no_bvp_uses_default_voice_generation_completes(mock_gemini, mock_logs_repo):
     from app.services.generation import run_generation_pipeline
 
@@ -139,7 +139,7 @@ async def test_no_bvp_uses_default_voice_generation_completes(mock_gemini, mock_
 @pytest.mark.asyncio
 @patch("app.services.generation.sentry_sdk")
 @patch("app.services.generation.generation_logs_repo")
-@patch("app.services.generation.gemini")
+@patch("app.services.generation._llm")
 async def test_fidelity_check_invalid_json_fails_job(mock_gemini, mock_logs_repo, mock_sentry):
     from app.services.generation import run_generation_pipeline
 
@@ -164,7 +164,7 @@ async def test_fidelity_check_invalid_json_fails_job(mock_gemini, mock_logs_repo
 @pytest.mark.asyncio
 @patch("app.services.generation.sentry_sdk")
 @patch("app.services.generation.generation_logs_repo")
-@patch("app.services.generation.gemini")
+@patch("app.services.generation._llm")
 async def test_blog_generation_failure_after_retries_fails_job(mock_gemini, mock_logs_repo, mock_sentry):
     from app.services.generation import run_generation_pipeline
 
@@ -188,7 +188,7 @@ async def test_blog_generation_failure_after_retries_fails_job(mock_gemini, mock
 
 @pytest.mark.asyncio
 @patch("app.services.generation.generation_logs_repo")
-@patch("app.services.generation.gemini")
+@patch("app.services.generation._llm")
 async def test_blog_html_stored_as_is_even_if_malformed(mock_gemini, mock_logs_repo):
     from app.services.generation import run_generation_pipeline
 
@@ -212,7 +212,7 @@ async def test_blog_html_stored_as_is_even_if_malformed(mock_gemini, mock_logs_r
 
 @pytest.mark.asyncio
 @patch("app.services.generation.generation_logs_repo")
-@patch("app.services.generation.gemini")
+@patch("app.services.generation._llm")
 async def test_job_marked_in_progress_before_generation(mock_gemini, mock_logs_repo):
     from app.services.generation import run_generation_pipeline
 
@@ -245,7 +245,7 @@ async def test_job_marked_in_progress_before_generation(mock_gemini, mock_logs_r
 
 @pytest.mark.asyncio
 @patch("app.services.generation.generation_logs_repo")
-@patch("app.services.generation.gemini")
+@patch("app.services.generation._llm")
 async def test_target_keyword_and_audience_passed_to_generate_blog(mock_gemini, mock_logs_repo):
     """Verify target_keyword and target_audience flow from campaign → generate_blog call."""
     from app.services.generation import run_generation_pipeline
@@ -273,7 +273,7 @@ async def test_target_keyword_and_audience_passed_to_generate_blog(mock_gemini, 
 
 @pytest.mark.asyncio
 @patch("app.services.generation.generation_logs_repo")
-@patch("app.services.generation.gemini")
+@patch("app.services.generation._llm")
 async def test_null_keyword_and_audience_still_produces_blog(mock_gemini, mock_logs_repo):
     """Regression: when target_keyword and target_audience are None, pipeline succeeds."""
     from app.services.generation import run_generation_pipeline
@@ -296,3 +296,33 @@ async def test_null_keyword_and_audience_still_produces_blog(mock_gemini, mock_l
     positional = call_args[0]
     assert positional[3] is None
     assert positional[4] is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation.generation_logs_repo")
+@patch("app.services.generation._llm")
+async def test_run_generation_pipeline_sets_excerpt_and_meta(mock_llm, mock_logs_repo):
+    """After generation, campaign.excerpt and campaign.meta_description are populated."""
+    from app.services.generation import run_generation_pipeline
+
+    job_id = uuid.uuid4()
+    campaign = _make_campaign()
+    client = _make_client(bvp=_BVP)
+    job = _make_job(campaign_id=campaign.id)
+
+    blog_with_comments = (
+        "<h1>Test Title</h1>"
+        "<!-- excerpt: Great hook for the article. -->"
+        "<!-- meta: SEO meta description here. -->"
+        "<p>Body text here.</p>"
+    )
+    mock_llm.generate_blog = AsyncMock(return_value=blog_with_comments)
+    mock_llm.check_fidelity = AsyncMock(return_value=_VOICE_SCORE)
+    mock_llm.generate_social = AsyncMock(return_value=_SOCIAL)
+    mock_logs_repo.create_generation_log = AsyncMock()
+
+    db = _make_db(job, campaign, client)
+    await run_generation_pipeline(job_id, db)
+
+    assert campaign.excerpt == "Great hook for the article."
+    assert campaign.meta_description == "SEO meta description here."

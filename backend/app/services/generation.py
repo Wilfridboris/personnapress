@@ -20,6 +20,8 @@ from sqlmodel import select
 from app.core.config import settings
 from app.db.repositories import generation_logs as generation_logs_repo
 from app.db.repositories.models import Campaign, Client, Job
+from app.services.articles import _extract_excerpt
+from app.services.publishing import _extract_meta_description
 
 if settings.LLM_PROVIDER == "anthropic":
     from app.integrations import anthropic_client as _llm
@@ -161,6 +163,8 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
         if not blog_html:
             raise ValueError("generate_blog returned empty content")
         campaign.blog_html = blog_html
+        campaign.excerpt = _extract_excerpt(blog_html)
+        campaign.meta_description = _extract_meta_description(blog_html)
 
         # ── Step 3: Voice fidelity check ─────────────────────────────────────
         h1_match = re.search(r"<h1[^>]*>(.*?)</h1>", blog_html, re.IGNORECASE | re.DOTALL)

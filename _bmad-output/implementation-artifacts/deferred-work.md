@@ -201,3 +201,7 @@
 - Unpinned `anthropic` in requirements.txt — pre-existing pattern (`google-genai` also unpinned); add version pin when stabilizing dependency tree. [backend/requirements.txt:27]
 - `_md_to_html` DOTALL flag can span multi-line bold across tag boundaries — pre-existing behaviour moved unchanged from gemini.py; assess if LLM output ever triggers this. [backend/app/integrations/generation_prompts.py:232]
 - `_strip_fences` no mid-output closing fence detection — pre-existing behaviour moved from gemini.py; only last-line ```` check implemented. [backend/app/integrations/generation_prompts.py:217]
+
+## Deferred from: code review of spec-fix-blog-save-comments-stripped (2026-07-24)
+
+- Unconditional overwrite on re-generation — `run_generation_pipeline` always overwrites `campaign.excerpt` / `campaign.meta_description` without checking whether the fields were set by a previous run. Design intent per spec: revoice creates fresh campaigns, not re-runs on existing ones. Revisit if a user-editable excerpt workflow is added later. [backend/app/services/generation.py:165-166]

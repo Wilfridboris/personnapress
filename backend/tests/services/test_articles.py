@@ -8,7 +8,7 @@ import pytest
 _DEFAULT_HTML = "<h1>My Title</h1><p>Body content here.</p>"
 
 
-def _make_campaign(blog_html=_DEFAULT_HTML, brain_dump="Default brain dump text", voice_score=None, image_url=None):
+def _make_campaign(blog_html=_DEFAULT_HTML, brain_dump="Default brain dump text", voice_score=None, image_url=None, excerpt=None, meta_description=None, image_alt=None):
     c = MagicMock()
     c.id = uuid.uuid4()
     c.client_id = uuid.uuid4()
@@ -16,6 +16,9 @@ def _make_campaign(blog_html=_DEFAULT_HTML, brain_dump="Default brain dump text"
     c.brain_dump = brain_dump
     c.voice_score = voice_score
     c.image_url = image_url
+    c.excerpt = excerpt
+    c.meta_description = meta_description
+    c.image_alt = image_alt
     return c
 
 
@@ -316,3 +319,90 @@ def test_excerpt_and_meta_description_differ_when_both_comments_present():
     assert excerpt != meta
     assert "Have you spent" in excerpt
     assert "Learn how to" in meta
+
+
+# ---------------------------------------------------------------------------
+# Column-preference and image_alt propagation (story: spec-fix-blog-save-comments-stripped)
+# ---------------------------------------------------------------------------
+
+async def _run_create_capture(campaign):
+    """Run create_or_update_article_from_campaign and return the created Article object."""
+    from app.services.articles import create_or_update_article_from_campaign
+
+    session = AsyncMock()
+    no_existing = MagicMock()
+    no_existing.scalar_one_or_none.return_value = None
+    slug_result = MagicMock()
+    slug_result.all.return_value = []
+
+    captured = {}
+
+    def capture_add(obj):
+        # First add is the Article; second is the ArticleRevision
+        if hasattr(obj, "excerpt") and "article" not in captured:
+            captured["article"] = obj
+
+    session.add = capture_add
+    session.flush = AsyncMock()
+    session.refresh = AsyncMock()
+
+    call_count = 0
+
+    async def mock_execute(q):
+        nonlocal call_count
+        call_count += 1
+        return no_existing if call_count == 1 else slug_result
+
+    session.execute = mock_execute
+    await create_or_update_article_from_campaign(session, campaign)
+    return captured.get("article")
+
+
+@pytest.mark.asyncio
+async def test_create_article_uses_campaign_excerpt_column():
+    """When campaign.excerpt is populated, article excerpt comes from column not HTML."""
+    campaign = _make_campaign(
+        blog_html="<h1>Title</h1><p>Body with no excerpt comment.</p>",
+        excerpt="Pre-computed excerpt from generation",
+    )
+    article = await _run_create_capture(campaign)
+    assert article is not None
+    assert article.excerpt == "Pre-computed excerpt from generation"
+
+
+@pytest.mark.asyncio
+async def test_create_article_uses_campaign_meta_description_column():
+    """When campaign.meta_description is populated, article meta comes from column."""
+    campaign = _make_campaign(
+        blog_html="<h1>Title</h1><p>Body with no meta comment.</p>",
+        meta_description="Pre-computed meta from generation",
+    )
+    article = await _run_create_capture(campaign)
+    assert article is not None
+    assert article.meta_description == "Pre-computed meta from generation"
+
+
+@pytest.mark.asyncio
+async def test_create_article_falls_back_to_html_when_columns_null():
+    """When campaign columns are NULL, extraction falls back to HTML comment."""
+    campaign = _make_campaign(
+        blog_html='<h1>Title</h1><!-- excerpt: fallback value --><p>Body.</p>',
+        excerpt=None,
+        meta_description=None,
+    )
+    article = await _run_create_capture(campaign)
+    assert article is not None
+    assert article.excerpt == "fallback value"
+    assert article.meta_description == ""
+
+
+@pytest.mark.asyncio
+async def test_create_article_copies_image_alt_from_campaign():
+    """campaign.image_alt is propagated to article.featured_image_alt on creation."""
+    campaign = _make_campaign(
+        blog_html="<h1>Title</h1><p>Body.</p>",
+        image_alt="A robot writing blog posts",
+    )
+    article = await _run_create_capture(campaign)
+    assert article is not None
+    assert article.featured_image_alt == "A robot writing blog posts"

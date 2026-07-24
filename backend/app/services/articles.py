@@ -97,8 +97,8 @@ async def create_or_update_article_from_campaign(
     base_slug = slug_from_title(title)
     slug = await _unique_slug(session, campaign.client_id, base_slug)
 
-    meta_description = _extract_meta_description(campaign.blog_html)
-    excerpt = _extract_excerpt(campaign.blog_html)
+    excerpt = campaign.excerpt if campaign.excerpt is not None else _extract_excerpt(campaign.blog_html or "")
+    meta_description = campaign.meta_description if campaign.meta_description is not None else _extract_meta_description(campaign.blog_html or "")
     tags = campaign.voice_score.get("tags") if isinstance(campaign.voice_score, dict) else None
     reading_time = _reading_time(campaign.blog_html)
     article_status = status_override if status_override else ArticleStatus.published
@@ -112,6 +112,7 @@ async def create_or_update_article_from_campaign(
         excerpt=excerpt,
         meta_description=meta_description,
         featured_image_url=campaign.image_url,
+        featured_image_alt=campaign.image_alt,
         author=None,
         tags=tags,
         category=None,
