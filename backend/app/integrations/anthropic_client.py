@@ -188,7 +188,7 @@ async def check_fidelity(
         expanded_scoring_section=expanded_scoring_section,
     )
 
-    raw = _strip_fences((await _call(prompt, max_tokens=1024)).strip())
+    raw = _strip_fences((await _call(prompt, max_tokens=2048)).strip())
 
     try:
         data = json.loads(raw)
