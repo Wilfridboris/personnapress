@@ -20,7 +20,7 @@ export function PublicHeader() {
         <nav aria-label="Main navigation" className="flex items-center gap-8">
           <a href="/#workflow" className="text-sm text-graphite hover:text-ink transition-colors">How it works</a>
           <a href="/#platforms" className="text-sm text-graphite hover:text-ink transition-colors">Platforms</a>
-          <a href="/#pricing" className="text-sm text-graphite hover:text-ink transition-colors">Pricing</a>
+          <Link href="/pricing" className="text-sm text-graphite hover:text-ink transition-colors">Pricing</Link>
           <a href="/#faq" className="text-sm text-graphite hover:text-ink transition-colors">FAQ</a>
           <Link href="/blog" className="text-sm text-graphite hover:text-ink transition-colors">Blog</Link>
           <Link href="/about" className="text-sm text-graphite hover:text-ink transition-colors">About</Link>

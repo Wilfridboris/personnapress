@@ -23,7 +23,8 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/privacy") ||
     pathname.startsWith("/terms") ||
     pathname.startsWith("/blog") ||
-    pathname.startsWith("/about");
+    pathname.startsWith("/about") ||
+    pathname.startsWith("/pricing");
 
   const sessionCookie = request.cookies.get("session")?.value;
 
