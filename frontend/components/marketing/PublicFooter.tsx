@@ -24,6 +24,12 @@ export function PublicFooter() {
           {/* Nav columns */}
           <nav aria-label="Footer navigation" className="flex flex-wrap gap-10 md:gap-16 flex-1">
 
+            {/* Company */}
+            <div className="flex flex-col gap-3 min-w-[120px]">
+              <p className="font-mono text-[10px] uppercase tracking-widest text-graphite/50">Company</p>
+              <Link href="/about" className="font-mono text-xs text-graphite hover:text-ink transition-colors">About</Link>
+            </div>
+
             {/* Product */}
             <div className="flex flex-col gap-3 min-w-[120px]">
               <p className="font-mono text-[10px] uppercase tracking-widest text-graphite/50">Product</p>

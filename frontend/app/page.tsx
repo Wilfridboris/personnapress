@@ -93,6 +93,11 @@ const schemaOrganization = {
   logo: `${APP_URL}/images/PersonnaPress-opengraph.png`,
   description:
     "PersonnaPress is an AI content automation platform that learns your brand voice and publishes SEO-structured content across multiple platforms.",
+  founder: {
+    "@type": "Person",
+    name: "Boris Kwayep",
+    url: `${APP_URL}/about`,
+  },
 };
 
 const WORKFLOW_STEPS = [
