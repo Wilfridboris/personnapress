@@ -407,8 +407,23 @@ async def _handle_subscription_updated(sub_obj: dict, db: AsyncSession) -> None:
     result = await db.execute(select(Subscription).where(Subscription.stripe_sub_id == stripe_sub_id))
     sub = result.scalar_one_or_none()
     if not sub:
-        logger.info("No subscription found for stripe_sub_id: %s", stripe_sub_id)
-        return
+        # Trial users have stripe_sub_id=NULL — fall back to matching by Stripe customer ID
+        customer_id = sub_obj.get("customer")
+        if customer_id:
+            user_result = await db.execute(select(User).where(User.stripe_customer_id == customer_id))
+            user = user_result.scalar_one_or_none()
+            if user:
+                sub_result = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
+                sub = sub_result.scalar_one_or_none()
+        if not sub:
+            logger.warning(
+                "No subscription found for stripe_sub_id=%s customer=%s",
+                stripe_sub_id,
+                sub_obj.get("customer"),
+            )
+            return
+        # Stamp the stripe_sub_id so future events match directly
+        sub.stripe_sub_id = stripe_sub_id
 
     price_to_tier = get_stripe_price_to_tier()
     items = sub_obj.get("items", {}).get("data", [])
