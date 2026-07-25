@@ -248,19 +248,24 @@ async def get_user_plan_info(user_id: uuid.UUID, db: AsyncSession) -> tuple[str,
 
 
 async def get_subscription(user_id: str, db: AsyncSession) -> SubscriptionResponse:
-    result = await db.execute(select(Subscription).where(Subscription.user_id == uuid.UUID(user_id)))
+    uid = uuid.UUID(user_id)
+    result = await db.execute(select(Subscription).where(Subscription.user_id == uid))
     sub = result.scalar_one_or_none()
     if not sub:
         raise HTTPException(
             status_code=404,
             detail={"error": {"code": "SUBSCRIPTION_NOT_FOUND", "message": "Subscription not found.", "detail": {}}},
         )
+    count_result = await db.execute(
+        select(func.count()).select_from(Client).where(Client.user_id == uid)
+    )
+    clients_count: int = count_result.scalar() or 0
     limits = PLAN_LIMITS.get(sub.plan_tier, PLAN_LIMITS["starter"])
     return SubscriptionResponse(
         plan_tier=sub.plan_tier,
         status=sub.status,
         campaigns_used=sub.campaigns_used,
-        clients_count=sub.clients_count,
+        clients_count=clients_count,
         image_gen_used=sub.image_gen_used,
         billing_cycle_start=sub.billing_cycle_start,
         billing_cycle_end=sub.billing_cycle_end,
