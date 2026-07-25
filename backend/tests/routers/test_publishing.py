@@ -670,6 +670,7 @@ async def test_publish_headless_scheduled():
         patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
         patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
         patch("app.routers.publishing.check_trial_not_expired", AsyncMock()),
+        patch("app.routers.publishing.update_campaign_scheduled_at", AsyncMock()),
         patch("app.routers.publishing.create_or_update_article_from_campaign", AsyncMock(return_value=article)),
         patch("app.routers.publishing.scheduler", mock_scheduler),
     ):
@@ -684,11 +685,12 @@ async def test_publish_headless_scheduled():
     assert result["article_id"] == str(article.id)
     # Campaign must NOT be marked published yet
     assert campaign.status != "published"
-    # APScheduler add_job must be called with headless job id
+    # APScheduler add_job must be called with headless job id — and BEFORE db.commit
     mock_scheduler.add_job.assert_called_once()
     call_kwargs = mock_scheduler.add_job.call_args[1]
     assert call_kwargs["id"] == f"headless_{campaign.id}"
     assert str(campaign.id) in call_kwargs["args"]
+    assert call_kwargs["misfire_grace_time"] == 3600
 
 
 @pytest.mark.asyncio
@@ -713,6 +715,7 @@ async def test_publish_headless_schedule_replace_existing():
         patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
         patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
         patch("app.routers.publishing.check_trial_not_expired", AsyncMock()),
+        patch("app.routers.publishing.update_campaign_scheduled_at", AsyncMock()),
         patch("app.routers.publishing.create_or_update_article_from_campaign", AsyncMock(return_value=article)),
         patch("app.routers.publishing.scheduler", mock_scheduler),
     ):

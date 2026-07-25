@@ -1188,9 +1188,8 @@ async def publish_headless(
                 },
             )
         await update_campaign_scheduled_at(db, campaign_id, scheduled_at_utc)
-        await db.commit()
-        await db.refresh(article)
 
+        # Register scheduler job before committing so DB rolls back if registration fails.
         try:
             scheduler.add_job(
                 run_publish_headless,
@@ -1198,12 +1197,16 @@ async def publish_headless(
                 args=[str(campaign_id)],
                 id=f"headless_{campaign_id}",
                 replace_existing=True,
+                misfire_grace_time=3600,
             )
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
                 detail={"error": {"code": "SCHEDULER_ERROR", "message": "Failed to register scheduled headless job.", "detail": {}}},
             ) from exc
+
+        await db.commit()
+        await db.refresh(article)
 
         return {
             "article_id": str(article.id),

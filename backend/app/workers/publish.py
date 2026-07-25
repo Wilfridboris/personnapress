@@ -10,6 +10,7 @@ import logging
 from uuid import UUID
 
 from app.core.exceptions import PlatformError
+from app.db.repositories.models import ArticleStatus
 from app.core.security import decrypt_credential, encrypt_credential
 from app.db.connection import get_session_context
 from app.db.repositories.campaigns import get_campaign, update_campaign_scheduled_at, update_campaign_status
@@ -170,11 +171,11 @@ async def run_publish_headless(campaign_id_str: str) -> None:
         if not article:
             logger.warning("run_publish_headless: no article for campaign=%s — skipping", campaign_id)
             return
-        if str(getattr(article.status, "value", article.status)) == "published":
+        if article.status == ArticleStatus.published:
             logger.info("run_publish_headless: article=%s already published — skipping", article.id)
             return
         now = utcnow()
-        article.status = "published"
+        article.status = ArticleStatus.published
         article.published_at = now
         article.updated_at = now
         db.add(article)
