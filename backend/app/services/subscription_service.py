@@ -286,10 +286,26 @@ async def create_billing_portal_session(user_id: str, db: AsyncSession) -> str:
         user.stripe_customer_id = customer.id
         db.add(user)
         await db.commit()
-    session = stripe_sdk.billing_portal.Session.create(
-        customer=user.stripe_customer_id,
-        return_url=settings.APP_URL + "/account",
-    )
+
+    try:
+        session = stripe_sdk.billing_portal.Session.create(
+            customer=user.stripe_customer_id,
+            return_url=settings.APP_URL + "/account",
+        )
+    except stripe_sdk.error.InvalidRequestError as e:
+        if e.code == "resource_missing":
+            # Stale customer ID (e.g. from test mode) — recreate in current mode
+            customer = stripe_sdk.Customer.create(email=user.email, metadata={"user_id": user_id})
+            user.stripe_customer_id = customer.id
+            db.add(user)
+            await db.commit()
+            session = stripe_sdk.billing_portal.Session.create(
+                customer=user.stripe_customer_id,
+                return_url=settings.APP_URL + "/account",
+            )
+        else:
+            raise
+
     return session.url
 
 
