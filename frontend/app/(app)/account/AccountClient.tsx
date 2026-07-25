@@ -6,12 +6,21 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { fetchAPI, APIError } from "@/lib/api";
 import { logout } from "@/lib/auth";
+import type { PlanTier } from "@/lib/types";
+import { PlanPickerClient } from "./PlanPickerClient";
 
-export function AccountClient() {
+interface AccountClientProps {
+  status: string;
+  currentTier: PlanTier;
+}
+
+export function AccountClient({ status, currentTier }: AccountClientProps) {
   const router = useRouter();
   const [portalLoading, setPortalLoading] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const showPlanPicker = status === "trialing" || status === "trial_expired";
 
   async function handleManageSubscription() {
     setPortalLoading(true);
@@ -49,20 +58,24 @@ export function AccountClient() {
     <>
       <hr className="border-[#E5E5E5] my-6" />
 
-      {error && (
+      {!showPlanPicker && error && (
         <p role="alert" className="font-body text-sm text-danger mb-4">
           {error}
         </p>
       )}
 
-      <Button
-        variant="primary"
-        onClick={handleManageSubscription}
-        disabled={portalLoading}
-        className="w-full"
-      >
-        {portalLoading ? "Loading..." : "Manage subscription"}
-      </Button>
+      {showPlanPicker ? (
+        <PlanPickerClient currentTier={currentTier} />
+      ) : (
+        <Button
+          variant="primary"
+          onClick={handleManageSubscription}
+          disabled={portalLoading}
+          className="w-full"
+        >
+          {portalLoading ? "Loading..." : "Manage subscription"}
+        </Button>
+      )}
 
       <hr className="border-[#E5E5E5] my-6" />
 

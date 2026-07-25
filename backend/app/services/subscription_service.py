@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import stripe as stripe_sdk
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlmodel import select
 
 from app.core.config import settings
@@ -309,12 +309,95 @@ async def create_billing_portal_session(user_id: str, db: AsyncSession) -> str:
     return session.url
 
 
+async def create_checkout_session(user_id: str, plan: str, db: AsyncSession) -> str:
+    """Creates a Stripe Checkout Session for the given plan tier."""
+    price_map = {v: k for k, v in get_stripe_price_to_tier().items()}
+    price_id = price_map.get(plan)
+    if not price_id:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "INVALID_PLAN", "message": "Invalid plan.", "detail": {}}}
+        )
+
+    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "User not found.", "detail": {}}}
+        )
+
+    sub_result = await db.execute(select(Subscription).where(Subscription.user_id == uuid.UUID(user_id)))
+    sub = sub_result.scalars().first()
+    if sub and sub.status == "active":
+        raise HTTPException(
+            status_code=409,
+            detail={"error": {"code": "ALREADY_SUBSCRIBED", "message": "Already have an active subscription.", "detail": {}}}
+        )
+
+    kwargs: dict = {
+        "mode": "subscription",
+        "line_items": [{"price": price_id, "quantity": 1}],
+        "success_url": settings.APP_URL + "/account?checkout_success=1",
+        "cancel_url": settings.APP_URL + "/pricing",
+        "allow_promotion_codes": True,
+        "client_reference_id": user_id,
+    }
+    if user.stripe_customer_id:
+        kwargs["customer"] = user.stripe_customer_id
+    else:
+        kwargs["customer_email"] = user.email
+
+    session = stripe_sdk.checkout.Session.create(**kwargs)
+    return session.url
+
+
 async def handle_stripe_webhook(event: dict, db: AsyncSession) -> None:
     event_type = event.get("type")
     if event_type in ("customer.subscription.updated", "customer.subscription.created"):
         await _handle_subscription_updated(event["data"]["object"], db)
     elif event_type == "customer.subscription.deleted":
         await _handle_subscription_deleted(event["data"]["object"], db)
+    elif event_type == "checkout.session.completed":
+        cs = event["data"]["object"]
+        customer_id = cs.get("customer")
+        if not customer_id:
+            return
+        client_ref = cs.get("client_reference_id")
+        customer_email = (cs.get("customer_details") or {}).get("email")
+        matched = False
+        if client_ref:
+            try:
+                user_uuid = uuid.UUID(client_ref)
+                result = await db.execute(
+                    update(User)
+                    .where(User.id == user_uuid)
+                    .values(stripe_customer_id=customer_id)
+                )
+                if result.rowcount > 0:
+                    await db.commit()
+                    matched = True
+            except ValueError:
+                pass
+        if not matched and customer_email:
+            result = await db.execute(
+                update(User)
+                .where(User.email == customer_email)
+                .values(stripe_customer_id=customer_id)
+            )
+            if result.rowcount == 0:
+                logger.warning(
+                    "checkout.session.completed: no user matched (client_ref=%s, email=%s)",
+                    client_ref,
+                    customer_email,
+                )
+            else:
+                await db.commit()
+        elif not matched:
+            logger.warning(
+                "checkout.session.completed: no client_reference_id or customer_email (customer=%s)",
+                customer_id,
+            )
     else:
         logger.info("Unhandled Stripe event type: %s", event_type)
 

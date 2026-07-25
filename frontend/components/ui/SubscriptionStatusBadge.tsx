@@ -1,6 +1,6 @@
 import { clsx } from "clsx";
 
-type SubscriptionStatus = "trialing" | "active" | "canceled" | "past_due";
+type SubscriptionStatus = "trialing" | "active" | "canceled" | "past_due" | "trial_expired";
 
 interface SubscriptionStatusBadgeProps {
   status: SubscriptionStatus;
@@ -8,10 +8,11 @@ interface SubscriptionStatusBadgeProps {
 }
 
 const STATUS_CONFIG: Record<SubscriptionStatus, { label: string; className: string }> = {
-  trialing:  { label: "TRIALING",  className: "bg-highlighter text-ink" },
-  active:    { label: "ACTIVE",    className: "bg-success/10 text-success" },
-  canceled:  { label: "CANCELED",  className: "bg-danger/10 text-danger" },
-  past_due:  { label: "PAST DUE", className: "bg-danger/10 text-danger" },
+  trialing:      { label: "TRIALING",    className: "bg-highlighter text-ink" },
+  active:        { label: "ACTIVE",      className: "bg-success/10 text-success" },
+  canceled:      { label: "CANCELED",    className: "bg-danger/10 text-danger" },
+  past_due:      { label: "PAST DUE",   className: "bg-danger/10 text-danger" },
+  trial_expired: { label: "TRIAL ENDED", className: "bg-danger/10 text-danger" },
 };
 
 export function SubscriptionStatusBadge({ status, className }: SubscriptionStatusBadgeProps) {

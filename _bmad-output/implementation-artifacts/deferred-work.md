@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of 7-4-stripe-checkout-plan-picker (2026-07-25)
+
+- Stripe SDK synchronous calls (`stripe_sdk.checkout.Session.create`, `stripe_sdk.billing_portal.Session.create`) block the event loop in async FastAPI handlers. Pre-existing pattern in `create_billing_portal_session`; wrapping in `asyncio.to_thread` would fix both. [backend/app/services/subscription_service.py]
+- Plan prices ($29/$49/$149) and feature lists are hardcoded in PlanPickerClient rather than driven from backend config or Stripe product catalog. A price change in Stripe requires a manual component edit. [frontend/app/(app)/account/PlanPickerClient.tsx]
+
 ## Deferred from: code review of fix-nofollow-link-target-blank (2026-07-23)
 
 - No sanitizer-level enforcement that `target="_blank"` implies `rel="noopener noreferrer"` — API callers bypassing the editor can submit `target="_blank"` without noopener; editor always sets rel correctly so only a direct API caller is at risk. Add a post-sanitize transform enforcing rel when target is present if direct API access becomes a concern. [backend/app/routers/campaigns.py, backend/app/routers/articles.py]

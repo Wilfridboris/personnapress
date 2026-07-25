@@ -5,10 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
 from app.db.connection import get_session
-from app.schemas.subscription import SubscriptionResponse
+from app.schemas.subscription import CheckoutRequest, CheckoutResponse, SubscriptionResponse
 from app.services.subscription_service import (
     check_and_expire_trial,
     create_billing_portal_session,
+    create_checkout_session,
     get_subscription,
 )
 
@@ -39,3 +40,13 @@ async def create_portal_session(
 ) -> dict:
     portal_url = await create_billing_portal_session(current_user["user_id"], db)
     return {"portal_url": portal_url}
+
+
+@router.post("/checkout", response_model=CheckoutResponse)
+async def create_checkout(
+    body: CheckoutRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> CheckoutResponse:
+    checkout_url = await create_checkout_session(current_user["user_id"], body.plan, db)
+    return CheckoutResponse(checkout_url=checkout_url)

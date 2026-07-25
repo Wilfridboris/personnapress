@@ -1,7 +1,7 @@
 """Unit tests for subscription_service.py."""
 import uuid
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -11,6 +11,7 @@ from app.services.subscription_service import (
     check_and_expire_trial,
     check_campaign_limit,
     check_trial_not_expired,
+    create_checkout_session,
     handle_stripe_webhook,
 )
 
@@ -253,3 +254,134 @@ async def test_check_campaign_limit_agency_bypasses_limit():
 
     assert sub.campaigns_used == 1_000_000
     db.flush.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# create_checkout_session (Story 7-4)
+# ---------------------------------------------------------------------------
+
+PRICE_MAP = {
+    "price_starter_test": "starter",
+    "price_growth_test": "growth",
+    "price_agency_test": "agency",
+}
+
+
+def _make_user(stripe_customer_id=None, email="user@example.com"):
+    user = MagicMock()
+    user.id = uuid.uuid4()
+    user.email = email
+    user.stripe_customer_id = stripe_customer_id
+    return user
+
+
+def _db_with_user(user):
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalars.return_value.first.return_value = user
+    db.execute = AsyncMock(return_value=result)
+    return db
+
+
+async def test_create_checkout_session_valid_plan():
+    user = _make_user(stripe_customer_id="cus_existing")
+    db = _db_with_user(user)
+
+    mock_session = MagicMock()
+    mock_session.url = "https://checkout.stripe.com/test_abc123"
+
+    with patch("app.services.subscription_service.get_stripe_price_to_tier", return_value=PRICE_MAP), \
+         patch("app.services.subscription_service.stripe_sdk.checkout.Session.create", return_value=mock_session) as mock_create, \
+         patch("app.services.subscription_service.settings") as mock_settings:
+        mock_settings.APP_URL = "https://personnapress.com"
+
+        result = await create_checkout_session(str(user.id), "growth", db)
+
+    assert result == "https://checkout.stripe.com/test_abc123"
+    call_kwargs = mock_create.call_args.kwargs
+    assert call_kwargs["mode"] == "subscription"
+    assert call_kwargs["line_items"][0]["price"] == "price_growth_test"
+    assert call_kwargs["success_url"] == "https://personnapress.com/account?checkout_success=1"
+    assert call_kwargs["cancel_url"] == "https://personnapress.com/pricing"
+    assert call_kwargs["allow_promotion_codes"] is True
+    assert call_kwargs["client_reference_id"] == str(user.id)
+
+
+async def test_create_checkout_session_uses_existing_customer():
+    user = _make_user(stripe_customer_id="cus_123")
+    db = _db_with_user(user)
+
+    mock_session = MagicMock()
+    mock_session.url = "https://checkout.stripe.com/test_existing"
+
+    with patch("app.services.subscription_service.get_stripe_price_to_tier", return_value=PRICE_MAP), \
+         patch("app.services.subscription_service.stripe_sdk.checkout.Session.create", return_value=mock_session) as mock_create, \
+         patch("app.services.subscription_service.settings") as mock_settings:
+        mock_settings.APP_URL = "https://personnapress.com"
+
+        await create_checkout_session(str(user.id), "growth", db)
+
+    call_kwargs = mock_create.call_args.kwargs
+    assert call_kwargs.get("customer") == "cus_123"
+    assert "customer_email" not in call_kwargs
+    assert call_kwargs["client_reference_id"] == str(user.id)
+
+
+async def test_create_checkout_session_new_customer_uses_email():
+    user = _make_user(stripe_customer_id=None, email="newuser@example.com")
+    db = _db_with_user(user)
+
+    mock_session = MagicMock()
+    mock_session.url = "https://checkout.stripe.com/test_new"
+
+    with patch("app.services.subscription_service.get_stripe_price_to_tier", return_value=PRICE_MAP), \
+         patch("app.services.subscription_service.stripe_sdk.checkout.Session.create", return_value=mock_session) as mock_create, \
+         patch("app.services.subscription_service.settings") as mock_settings:
+        mock_settings.APP_URL = "https://personnapress.com"
+
+        await create_checkout_session(str(user.id), "starter", db)
+
+    call_kwargs = mock_create.call_args.kwargs
+    assert call_kwargs.get("customer_email") == "newuser@example.com"
+    assert "customer" not in call_kwargs
+    assert call_kwargs["client_reference_id"] == str(user.id)
+
+
+async def test_create_checkout_session_invalid_plan():
+    user = _make_user()
+    db = _db_with_user(user)
+
+    with patch("app.services.subscription_service.get_stripe_price_to_tier", return_value=PRICE_MAP), \
+         patch("app.services.subscription_service.settings") as mock_settings:
+        mock_settings.APP_URL = "https://personnapress.com"
+
+        with pytest.raises(HTTPException) as exc_info:
+            await create_checkout_session(str(user.id), "enterprise", db)
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["error"]["code"] == "INVALID_PLAN"
+    db.execute.assert_not_called()
+
+
+async def test_create_checkout_session_blocks_active_subscriber():
+    user = _make_user(stripe_customer_id="cus_active")
+    active_sub = MagicMock()
+    active_sub.status = "active"
+
+    user_result = MagicMock()
+    user_result.scalars.return_value.first.return_value = user
+    sub_result = MagicMock()
+    sub_result.scalars.return_value.first.return_value = active_sub
+
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=[user_result, sub_result])
+
+    with patch("app.services.subscription_service.get_stripe_price_to_tier", return_value=PRICE_MAP), \
+         patch("app.services.subscription_service.settings") as mock_settings:
+        mock_settings.APP_URL = "https://personnapress.com"
+
+        with pytest.raises(HTTPException) as exc_info:
+            await create_checkout_session(str(user.id), "growth", db)
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["error"]["code"] == "ALREADY_SUBSCRIBED"

@@ -10,6 +10,14 @@ class PlanLimits(BaseModel):
     image_gens: int
 
 
+class CheckoutRequest(BaseModel):
+    plan: str
+
+
+class CheckoutResponse(BaseModel):
+    checkout_url: str
+
+
 class SubscriptionResponse(BaseModel):
     plan_tier: str
     status: str

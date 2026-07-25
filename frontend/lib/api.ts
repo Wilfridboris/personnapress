@@ -184,6 +184,11 @@ export const subscriptionsApi = {
   getMe: () => apiFetch<SubscriptionInfo>("/subscriptions/me"),
   getStatus: () => apiFetch<{ status: string }>("/subscriptions/status"),
   createPortal: () => apiFetch<{ portal_url: string }>("/subscriptions/portal", { method: "POST" }),
+  createCheckout: (plan: "starter" | "growth" | "agency") =>
+    apiFetch<{ checkout_url: string }>("/subscriptions/checkout", {
+      method: "POST",
+      body: JSON.stringify({ plan }),
+    }),
 };
 
 export const deliveryTokensApi = {

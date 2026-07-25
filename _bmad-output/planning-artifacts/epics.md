@@ -2053,3 +2053,33 @@ so that older posts written with a weaker voice profile benefit from the richer 
 6. **Given** the revoice call succeeds, **When** the modal closes, **Then** the user navigates to the new campaign approval gate page (`/campaigns/{new_id}`).
 
 7. **Given** the Paper Style design system, **When** the Re-voice UI renders, **Then** it uses Lucide icons only (no emojis), rounded-none modal surfaces, Ink 1px borders, no em-dash in any visible text.
+
+---
+
+## Epic 18: Public Pricing and Checkout
+
+**Goal:** Close the revenue conversion gap. Every existing "Subscribe" CTA opens the Stripe Customer Portal, which is empty for non-subscribers — a dead end. This epic adds the Stripe Checkout flow so trial users can actually subscribe, and adds a public `/pricing` page so search traffic has a dedicated landing surface.
+
+**Stories:**
+
+### Story 18.1: Public Pricing Page
+
+As a potential customer searching for AI content automation pricing,
+I want to find a dedicated, informative `/pricing` page on PersonnaPress,
+so that I can compare plans, understand what I get on each tier, and start a free trial.
+
+**Acceptance Criteria:**
+
+1. **Given** any visitor navigates to `/pricing`, **When** the page loads, **Then** it renders with PublicHeader and PublicFooter, title "PersonnaPress Pricing — AI Content Automation Plans", meta description targeting AI blog writer pricing, and a `<script type="application/ld+json">` WebPage + Offer schema block.
+
+2. **Given** the `/pricing` page loads, **When** the pricing cards render, **Then** three plan cards appear: Starter ($29/mo), Growth ($49/mo, "Most popular"), Agency ($149/mo) — each with feature list and "Start free trial" CTA linking to `/signup`.
+
+3. **Given** the `/pricing` page loads, **When** the comparison table renders, **Then** a full-width table with rows for Clients, Campaigns per month, Image gens, WordPress, X/LinkedIn, Brand voice profiles, Content calendar, Scheduled publishing, GitHub publishing, Headless blog API, Priority support — using CheckCircle2 (included) and X icon (not included).
+
+4. **Given** the `/pricing` page loads, **When** the FAQ renders, **Then** four questions appear as `<dt>`/`<dd>` pairs: "Is there a free trial?", "Can I change plans?", "What happens when the trial ends?", "How does billing work?".
+
+5. **Given** the sitemap is generated, **When** `/sitemap.xml` is fetched, **Then** `https://personnapress.com/pricing` is listed with `changeFrequency: "monthly"` and `priority: 0.9`.
+
+6. **Given** the PublicHeader renders on any public page, **When** the "Pricing" nav link is inspected, **Then** it links to `/pricing` (not the homepage anchor `#pricing`).
+
+**Note:** Story 7.4 (Stripe Checkout Flow + In-App Plan Picker) is filed under Epic 7 but is the functional companion to this story — it adds the backend checkout endpoint and in-app plan picker that allows trial users to actually subscribe.

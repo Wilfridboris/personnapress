@@ -1,14 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useUIStore } from "@/lib/stores/useUIStore";
-import { subscriptionsApi } from "@/lib/api";
 
 export function UpgradePromptModal() {
   const message = useUIStore((s) => s.upgradePromptMessage);
   const hide = useUIStore((s) => s.hideUpgradePrompt);
-  const addToast = useUIStore((s) => s.addToast);
-  const [loading, setLoading] = useState(false);
   const subscribeRef = useRef<HTMLButtonElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
 
@@ -60,18 +57,6 @@ export function UpgradePromptModal() {
 
   if (!message) return null;
 
-  async function handleSubscribe() {
-    setLoading(true);
-    try {
-      const { portal_url } = await subscriptionsApi.createPortal();
-      window.location.href = portal_url;
-    } catch {
-      addToast("Could not open billing portal. Please try again.", "error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <div
       role="dialog"
@@ -95,11 +80,13 @@ export function UpgradePromptModal() {
         <div className="flex gap-3">
           <button
             ref={subscribeRef}
-            onClick={handleSubscribe}
-            disabled={loading}
-            className="flex-1 bg-[#111111] text-white px-4 py-2.5 text-sm font-medium hover:bg-white hover:text-[#111111] border border-[#111111] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 disabled:opacity-60"
+            onClick={() => {
+              hide();
+              window.location.href = "/account#choose-plan";
+            }}
+            className="flex-1 bg-[#111111] text-white px-4 py-2.5 text-sm font-medium hover:bg-white hover:text-[#111111] border border-[#111111] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
           >
-            {loading ? "Opening..." : "Subscribe"}
+            Subscribe
           </button>
           <button
             onClick={hide}

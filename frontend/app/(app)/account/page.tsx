@@ -45,7 +45,7 @@ export default async function AccountPage() {
     subscription.plan_tier.charAt(0).toUpperCase() +
     subscription.plan_tier.slice(1);
 
-  const status = subscription.status as "trialing" | "active" | "canceled" | "past_due";
+  const status = subscription.status as "trialing" | "active" | "canceled" | "past_due" | "trial_expired";
 
   return (
     <>
@@ -85,7 +85,7 @@ export default async function AccountPage() {
         </p>
       </section>
 
-      <AccountClient />
+      <AccountClient status={subscription.status} currentTier={subscription.plan_tier} />
     </>
   );
 }

@@ -1,3 +1,10 @@
+export type SubscriptionStatus =
+  | "trialing"
+  | "active"
+  | "canceled"
+  | "past_due"
+  | "trial_expired";
+
 export type CampaignStatus =
   | "pending_approval"
   | "approved"
