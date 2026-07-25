@@ -222,27 +222,29 @@ const AFTER_ITEMS = [
 
 const STARTER_FEATURES = [
   "2 clients",
-  "10 campaigns / month",
-  "10 image generations / month",
-  "WordPress and Webflow publishing",
-  "X and LinkedIn scheduling",
+  "10 campaigns per month",
+  "10 image generations per month",
+  "All publishing platforms (WordPress, GitHub)",
+  "X and LinkedIn publishing",
+  "Brand voice profiles",
+  "Content calendar",
+  "Scheduled publishing",
+  "Headless blog API",
   "14-day free trial",
 ];
 
 const GROWTH_FEATURES = [
   "5 clients",
-  "30 campaigns / month",
-  "30 image generations / month",
+  "30 campaigns per month",
+  "30 image generations per month",
   "Everything in Starter",
-  "Content calendar",
-  "Scheduled publishing",
 ];
 
 const AGENCY_FEATURES = [
   "20 clients",
   "Unlimited campaigns",
+  "100 image generations per month",
   "Everything in Growth",
-  "Multi-brand workspace",
   "Priority support",
 ];
 
@@ -640,7 +642,7 @@ export default function LandingPage() {
               <p className="font-display text-4xl font-bold text-ink mb-1">
                 $29<span className="font-mono text-sm text-graphite">/mo</span>
               </p>
-              <p className="text-sm text-graphite mb-6">For individuals getting started with AI content.</p>
+              <p className="text-sm text-graphite mb-6">For individuals getting started with AI content automation.</p>
               <ul className="space-y-2 mb-8">
                 {STARTER_FEATURES.map((f) => (
                   <li key={f} className="flex items-start gap-2 text-sm text-graphite">
