@@ -22,7 +22,8 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/github-publisher") ||
     pathname.startsWith("/privacy") ||
     pathname.startsWith("/terms") ||
-    pathname.startsWith("/blog");
+    pathname.startsWith("/blog") ||
+    pathname.startsWith("/about");
 
   const sessionCookie = request.cookies.get("session")?.value;
 
