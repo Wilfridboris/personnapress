@@ -9,9 +9,10 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const state = searchParams.get("state");
   const installationId = searchParams.get("installation_id");
+  const setupAction = searchParams.get("setup_action");
 
   const rawCookie = request.cookies.get("github_oauth_state")?.value;
-  if (!rawCookie || !state || !installationId) {
+  if (!rawCookie || !installationId) {
     return NextResponse.redirect(`${APP_URL}/dashboard?error=${encodeURIComponent("GitHub connection failed.")}`);
   }
 
@@ -26,11 +27,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${APP_URL}/dashboard?error=${encodeURIComponent("GitHub connection failed.")}`);
   }
 
-  if (!cookieData.state || !cookieData.clientId) {
+  if (!cookieData.clientId) {
     return NextResponse.redirect(`${APP_URL}/dashboard?error=${encodeURIComponent("GitHub connection failed.")}`);
   }
 
-  if (cookieData.state !== state) {
+  // Normal install flow: validate CSRF state param.
+  // Update/configure flow (setup_action=update, no state): GitHub calls the
+  // setup URL without a state param. We accept this only when the
+  // github_oauth_state cookie is present (set moments ago by /api/auth/github),
+  // which proves the request originated from a PersonnaPress-initiated flow.
+  if (setupAction !== "update" && cookieData.state !== state) {
     return NextResponse.redirect(`${APP_URL}/dashboard?error=${encodeURIComponent("GitHub connection failed.")}`);
   }
 
