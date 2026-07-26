@@ -352,7 +352,7 @@ async def create_checkout_session(user_id: str, plan: str, db: AsyncSession) -> 
     return session.url
 
 
-async def handle_stripe_webhook(event: dict, db: AsyncSession) -> None:
+async def handle_stripe_webhook(event, db: AsyncSession) -> None:
     event_type = event.get("type")
     if event_type in ("customer.subscription.updated", "customer.subscription.created"):
         await _handle_subscription_updated(event["data"]["object"], db)
