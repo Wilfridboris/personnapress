@@ -441,9 +441,9 @@ async def _handle_subscription_updated(sub_obj: dict, db: AsyncSession) -> None:
     period_start = first_item.get("current_period_start") or sub_obj.get("current_period_start")
     period_end = first_item.get("current_period_end") or sub_obj.get("current_period_end")
     if period_start is not None:
-        sub.billing_cycle_start = datetime.fromtimestamp(period_start, tz=timezone.utc)
+        sub.billing_cycle_start = datetime.fromtimestamp(period_start, tz=timezone.utc).replace(tzinfo=None)
     if period_end is not None:
-        sub.billing_cycle_end = datetime.fromtimestamp(period_end, tz=timezone.utc)
+        sub.billing_cycle_end = datetime.fromtimestamp(period_end, tz=timezone.utc).replace(tzinfo=None)
     sub.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
 
