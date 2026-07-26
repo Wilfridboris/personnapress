@@ -18,6 +18,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/verify-email") ||
     pathname.startsWith("/api/auth/") ||
     pathname.startsWith("/api/webhooks/") ||
+    pathname.startsWith("/api/email-capture") ||
     pathname.startsWith("/headless-blog-api") ||
     pathname.startsWith("/github-publisher") ||
     pathname.startsWith("/privacy") ||
