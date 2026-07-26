@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY?.trim();
-const RESEND_AUDIENCE_ID = process.env.RESEND_AUDIENCE_ID?.trim();
+const RESEND_SEGMENT_ID = process.env.RESEND_SEGMENT_ID?.trim();
 
 // Module-level singleton — avoids re-initialising on every request
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
@@ -27,8 +27,8 @@ function _allow(ip: string): boolean {
 const VALID_SOURCES = new Set(['homepage', 'pricing', 'about', 'blog', 'unknown']);
 
 export async function POST(req: NextRequest) {
-  if (!RESEND_API_KEY || !RESEND_AUDIENCE_ID || !resend) {
-    console.warn('[email-capture] Missing RESEND_API_KEY or RESEND_AUDIENCE_ID');
+  if (!RESEND_API_KEY || !RESEND_SEGMENT_ID || !resend) {
+    console.warn('[email-capture] Missing RESEND_API_KEY or RESEND_SEGMENT_ID');
     return NextResponse.json({ error: 'Service unavailable' }, { status: 500 });
   }
 
@@ -59,11 +59,9 @@ export async function POST(req: NextRequest) {
 
   try {
     await resend.contacts.create({
-      audienceId: RESEND_AUDIENCE_ID,
       email,
       unsubscribed: false,
-      firstName: undefined,
-      lastName: undefined,
+      segments: [{ id: RESEND_SEGMENT_ID }],
     });
     return NextResponse.json({ subscribed: true });
   } catch (err: unknown) {
