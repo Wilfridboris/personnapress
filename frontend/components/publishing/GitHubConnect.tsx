@@ -446,8 +446,20 @@ export function GitHubConnect({ clientId, connection }: Props) {
         titleId="disconnect-github-dialog-heading"
         triggerRef={disconnectTriggerRef}
       >
-        <p className="text-sm text-[#555555] mb-6">
+        <p className="text-sm text-[#555555] mb-3">
           Future campaigns will not publish to this GitHub repository. The GitHub App installation itself is not revoked.
+        </p>
+        <p className="text-sm text-[#555555] mb-6">
+          To connect a different GitHub account, first{" "}
+          <a
+            href="https://github.com/settings/installations"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-[#111111] transition-colors"
+          >
+            uninstall the PersonnaPress GitHub App
+          </a>{" "}
+          from GitHub, then reconnect here.
         </p>
         {disconnectError && (
           <p className="text-xs text-[#C0392B] mb-4" role="alert">{disconnectError}</p>

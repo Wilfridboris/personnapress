@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.db.connection import get_session
 from app.db.repositories.campaigns import update_campaign_status
-from app.db.repositories.models import Campaign
+from app.db.repositories.models import Campaign, User
 from app.services.subscription_service import handle_stripe_webhook
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
@@ -63,6 +63,23 @@ async def github_webhook(
         raise HTTPException(status_code=500, detail="GitHub webhook secret not configured")
     if not _verify_github_signature(payload, sig_header, secret):
         raise HTTPException(status_code=400, detail="Invalid GitHub signature")
+
+    if event_type == "installation":
+        try:
+            body = json.loads(payload)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload")
+        if body.get("action") == "deleted":
+            installation_id = str(body.get("installation", {}).get("id", ""))
+            if installation_id:
+                await db.execute(
+                    User.__table__.update()
+                    .where(User.github_installation_id == installation_id)
+                    .values(github_installation_id=None)
+                )
+                await db.commit()
+                logger.info("GitHub App uninstalled: cleared installation_id %s", installation_id)
+        return {"received": True}
 
     if event_type != "pull_request":
         return {"received": True}
