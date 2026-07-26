@@ -1150,6 +1150,18 @@ async def delete_platform_connection(
             detail={"error": {"code": "NOT_FOUND", "message": "Connection not found.", "detail": {}}},
         )
 
+    # When a GitHub connection is removed, clear the user-level installation_id
+    # so the next connect goes through a fresh lookup. If the user still has
+    # other GitHub-connected clients the backfill in get_existing_github_installation_id
+    # will re-populate it; if not, they'll go through the full install flow.
+    if platform == "github_pages":
+        await db.execute(
+            User.__table__.update()
+            .where(User.id == user_id)
+            .values(github_installation_id=None)
+        )
+        await db.commit()
+
 
 @router.post("/campaigns/{campaign_id}/publish-headless", status_code=200)
 async def publish_headless(
