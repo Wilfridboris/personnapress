@@ -427,8 +427,9 @@ async def _handle_subscription_updated(sub_obj: dict, db: AsyncSession) -> None:
 
     price_to_tier = get_stripe_price_to_tier()
     items = sub_obj.get("items", {}).get("data", [])
-    if items:
-        price_id = items[0].get("price", {}).get("id")
+    first_item = items[0] if items else {}
+    if first_item:
+        price_id = first_item.get("price", {}).get("id")
         if price_id and price_id in price_to_tier:
             sub.plan_tier = price_to_tier[price_id]
 
@@ -436,10 +437,9 @@ async def _handle_subscription_updated(sub_obj: dict, db: AsyncSession) -> None:
     if sub.status == "active":
         sub.deletion_scheduled_at = None  # cancel any pending deletion when user subscribes
 
-    period_start = sub_obj.get("current_period_start")
-    period_end = sub_obj.get("current_period_end")
-    if period_start is None or period_end is None:
-        logger.warning("Stripe sub object missing billing period fields. Available keys: %s", list(sub_obj.keys()))
+    # Stripe API 2026-06-24.dahlia moved billing periods from subscription root to item level
+    period_start = first_item.get("current_period_start") or sub_obj.get("current_period_start")
+    period_end = first_item.get("current_period_end") or sub_obj.get("current_period_end")
     if period_start is not None:
         sub.billing_cycle_start = datetime.fromtimestamp(period_start, tz=timezone.utc)
     if period_end is not None:
