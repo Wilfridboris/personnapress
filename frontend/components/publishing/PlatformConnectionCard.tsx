@@ -232,7 +232,7 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
                   <button type="button" onClick={() => setWpType(null)}
                     className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors"
                     aria-label="Back to WordPress hosting type selection">
-                    ← Back
+                    Back
                   </button>
                   <button type="button" onClick={handleCancel}
                     className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors">
@@ -308,7 +308,7 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
                   <button type="button" onClick={() => setWpType(null)}
                     className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors"
                     aria-label="Back to WordPress hosting type selection">
-                    ← Back
+                    Back
                   </button>
                   <button type="button" onClick={handleCancel}
                     className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors">
