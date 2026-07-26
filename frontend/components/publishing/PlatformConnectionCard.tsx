@@ -190,9 +190,15 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
           <div className="mt-4 pt-4 border-t border-[#E5E5E5] space-y-4">
             {connection.platform === "wordpress" && wpType === null && (
               <fieldset>
-                <legend className="block text-xs font-medium text-[#111111] mb-3">
-                  Where is your WordPress site hosted?
-                </legend>
+                <div className="flex items-center justify-between mb-3">
+                  <legend className="text-xs font-medium text-[#111111]">
+                    Where is your WordPress site hosted?
+                  </legend>
+                  <button type="button" onClick={handleCancel}
+                    className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors">
+                    Cancel
+                  </button>
+                </div>
                 <div className="space-y-2">
                   <button
                     type="button"
@@ -217,20 +223,22 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
                     </span>
                   </button>
                 </div>
-                <button type="button" onClick={handleCancel}
-                  className="mt-4 text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors">
-                  Cancel
-                </button>
               </fieldset>
             )}
 
             {connection.platform === "wordpress" && wpType === "self-hosted" && (
               <div className="space-y-4">
-                <button type="button" onClick={() => setWpType(null)}
-                  className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors"
-                  aria-label="Back to WordPress hosting type selection">
-                  Back
-                </button>
+                <div className="flex items-center justify-between">
+                  <button type="button" onClick={() => setWpType(null)}
+                    className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors"
+                    aria-label="Back to WordPress hosting type selection">
+                    ← Back
+                  </button>
+                  <button type="button" onClick={handleCancel}
+                    className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors">
+                    Cancel
+                  </button>
+                </div>
                 <div className="space-y-1">
                   <label htmlFor={`wp-url-${connection.platform}`} className="block text-xs font-medium text-[#111111]">
                     WordPress site URL
@@ -296,11 +304,17 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
 
             {connection.platform === "wordpress" && wpType === "wordpress-com" && (
               <div className="space-y-4">
-                <button type="button" onClick={() => setWpType(null)}
-                  className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors"
-                  aria-label="Back to WordPress hosting type selection">
-                  Back
-                </button>
+                <div className="flex items-center justify-between">
+                  <button type="button" onClick={() => setWpType(null)}
+                    className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors"
+                    aria-label="Back to WordPress hosting type selection">
+                    ← Back
+                  </button>
+                  <button type="button" onClick={handleCancel}
+                    className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors">
+                    Cancel
+                  </button>
+                </div>
                 <p className="text-xs text-[#555555]">
                   You will be redirected to WordPress.com to authorize access.
                 </p>
@@ -312,12 +326,6 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
                 >
                   {loading ? "Connecting…" : "Connect with WordPress.com"}
                 </a>
-                <div>
-                  <button type="button" onClick={handleCancel}
-                    className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors">
-                    Cancel
-                  </button>
-                </div>
               </div>
             )}
 
