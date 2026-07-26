@@ -435,8 +435,15 @@ async def _handle_subscription_updated(sub_obj: dict, db: AsyncSession) -> None:
     sub.status = sub_obj.get("status", sub.status)
     if sub.status == "active":
         sub.deletion_scheduled_at = None  # cancel any pending deletion when user subscribes
-    sub.billing_cycle_start = datetime.fromtimestamp(sub_obj["current_period_start"], tz=timezone.utc)
-    sub.billing_cycle_end = datetime.fromtimestamp(sub_obj["current_period_end"], tz=timezone.utc)
+
+    period_start = sub_obj.get("current_period_start")
+    period_end = sub_obj.get("current_period_end")
+    if period_start is None or period_end is None:
+        logger.warning("Stripe sub object missing billing period fields. Available keys: %s", list(sub_obj.keys()))
+    if period_start is not None:
+        sub.billing_cycle_start = datetime.fromtimestamp(period_start, tz=timezone.utc)
+    if period_end is not None:
+        sub.billing_cycle_end = datetime.fromtimestamp(period_end, tz=timezone.utc)
     sub.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
 
