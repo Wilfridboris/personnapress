@@ -41,6 +41,7 @@ class Settings(BaseSettings):
 
     SENTRY_DSN: str = ""
     RESEND_API_KEY: str = ""
+    RESEND_AUDIENCE_ID: str = ""
     EMAIL_FROM: str = "PersonnaPress <noreply@personnapress.com>"
 
     APP_URL: str = "http://localhost:3000"

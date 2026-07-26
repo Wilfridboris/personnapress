@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft } from "lucide-react";
+import { EmailCaptureWidget } from "@/components/marketing/EmailCaptureWidget";
 
 export const revalidate = 3600;
 export const dynamicParams = true;
@@ -232,6 +233,8 @@ export default async function BlogDetailPage({
           }}
         />
       </div>
+
+      <EmailCaptureWidget source="blog" />
 
       {/* Bottom nav */}
       <div className="max-w-3xl mx-auto px-6 pb-24 border-t border-border pt-8 mt-4">

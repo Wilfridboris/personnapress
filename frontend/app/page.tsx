@@ -18,6 +18,7 @@ import {
 import { FaqAccordion } from "./_components/FaqAccordion";
 import { PublicHeader } from "@/components/marketing/PublicHeader";
 import { PublicFooter } from "@/components/marketing/PublicFooter";
+import { EmailCaptureWidget } from "@/components/marketing/EmailCaptureWidget";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.personnapress.com";
 
@@ -728,6 +729,8 @@ export default function LandingPage() {
           <FaqAccordion items={FAQ_ITEMS} />
         </section>
       </main>
+
+      <EmailCaptureWidget source="homepage" />
 
       {/* Footer */}
       <PublicFooter />

@@ -19,7 +19,7 @@ from app.core.security import (
     set_session_cookie,
 )
 from app.db.repositories.models import Subscription, User
-from app.integrations.email import send_verification_email
+from app.integrations.email import add_contact_to_audience, send_verification_email
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,17 @@ def _verify_password(password: str, hashed: str) -> bool:
 
 def _dummy_verify() -> None:
     _bcrypt.checkpw(b"dummy", _DUMMY_HASH)
+
+
+def _schedule_add_contact(email: str, source: str) -> None:
+    """Schedule add_contact_to_audience as a true fire-and-forget task."""
+    async def _run() -> None:
+        try:
+            await asyncio.to_thread(add_contact_to_audience, email, source)
+        except Exception:
+            logger.warning("Failed to add user to Resend audience: %s", email)
+    asyncio.create_task(_run())
+
 
 
 def _err(code: str, message: str) -> dict:
@@ -140,6 +151,7 @@ async def verify_email_token(token: str, db: AsyncSession) -> JSONResponse:
     user.verified = True
     await db.commit()
     await db.refresh(user)
+    _schedule_add_contact(user.email, "signup")
     return await _issue_session(user, db)
 
 
@@ -214,6 +226,7 @@ async def auth_google(google_sub: str, email: str, email_verified: bool, db: Asy
         await _new_subscription(user.id, db)
         await db.commit()
         await db.refresh(user)
+        _schedule_add_contact(email, "google_signup")
     else:
         if not user.google_sub:
             user.google_sub = google_sub

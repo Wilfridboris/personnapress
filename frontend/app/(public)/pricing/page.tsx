@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CheckCircle2, X } from "lucide-react";
+import { EmailCaptureWidget } from "@/components/marketing/EmailCaptureWidget";
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://personnapress.com").replace(/\/$/, "");
 
@@ -211,6 +212,8 @@ export default function PricingPage() {
           </dl>
         </section>
       </div>
+
+      <EmailCaptureWidget source="pricing" />
     </>
   );
 }
