@@ -45,7 +45,7 @@ async def stripe_webhook(
         logger.error("Webhook processing error: %s", exc)
         raise HTTPException(status_code=400, detail="Webhook processing failed")
 
-    await handle_stripe_webhook(event, db)
+    await handle_stripe_webhook(json.loads(payload), db)
     return {"received": True}
 
 
