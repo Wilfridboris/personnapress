@@ -7,7 +7,28 @@ import { ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientStore } from "@/lib/stores/useClientStore";
 
-const SAFE_BASES = new Set(["/dashboard", "/articles", "/campaigns", "/calendar", "/connections"]);
+// Top-level routes that are safe to stay on as-is when switching clients.
+const SAFE_BASES = new Set(["/dashboard", "/articles", "/campaigns", "/calendar", "/clients"]);
+// Routes where a deep path (e.g. /campaigns/[id]) should collapse to the list on switch.
+const COLLAPSE_TO_PARENT = new Set(["articles", "campaigns"]);
+
+function getTargetPath(pathname: string, newClientId: string): string {
+  const segments = pathname.split("/").filter(Boolean);
+  const [first, second, third] = segments;
+
+  if (!first) return "/dashboard";
+
+  // /clients/[id] or /clients/[id]/connections|voice → swap in the new client ID.
+  if (first === "clients" && second && second !== "new") {
+    return third ? `/clients/${newClientId}/${third}` : `/clients/${newClientId}`;
+  }
+
+  // /campaigns/[id] or /articles/[id] → the item belongs to the old client, go to the list.
+  if (COLLAPSE_TO_PARENT.has(first) && second) return `/${first}`;
+
+  const base = `/${first}`;
+  return SAFE_BASES.has(base) ? base : "/dashboard";
+}
 
 export function ClientSwitcher() {
   const router = useRouter();
@@ -50,8 +71,7 @@ export function ClientSwitcher() {
   function selectClient(id: string) {
     setActiveClientId(id);
     setIsOpen(false);
-    const base = "/" + (pathname.split("/")[1] ?? "dashboard");
-    router.push(SAFE_BASES.has(base) ? base : "/dashboard");
+    router.push(getTargetPath(pathname, id));
   }
 
   return (
