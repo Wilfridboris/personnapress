@@ -42,6 +42,7 @@ class User(SQLModel, table=True):
     hashed_password: Optional[str] = None
     google_sub: Optional[str] = None
     stripe_customer_id: Optional[str] = None
+    github_installation_id: Optional[str] = Field(default=None, nullable=True)
     verified: bool = Field(default=False)
     onboarding_completed: bool = Field(default=False)
     created_at: datetime = Field(default_factory=utcnow)

@@ -21,7 +21,7 @@ from app.core.security import decrypt_credential, encrypt_credential
 from app.db.connection import get_session
 from app.db.repositories.campaigns import get_campaign, update_campaign_scheduled_at
 from app.db.repositories.clients import get_client
-from app.db.repositories.models import Client, PlatformConnection
+from app.db.repositories.models import Client, PlatformConnection, User
 from app.db.repositories.jobs import create_job, get_publish_job_for_campaign, get_scheduled_job
 from app.db.repositories.platform_connections import (
     delete_connection,
@@ -405,12 +405,22 @@ async def get_existing_github_installation_id(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict:
-    """Return a GitHub App installation_id already stored for any of the user's clients.
+    """Return a GitHub App installation_id for this user.
 
-    Used by the frontend to skip the GitHub installation flow when the app is
-    already installed on the user's GitHub account (subsequent client connections).
+    Checks the user-level field first (survives client disconnects), then falls
+    back to any active client connection. Used by the frontend to skip the
+    GitHub install flow when the app is already installed on the user's account.
     """
     user_id = _parse_user_id(current_user)
+
+    # User-level field — populated on every successful GitHub connect and
+    # preserved even after client connections are deleted.
+    user_result = await db.execute(select(User.github_installation_id).where(User.id == user_id))
+    user_installation_id = user_result.scalar_one_or_none()
+    if user_installation_id:
+        return {"installation_id": user_installation_id}
+
+    # Fallback: scan active client connections (pre-migration rows).
     result = await db.execute(
         select(PlatformConnection.encrypted_credentials)
         .join(Client, PlatformConnection.client_id == Client.id)
@@ -422,7 +432,16 @@ async def get_existing_github_installation_id(
         return {"installation_id": None}
     try:
         cred = json.loads(decrypt_credential(row))
-        return {"installation_id": cred.get("installation_id")}
+        installation_id = cred.get("installation_id")
+        # Backfill user-level field from active connection.
+        if installation_id:
+            await db.execute(
+                User.__table__.update()
+                .where(User.id == user_id)
+                .values(github_installation_id=installation_id)
+            )
+            await db.commit()
+        return {"installation_id": installation_id}
     except Exception:
         logger.warning("Failed to decrypt GitHub credential for installation-id lookup", exc_info=True)
         return {"installation_id": None}
@@ -455,6 +474,14 @@ async def connect_github(
     })
     encrypted = encrypt_credential(cred_json)
     await upsert_connection(db, client_id, "github_pages", encrypted)
+
+    # Persist installation_id at user level so it survives client disconnects.
+    await db.execute(
+        User.__table__.update()
+        .where(User.id == user_id)
+        .values(github_installation_id=body.installation_id)
+    )
+    await db.commit()
 
     return {"platform": "github_pages", "connected": True, "account_identifier": None}
 
