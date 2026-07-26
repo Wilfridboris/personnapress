@@ -207,6 +207,13 @@
 - `_md_to_html` DOTALL flag can span multi-line bold across tag boundaries — pre-existing behaviour moved unchanged from gemini.py; assess if LLM output ever triggers this. [backend/app/integrations/generation_prompts.py:232]
 - `_strip_fences` no mid-output closing fence detection — pre-existing behaviour moved from gemini.py; only last-line ```` check implemented. [backend/app/integrations/generation_prompts.py:217]
 
+## Deferred from: code review of 19-2-transactional-email-template-reengagement (2026-07-26)
+
+- Rollback called before `sentry_sdk.capture_exception`/`logger.error` — if rollback itself raises, original exception is lost and neither Sentry nor log captures it. Pre-existing pattern in cleanup.py. [backend/app/workers/reengagement.py:54]
+- `WITH FOR UPDATE` lock held across `asyncio.to_thread` Resend network call — DB connection held open during third-party HTTP. Pre-existing pattern in cleanup.py `_phase1_warn`. [backend/app/workers/cleanup.py:64]
+- No unsubscribe link in re-engagement email — CAN-SPAM/GDPR technically require opt-out for marketing emails; pre-existing omission on all emails in codebase. Address before scaling.
+- `BATCH_LIMIT=50` single-pass per daily run — eligible users beyond 50 wait until the next day. Acceptable for current volume; add pagination loop if list grows large.
+
 ## Deferred from: code review of spec-fix-blog-save-comments-stripped (2026-07-24)
 
 - Unconditional overwrite on re-generation — `run_generation_pipeline` always overwrites `campaign.excerpt` / `campaign.meta_description` without checking whether the fields were set by a previous run. Design intent per spec: revoice creates fresh campaigns, not re-runs on existing ones. Revisit if a user-editable excerpt workflow is added later. [backend/app/services/generation.py:165-166]

@@ -3,6 +3,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.core.config import settings
 from app.workers.cleanup import subscription_cleanup
+from app.workers.reengagement import trial_reengagement_check
 
 
 def create_scheduler() -> AsyncIOScheduler:
@@ -19,6 +20,17 @@ def create_scheduler() -> AsyncIOScheduler:
         hour=2,
         minute=0,
         id="subscription_cleanup",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    # Daily re-engagement job — runs at 09:00 UTC every day.
+    scheduler.add_job(
+        trial_reengagement_check,
+        trigger="cron",
+        hour=9,
+        minute=0,
+        id="trial_reengagement_check",
         replace_existing=True,
         misfire_grace_time=3600,
     )

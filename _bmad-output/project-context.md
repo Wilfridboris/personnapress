@@ -18,6 +18,16 @@ _Documented after discovery phase_
 
 ## Critical Implementation Rules
 
+### No Em-dashes in User-facing Copy
+
+**Never use em-dashes (`—`) in any user-facing text.** This is a firm design and communication constraint for PersonnaPress. It applies to:
+- All UI copy: labels, descriptions, success/error messages, button text, placeholders
+- All email content: subject lines, body text, CTA labels
+- All public page copy: headings, subtitles, body paragraphs
+
+
+---
+
 ### Next.js 16 + Turbopack: RSC Re-render Loop in Dev Mode
 
 In Turbopack dev mode, some pages trigger repeated RSC re-renders (15–34+ per visit). Root cause is unknown (likely Turbopack HMR internals). The key mitigation rule:
