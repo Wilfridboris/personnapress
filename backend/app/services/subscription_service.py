@@ -181,6 +181,88 @@ async def check_campaign_limit(db: AsyncSession, user_id: uuid.UUID) -> None:
         await db.flush()
 
 
+async def check_roadmap_limit(db: AsyncSession, user_id: uuid.UUID) -> None:
+    sub_result = await db.execute(
+        select(Subscription).where(Subscription.user_id == user_id).with_for_update()
+    )
+    sub = sub_result.scalars().first()
+
+    if sub and sub.status in ("canceled", "expired", "past_due"):
+        plan_tier = "starter"
+    else:
+        plan_tier = (sub.plan_tier if sub else None) or "starter"
+
+    limit = PLAN_LIMITS.get(plan_tier, PLAN_LIMITS["starter"])["roadmaps"]
+
+    if sub:
+        current: int = sub.roadmaps_used
+    else:
+        current = 0
+
+    if limit >= UNLIMITED:
+        # Agency: no cap; still increment so account screen stays accurate
+        if sub:
+            sub.roadmaps_used = current + 1
+            await db.flush()
+        return
+
+    if current >= limit:
+        next_tier_map = {"starter": "growth", "growth": "agency"}
+        next_tier = next_tier_map.get(plan_tier, "agency")
+        if plan_tier == "starter":
+            message = (
+                "You've reached your 1-roadmap limit for this billing cycle. "
+                "Upgrade to Growth for 4 roadmaps per month."
+            )
+        else:
+            message = (
+                f"You've reached your {limit}-roadmap limit for this billing cycle. "
+                "Upgrade to Agency for unlimited roadmaps."
+            )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": "ROADMAP_LIMIT_EXCEEDED",
+                    "message": message,
+                    "detail": {
+                        "current": current,
+                        "limit": limit,
+                        "plan": plan_tier,
+                        "next_tier": next_tier,
+                    },
+                }
+            },
+        )
+
+    if sub:
+        sub.roadmaps_used = current + 1
+        await db.flush()
+
+
+async def check_image_limit_batch(db: AsyncSession, user_id: uuid.UUID, count: int) -> tuple[int, int]:
+    """Return (allowed, blocked) images given remaining quota. Never raises."""
+    sub_result = await db.execute(
+        select(Subscription).where(Subscription.user_id == user_id)
+    )
+    sub = sub_result.scalars().first()
+
+    if sub and sub.status in ("canceled", "expired", "past_due"):
+        plan_tier = "starter"
+    else:
+        plan_tier = sub.plan_tier if sub else "starter"
+
+    limit = PLAN_LIMITS.get(plan_tier, PLAN_LIMITS["starter"])["image_gens"]
+    current: int = sub.image_gen_used if sub else 0
+
+    if limit >= UNLIMITED:
+        return (count, 0)
+
+    allowed = max(0, min(count, limit - current))
+    blocked = count - allowed
+    return (allowed, blocked)
+
+
 async def check_image_limit(db: AsyncSession, user_id: uuid.UUID) -> None:
     sub_result = await db.execute(
         select(Subscription).where(Subscription.user_id == user_id).with_for_update()
@@ -267,6 +349,7 @@ async def get_subscription(user_id: str, db: AsyncSession) -> SubscriptionRespon
         campaigns_used=sub.campaigns_used,
         clients_count=clients_count,
         image_gen_used=sub.image_gen_used,
+        roadmaps_used=sub.roadmaps_used,
         billing_cycle_start=sub.billing_cycle_start,
         billing_cycle_end=sub.billing_cycle_end,
         plan_limits=PlanLimits(**limits),

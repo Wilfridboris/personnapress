@@ -8,6 +8,7 @@ class PlanLimits(BaseModel):
     clients: int
     campaigns: int
     image_gens: int
+    roadmaps: int
 
 
 class CheckoutRequest(BaseModel):
@@ -24,6 +25,7 @@ class SubscriptionResponse(BaseModel):
     campaigns_used: int
     clients_count: int
     image_gen_used: int
+    roadmaps_used: int = 0
     billing_cycle_start: datetime
     billing_cycle_end: datetime
     deletion_scheduled_at: Optional[datetime] = None

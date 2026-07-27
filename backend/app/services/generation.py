@@ -226,6 +226,53 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
         await _fail_job(db, job, "Generation service temporarily unavailable. Retry in a few minutes.")
 
 
+async def generate_social_only(
+    brain_dump: str,
+    bvp: dict | None,
+    platform: str,
+    campaign_id: uuid.UUID,
+    db: AsyncSession,
+) -> None:
+    """Generate a single social post for a roadmap-only-social campaign.
+
+    Calls generate_social (0 thinking tokens) and writes only the requested
+    platform field to the Campaign row. The other platform field is left NULL.
+    """
+    campaign_result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
+    campaign = campaign_result.scalar_one_or_none()
+    if not campaign:
+        logger.error("generate_social_only: campaign %s not found", campaign_id)
+        return
+
+    social: dict = await _llm_with_retry(
+        _llm.generate_social,
+        brain_dump,
+        "",
+        bvp,
+        _SOCIAL_THINKING_TOKENS,
+    )
+
+    if platform == "x":
+        post_content = social.get("x_post")
+        if not post_content:
+            logger.error("generate_social_only: empty x_post from LLM for campaign %s", campaign_id)
+            raise ValueError("LLM returned empty x_post content")
+        campaign.x_post = post_content
+    elif platform == "linkedin":
+        post_content = social.get("linkedin_post")
+        if not post_content:
+            logger.error("generate_social_only: empty linkedin_post from LLM for campaign %s", campaign_id)
+            raise ValueError("LLM returned empty linkedin_post content")
+        campaign.linkedin_post = post_content
+    else:
+        logger.error("generate_social_only: unknown platform %r for campaign %s", platform, campaign_id)
+        return
+
+    campaign.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.commit()
+    logger.info("generate_social_only: campaign %s platform=%s done", campaign_id, platform)
+
+
 async def _fail_job(db: AsyncSession, job: Job, error_details: str) -> None:
     """Mark a job as failed with the given error details and commit."""
     try:

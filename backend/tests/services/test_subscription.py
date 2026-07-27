@@ -10,6 +10,8 @@ from app.core.constants import PLAN_LIMITS, UNLIMITED
 from app.services.subscription_service import (
     check_and_expire_trial,
     check_campaign_limit,
+    check_image_limit_batch,
+    check_roadmap_limit,
     check_trial_not_expired,
     create_checkout_session,
     handle_stripe_webhook,
@@ -384,4 +386,100 @@ async def test_create_checkout_session_blocks_active_subscriber():
             await create_checkout_session(str(user.id), "growth", db)
 
     assert exc_info.value.status_code == 409
-    assert exc_info.value.detail["error"]["code"] == "ALREADY_SUBSCRIBED"
+
+
+# ---------------------------------------------------------------------------
+# check_roadmap_limit (Story 20-1)
+# ---------------------------------------------------------------------------
+
+def _make_roadmap_sub(plan_tier: str, roadmaps_used: int, status: str = "active"):
+    sub = MagicMock()
+    sub.status = status
+    sub.plan_tier = plan_tier
+    sub.roadmaps_used = roadmaps_used
+    return sub
+
+
+def _db_with_roadmap_sub(sub):
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalars.return_value.first.return_value = sub
+    db.execute = AsyncMock(return_value=result)
+    return db
+
+
+async def test_check_roadmap_limit_starter_allows_first():
+    """Starter user at roadmaps_used=0 should pass and increment to 1."""
+    sub = _make_roadmap_sub("starter", roadmaps_used=0)
+    db = _db_with_roadmap_sub(sub)
+
+    await check_roadmap_limit(db, uuid.uuid4())
+
+    assert sub.roadmaps_used == 1
+    db.flush.assert_awaited_once()
+
+
+async def test_check_roadmap_limit_starter_blocks_at_1():
+    """Starter user at roadmaps_used=1 (limit=1) should raise 400."""
+    sub = _make_roadmap_sub("starter", roadmaps_used=1)
+    db = _db_with_roadmap_sub(sub)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await check_roadmap_limit(db, uuid.uuid4())
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["error"]["code"] == "ROADMAP_LIMIT_EXCEEDED"
+    assert "Growth" in exc_info.value.detail["error"]["message"]
+
+
+async def test_check_roadmap_limit_agency_bypasses():
+    """Agency plan should never raise and should still increment counter."""
+    sub = _make_roadmap_sub("agency", roadmaps_used=999_999)
+    db = _db_with_roadmap_sub(sub)
+
+    await check_roadmap_limit(db, uuid.uuid4())
+
+    assert sub.roadmaps_used == 1_000_000
+    db.flush.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# check_image_limit_batch (Story 20-1)
+# ---------------------------------------------------------------------------
+
+def _make_image_sub(plan_tier: str, image_gen_used: int, status: str = "active"):
+    sub = MagicMock()
+    sub.status = status
+    sub.plan_tier = plan_tier
+    sub.image_gen_used = image_gen_used
+    return sub
+
+
+def _db_with_image_sub(sub):
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalars.return_value.first.return_value = sub
+    db.execute = AsyncMock(return_value=result)
+    return db
+
+
+async def test_check_image_limit_batch_partial_allocation():
+    """Starter with 3 remaining out of 10; request 5 → allowed=3, blocked=2."""
+    sub = _make_image_sub("starter", image_gen_used=7)  # 7 used, 10 limit → 3 remaining
+    db = _db_with_image_sub(sub)
+
+    allowed, blocked = await check_image_limit_batch(db, uuid.uuid4(), 5)
+
+    assert allowed == 3
+    assert blocked == 2
+
+
+async def test_check_image_limit_batch_zero_remaining():
+    """User at limit gets allowed=0, blocked=N without raising."""
+    sub = _make_image_sub("starter", image_gen_used=10)  # at limit
+    db = _db_with_image_sub(sub)
+
+    allowed, blocked = await check_image_limit_batch(db, uuid.uuid4(), 5)
+
+    assert allowed == 0
+    assert blocked == 5

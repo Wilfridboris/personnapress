@@ -1,8 +1,10 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Union
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
@@ -461,4 +463,47 @@ async def revoke_client_delivery_token(
     await db.commit()
 
     return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# Roadmap config (Epic 20)
+# ---------------------------------------------------------------------------
+
+class RoadmapConfigRequest(BaseModel):
+    linkedin_count: int = Field(ge=0, le=14)
+    twitter_count: int = Field(ge=0, le=14)
+    blog_enabled: bool
+    images_enabled: bool
+
+
+class RoadmapConfigResponse(BaseModel):
+    roadmap_config: dict
+
+
+@router.patch("/{client_id}/roadmap-config", response_model=RoadmapConfigResponse)
+async def patch_roadmap_config(
+    client_id: uuid.UUID,
+    body: RoadmapConfigRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> RoadmapConfigResponse:
+    try:
+        user_id = uuid.UUID(current_user["user_id"])
+    except (ValueError, KeyError):
+        raise HTTPException(status_code=401, detail=_INVALID_SESSION)
+
+    client = await get_client(db, client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+
+    client.roadmap_config = {
+        "linkedin_count": body.linkedin_count,
+        "twitter_count": body.twitter_count,
+        "blog_enabled": body.blog_enabled,
+        "images_enabled": body.images_enabled,
+    }
+    client.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.commit()
+
+    return RoadmapConfigResponse(roadmap_config=client.roadmap_config)
 

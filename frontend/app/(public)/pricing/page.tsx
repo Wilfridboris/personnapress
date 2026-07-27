@@ -43,6 +43,7 @@ const jsonLd = {
 const COMPARISON_ROWS: { label: string; starter: boolean | string; growth: boolean | string; agency: boolean | string }[] = [
   { label: "Clients",                   starter: "2",    growth: "5",    agency: "20" },
   { label: "Campaigns per month",       starter: "10",   growth: "30",   agency: "Unlimited" },
+  { label: "Weekly roadmaps/month",     starter: "1",    growth: "4",    agency: "Unlimited" },
   { label: "Image generations/month",   starter: "10",   growth: "30",   agency: "100" },
   { label: "WordPress publishing",      starter: true,   growth: true,   agency: true },
   { label: "X and LinkedIn",            starter: true,   growth: true,   agency: true },

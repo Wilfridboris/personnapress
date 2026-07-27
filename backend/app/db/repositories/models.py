@@ -1,11 +1,19 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import Column, Enum as SAEnum, Text, UniqueConstraint
+from sqlalchemy import Column, Date, Enum as SAEnum, ForeignKey, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
+
+
+class RoadmapStatus(str, Enum):
+    pending = "pending"
+    generating = "generating"
+    ready = "ready"
+    failed = "failed"
 
 
 def utcnow() -> datetime:
@@ -61,6 +69,7 @@ class Subscription(SQLModel, table=True):
     image_gen_used: int = Field(default=0)
     billing_cycle_start: datetime
     billing_cycle_end: datetime
+    roadmaps_used: int = Field(default=0)
     deletion_scheduled_at: Optional[datetime] = Field(default=None, nullable=True)
     reengagement_email_sent_at: Optional[datetime] = Field(default=None, nullable=True)
     created_at: datetime = Field(default_factory=utcnow)
@@ -75,6 +84,9 @@ class Client(SQLModel, table=True):
     name: str
     website_url: Optional[str] = None
     brand_voice_profile: Optional[dict] = Field(
+        default=None, sa_column=Column(JSONB, nullable=True)
+    )
+    roadmap_config: Optional[dict] = Field(
         default=None, sa_column=Column(JSONB, nullable=True)
     )
     created_at: datetime = Field(default_factory=utcnow)
@@ -100,6 +112,31 @@ class PlatformConnection(SQLModel, table=True):
         )
     )
     encrypted_credentials: str
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class Roadmap(SQLModel, table=True):
+    __tablename__ = "roadmaps"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    client_id: uuid.UUID = Field(foreign_key="clients.id")
+    brain_dump: str = Field(sa_column=Column(Text, nullable=False))
+    status: RoadmapStatus = Field(
+        default=RoadmapStatus.pending,
+        sa_column=Column(
+            SAEnum(RoadmapStatus, name="roadmap_status_enum", create_constraint=True),
+            nullable=False,
+            default=RoadmapStatus.pending,
+        ),
+    )
+    week_start_date: Optional[date] = Field(
+        default=None, sa_column=Column(Date, nullable=True)
+    )
+    generate_images: bool = Field(default=True)
+    skip_blog: bool = Field(default=False)
+    error_message: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
@@ -135,6 +172,15 @@ class Campaign(SQLModel, table=True):
     target_audience: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     secondary_keywords: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     github_pr_url: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True, index=True))
+    roadmap_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("roadmaps.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

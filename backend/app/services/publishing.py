@@ -481,12 +481,18 @@ async def dispatch_publish_for_platform(
         elif platform == "webflow":
             await webflow_integration.publish_post(creds, campaign)
         elif platform == "x":
-            await twitter_integration.create_tweet(creds["access_token"], campaign.x_post or "")
+            if not campaign.x_post:
+                logger.debug("dispatch_publish_for_platform: skipping x (null x_post) campaign=%s", campaign_id)
+                return {platform: "skipped"}
+            await twitter_integration.create_tweet(creds["access_token"], campaign.x_post)
         elif platform == "linkedin":
+            if not campaign.linkedin_post:
+                logger.debug("dispatch_publish_for_platform: skipping linkedin (null linkedin_post) campaign=%s", campaign_id)
+                return {platform: "skipped"}
             await linkedin_integration.create_ugc_post(
                 creds["access_token"],
                 campaign.blog_html or "",
-                campaign.linkedin_post or "",
+                campaign.linkedin_post,
             )
         elif platform == "github_pages":
             await _publish_github(campaign, creds, db)
@@ -560,22 +566,30 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                 await webflow_integration.publish_post(creds, campaign)
 
             elif platform == "x":
+                if not campaign.x_post:
+                    logger.debug("dispatch_publish: skipping x (null x_post) campaign=%s", campaign_id)
+                    results[platform] = "skipped"
+                    continue
                 now = asyncio.get_running_loop().time()
                 if last_x_publish_time and now - last_x_publish_time < 2.0:
                     await asyncio.sleep(2.0 - (now - last_x_publish_time))
                 await twitter_integration.create_tweet(
-                    creds["access_token"], campaign.x_post or ""
+                    creds["access_token"], campaign.x_post
                 )
                 last_x_publish_time = asyncio.get_running_loop().time()
 
             elif platform == "linkedin":
+                if not campaign.linkedin_post:
+                    logger.debug("dispatch_publish: skipping linkedin (null linkedin_post) campaign=%s", campaign_id)
+                    results[platform] = "skipped"
+                    continue
                 now = asyncio.get_running_loop().time()
                 if last_linkedin_publish_time and now - last_linkedin_publish_time < 5.0:
                     await asyncio.sleep(5.0 - (now - last_linkedin_publish_time))
                 await linkedin_integration.create_ugc_post(
                     creds["access_token"],
                     campaign.blog_html or "",
-                    campaign.linkedin_post or "",
+                    campaign.linkedin_post,
                 )
                 last_linkedin_publish_time = asyncio.get_running_loop().time()
 

@@ -19,7 +19,7 @@ from sqlmodel import select
 
 from app.core.config import settings
 from app.db.repositories import generation_logs as generation_logs_repo
-from app.db.repositories.models import Campaign, Client, Job
+from app.db.repositories.models import Campaign, Client, Job, Subscription
 from app.integrations import supabase_storage
 from app.services import subscription_service
 
@@ -223,6 +223,76 @@ async def run_image_generation(
 
     logger.info(
         "run_image_generation: image complete for campaign %s → %s", campaign_id, public_url
+    )
+
+
+async def generate_image_for_roadmap_campaign(
+    campaign_id: uuid.UUID,
+    user_id: uuid.UUID,
+    title_hint: str,
+    db: AsyncSession,
+) -> None:
+    """Generate an image for a roadmap campaign without a quota check.
+
+    The caller (roadmap service) has already run check_image_limit_batch and
+    determined that this campaign is within the allowed count. This function
+    generates the image, uploads it, and increments image_gen_used directly.
+    On any error, logs a warning and returns without raising.
+    """
+    campaign_result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
+    campaign = campaign_result.scalar_one_or_none()
+    if not campaign:
+        logger.warning("generate_image_for_roadmap_campaign: campaign %s not found", campaign_id)
+        return
+
+    client_result = await db.execute(select(Client).where(Client.id == campaign.client_id))
+    client = client_result.scalar_one_or_none()
+    brand_voice_profile = client.brand_voice_profile if client else None
+
+    blog_title = title_hint or "Untitled"
+    prompt = _build_image_prompt(blog_title, brand_voice_profile)
+    image_alt = _build_image_alt(blog_title)
+    title_slug = _slugify(blog_title)
+    storage_path = f"generated-images/{campaign_id}/{title_slug}.png"
+
+    try:
+        provider_result = await _generate_with_retry(prompt)
+        public_url = await _upload_generated_image(provider_result, storage_path)
+    except Exception as exc:
+        logger.warning(
+            "generate_image_for_roadmap_campaign: image generation failed for campaign %s: %s",
+            campaign_id,
+            exc,
+        )
+        sentry_sdk.capture_exception(exc)
+        return
+
+    campaign.image_url = public_url
+    campaign.image_alt = image_alt
+
+    sub_res = await db.execute(
+        select(Subscription).where(Subscription.user_id == user_id).with_for_update()
+    )
+    sub = sub_res.scalars().first()
+    if sub:
+        sub.image_gen_used = sub.image_gen_used + 1
+    else:
+        logger.warning(
+            "generate_image_for_roadmap_campaign: no subscription row for user %s; image_gen_used not tracked",
+            user_id,
+        )
+
+    await generation_logs_repo.create_generation_log(
+        db,
+        user_id=user_id,
+        campaign_id=campaign_id,
+        replicate_count=1,
+    )
+    await db.commit()
+    logger.info(
+        "generate_image_for_roadmap_campaign: image complete for campaign %s → %s",
+        campaign_id,
+        public_url,
     )
 
 

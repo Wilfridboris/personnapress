@@ -49,7 +49,11 @@ def _make_db(campaigns, total):
     data_result = MagicMock()
     data_result.scalars.return_value.all.return_value = campaigns
 
-    db.execute = AsyncMock(side_effect=[count_result, data_result])
+    # 3rd call: client names lookup (Client.id, Client.name rows)
+    names_result = MagicMock()
+    names_result.all.return_value = []
+
+    db.execute = AsyncMock(side_effect=[count_result, data_result, names_result])
     return db
 
 

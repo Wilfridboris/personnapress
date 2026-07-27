@@ -224,6 +224,7 @@ const AFTER_ITEMS = [
 const STARTER_FEATURES = [
   "2 clients",
   "10 campaigns per month",
+  "1 weekly roadmap per month",
   "10 image generations per month",
   "All publishing platforms (WordPress, GitHub)",
   "X and LinkedIn publishing",
@@ -237,6 +238,7 @@ const STARTER_FEATURES = [
 const GROWTH_FEATURES = [
   "5 clients",
   "30 campaigns per month",
+  "4 weekly roadmaps per month",
   "30 image generations per month",
   "Everything in Starter",
 ];
@@ -244,6 +246,7 @@ const GROWTH_FEATURES = [
 const AGENCY_FEATURES = [
   "20 clients",
   "Unlimited campaigns",
+  "Unlimited weekly roadmaps",
   "100 image generations per month",
   "Everything in Growth",
   "Priority support",

@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 20-1-roadmap-generation-engine (2026-07-27)
+
+- Concurrent image quota overdraw: `check_image_limit_batch` reads remaining quota without `with_for_update`; two concurrent roadmaps from the same user can both be told "N images remaining" and both proceed to generate them, exceeding the plan limit. Fix requires pre-reserving quota or a serialized allocation approach. [backend/app/services/subscription_service.py]
+- BackgroundTasks not a durable job queue: if the worker process crashes mid-generation, the roadmap is stuck in "generating" status with no retry. Accepted trade-off per dev notes; consider APScheduler or Celery for durability in a future sprint. [backend/app/routers/roadmaps.py]
+- week_start_date in the past: no validation preventing a user from submitting a past date as week_start_date; roadmap is created with a stale week label. Low harm, can be addressed when a UI is built. [backend/app/routers/roadmaps.py]
+- Missing ondelete on roadmaps.user_id / client_id FKs: FK constraints to users.id and clients.id lack explicit ondelete behavior (defaults to RESTRICT). If a user or client is deleted, roadmap deletion must go through the account-deletion scheduler. Consistent with existing FK pattern in the schema. [backend/alembic/versions/20260727_1653_471dca414d29_add_roadmaps_table_and_roadmap_fields.py]
+
 ## Deferred from: code review of 7-4-stripe-checkout-plan-picker (2026-07-25)
 
 - Stripe SDK synchronous calls (`stripe_sdk.checkout.Session.create`, `stripe_sdk.billing_portal.Session.create`) block the event loop in async FastAPI handlers. Pre-existing pattern in `create_billing_portal_session`; wrapping in `asyncio.to_thread` would fix both. [backend/app/services/subscription_service.py]
