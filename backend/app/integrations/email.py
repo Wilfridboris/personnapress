@@ -204,6 +204,30 @@ def send_deletion_warning_email(to_email: str, deletion_date: str) -> None:
     })
 
 
+def send_welcome_email(to_email: str, first_name: str | None) -> None:
+    salutation = f"Hey {first_name}," if first_name else "Hey,"
+    html = build_email_html(
+        body_html=(
+            f"<p>{salutation}</p>"
+            f"<p>Your email is confirmed - you're in.</p>"
+            f"<p>To get your first blog post, start by creating a client profile. "
+            f"Then paste a few bullet points about what's on your mind this week, "
+            f"and PersonnaPress writes a full post in your voice and publishes it wherever you need it.</p>"
+            f"<p>If you hit a snag or have a question, just reply to this email. It comes straight to me.</p>"
+            f"<p>Boris<br>Founder, PersonnaPress</p>"
+        ),
+        cta_text="Create your first client",
+        cta_url=f"{settings.APP_URL}/dashboard",
+    )
+    resend.Emails.send({
+        "from": settings.EMAIL_FROM,
+        "to": [to_email],
+        "reply_to": "support@personnapress.com",
+        "subject": "You're in - here's what to do first",
+        "html": html,
+    })
+
+
 def send_reengagement_email(to_email: str, first_name: str | None) -> None:
     salutation = f"Hey {first_name}," if first_name else "Hey,"
     html = build_email_html(
