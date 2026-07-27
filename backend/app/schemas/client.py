@@ -100,6 +100,7 @@ class ClientResponse(BaseModel):
     ingestion_failed: bool = False     # True when Gemini extraction failed (AC4)
     ingestion_no_content: bool = False  # True when no scrapeable content found (AC5)
     ingestion_error: Optional[str] = None
+    roadmap_config: Optional[dict] = None
 
     model_config = {"from_attributes": True}
 

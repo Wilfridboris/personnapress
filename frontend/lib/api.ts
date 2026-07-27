@@ -1,4 +1,4 @@
-import type { Article, ArticleListResponse, ExpandedBrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, DeliveryToken, DeliveryTokenCreateResponse, DeliveryTokenListResponse, FileListResponse, GitHubDetectionResult, Job, PlatformConnectionStatus, PublishHeadlessResponse, QuestionnairePayload, RevisionDetail, RevisionListResponse, SubscriptionInfo } from "./types";
+import type { Article, ArticleListResponse, ExpandedBrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, DeliveryToken, DeliveryTokenCreateResponse, DeliveryTokenListResponse, FileListResponse, GitHubDetectionResult, Job, PlatformConnectionStatus, PublishHeadlessResponse, QuestionnairePayload, RevisionDetail, RevisionListResponse, RoadmapConfig, RoadmapCreateResponse, RoadmapStatusResponse, SubscriptionInfo } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -278,6 +278,56 @@ export const imagesApi = {
       throw new APIError(message, code);
     }
     return data as { url: string; path: string };
+  },
+};
+
+export const roadmapsApi = {
+  create: (data: {
+    brain_dump: string;
+    client_id: string;
+    linkedin_count: number;
+    twitter_count: number;
+    blog_enabled: boolean;
+    generate_images: boolean;
+  }) =>
+    apiFetch<RoadmapCreateResponse>("/roadmaps", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  get: (id: string) => apiFetch<RoadmapStatusResponse>(`/roadmaps/${id}`),
+  approve: (id: string, excludedCampaignIds: string[]) =>
+    apiFetch<{ status: string }>(`/roadmaps/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ excluded_campaign_ids: excludedCampaignIds }),
+    }),
+  patchConfig: (clientId: string, config: RoadmapConfig) =>
+    apiFetch<{ roadmap_config: RoadmapConfig }>(`/clients/${clientId}/roadmap-config`, {
+      method: "PATCH",
+      body: JSON.stringify(config),
+    }),
+  uploadCampaignImage: async (campaignId: string, clientId: string, file: File): Promise<{ image_url: string }> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_URL}/api/v1/clients/${clientId}/images`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+    if (!res.ok) {
+      let data: Record<string, unknown> = {};
+      try { data = (await res.json()) as Record<string, unknown>; } catch { /* noop */ }
+      const errShape = (data?.error ?? (data?.detail as Record<string, unknown>)?.error) as { message?: string; code?: string } | undefined;
+      throw new APIError(errShape?.message ?? "Upload failed.", errShape?.code ?? "UPLOAD_FAILED", res.status);
+    }
+    const uploadData = (await res.json()) as { url: string };
+    if (!uploadData?.url) {
+      throw new APIError("Upload succeeded but no URL was returned.", "UPLOAD_FAILED", 200);
+    }
+    await apiFetch<Campaign>(`/campaigns/${campaignId}/image`, {
+      method: "PATCH",
+      body: JSON.stringify({ image_url: uploadData.url, image_alt: "" }),
+    });
+    return { image_url: uploadData.url };
   },
 };
 

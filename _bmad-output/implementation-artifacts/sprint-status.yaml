@@ -1,5 +1,5 @@
 # generated: 2026-06-14
-# last_updated: 2026-07-22  # 17-1-campaign-article-link-image-panel-nav-retention code review complete: 9 patches applied (upload failure addToast, alt save failure addToast, isSavingAlt concurrent guard, imageAlt prop sync useEffect, image_url URL validation, image_alt max_length=500, CampaignImagePatchResponse model, empty body no-op early return, test assertions use body values + attribute access), marked done  # 1-5-account-subscription-management marked done; 8-9-pricing-tier-revision created ready-for-dev (Growth $79→$49, Agency $199→$149, Starter clients 3→2, Agency clients 15→20, unlimited campaigns sentinel)  # 4-5-blog-editor-link-rel-control code review complete: 6 patches applied (editorState?.isLink in modal JSX ×4, onKeyDown e.currentTarget.value, dofollow pre-populate test, nofollow-default test, mailto/slash/hash URL prefix tests, Enter-key submit test), marked done
+# last_updated: 2026-07-27  # 20-2-week-review-ui code review complete: 12 patches applied (UTC date parse, double-click approve guard, configPopulated ref reset on client switch, blog_enabled/images_enabled ?? defaults, image quota warning always shown, quota-locked Toggle disabled, blob: URL conditional img, cancel button disabled during upload, upload URL validation, empty campaigns state, REMOVED badge uppercase, account page Roadmaps row ordering), marked done
 # project: PersonnaPress
 # project_key: NOKEY
 # tracking_system: file-system
@@ -225,5 +225,5 @@ development_status:
   # Epic 20: Content Roadmap & Batch Scheduling
   epic-20: in-progress
   20-1-roadmap-generation-engine: done
-  20-2-week-review-ui: ready-for-dev
+  20-2-week-review-ui: done
   20-3-roadmap-post-management: ready-for-dev

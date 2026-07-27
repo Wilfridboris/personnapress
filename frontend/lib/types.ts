@@ -35,6 +35,13 @@ export interface Client {
   updated_at: string;
 }
 
+export interface RoadmapConfig {
+  linkedin_count: number;
+  twitter_count: number;
+  blog_enabled: boolean;
+  images_enabled: boolean;
+}
+
 export interface ClientResponse {
   id: string;
   name: string;
@@ -46,6 +53,36 @@ export interface ClientResponse {
   ingestion_failed?: boolean;
   ingestion_no_content?: boolean;
   ingestion_error?: string | null;
+  roadmap_config?: RoadmapConfig | null;
+}
+
+export type RoadmapStatus = "pending" | "generating" | "ready" | "failed";
+
+export interface RoadmapCampaignSummary {
+  id: string;
+  campaign_type: string;
+  platform_hint: string;
+  x_post: string | null;
+  linkedin_post: string | null;
+  blog_title: string | null;
+  image_url: string | null;
+  status: string;
+  scheduled_for: string | null;
+}
+
+export interface RoadmapStatusResponse {
+  id: string;
+  status: RoadmapStatus;
+  error_message: string | null;
+  generate_images: boolean;
+  skip_blog: boolean;
+  week_start_date: string | null;
+  campaigns: RoadmapCampaignSummary[];
+}
+
+export interface RoadmapCreateResponse {
+  roadmap_id: string;
+  job_id: string;
 }
 
 export type BrandVoiceProfileStatus = "ready" | "analyzing" | "incomplete";
@@ -223,6 +260,7 @@ export interface PlanLimits {
   clients: number;
   campaigns: number;
   image_gens: number;
+  roadmaps: number;
 }
 
 export interface GitHubDetectionResult {
@@ -264,6 +302,7 @@ export interface SubscriptionResponse {
   campaigns_used: number;
   clients_count: number;
   image_gen_used: number;
+  roadmaps_used: number;
   billing_cycle_start: string;
   billing_cycle_end: string;
   plan_limits: PlanLimits;

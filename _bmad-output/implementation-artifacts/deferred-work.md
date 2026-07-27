@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 20-2-week-review-ui (2026-07-27)
+
+- Blog title edit not persisted to API: `PostEditPanel` for `blog_full` updates `blog_title` in local state only; `campaignsApi.patch` does not expose a `blog_title` field — backend gap, deferred to story 20-3 scope. [PostEditPanel.tsx:60]
+- No polling timeout on /roadmap/[id]/review: a backend stall in "pending"/"generating" runs the 2s refetchInterval indefinitely with no escape path for the user. Backend should always set a terminal status. [RoadmapReviewClient.tsx]
+- 401 from expired session not caught in client components: if session cookie exists but session has expired, server component passes auth but client API calls return 401 — pre-existing pattern, no interceptor in scope. [RoadmapReviewClient.tsx]
+- Orphaned storage asset when image PATCH fails after upload: file lands in storage but campaign record never updates; error IS surfaced to user but file stays orphaned — requires background cleanup job. [api.ts:uploadCampaignImage]
+
 ## Deferred from: code review of 20-1-roadmap-generation-engine (2026-07-27)
 
 - Concurrent image quota overdraw: `check_image_limit_batch` reads remaining quota without `with_for_update`; two concurrent roadmaps from the same user can both be told "N images remaining" and both proceed to generate them, exceeding the plan limit. Fix requires pre-reserving quota or a serialized allocation approach. [backend/app/services/subscription_service.py]

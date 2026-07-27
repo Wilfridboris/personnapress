@@ -74,6 +74,9 @@ export default async function AccountPage() {
             Campaigns: {subscription.campaigns_used} / {fmtLimit(subscription.plan_limits.campaigns)}
           </p>
           <p className="font-body text-sm text-graphite">
+            Roadmaps: {subscription.roadmaps_used} / {fmtLimit(subscription.plan_limits.roadmaps)}
+          </p>
+          <p className="font-body text-sm text-graphite">
             Clients: {subscription.clients_count} / {fmtLimit(subscription.plan_limits.clients)}
           </p>
           <p className="font-body text-sm text-graphite">

@@ -178,6 +178,7 @@ async def get_client_detail(
         ingestion_failed=ingestion_failed,
         ingestion_no_content=ingestion_no_content,
         ingestion_error=latest_job.error_details if ingestion_failed and latest_job else None,
+        roadmap_config=client.roadmap_config,
     )
 
 

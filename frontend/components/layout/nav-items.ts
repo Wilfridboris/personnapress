@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Calendar, Settings } from "lucide-react";
+import { CalendarDays, LayoutDashboard, Users, Calendar, Settings } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItemConfig {
@@ -8,9 +8,10 @@ export interface NavItemConfig {
 }
 
 export const NAV_ITEMS: NavItemConfig[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/clients",   label: "Clients",   icon: Users },
-  { href: "/calendar",  label: "Calendar",  icon: Calendar },
+  { href: "/dashboard",   label: "Dashboard",    icon: LayoutDashboard },
+  { href: "/clients",     label: "Clients",      icon: Users },
+  { href: "/roadmap/new", label: "Plan My Week", icon: CalendarDays },
+  { href: "/calendar",    label: "Calendar",     icon: Calendar },
 ];
 
 export const ACCOUNT_NAV_ITEM: NavItemConfig = {
