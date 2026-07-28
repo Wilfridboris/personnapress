@@ -115,7 +115,7 @@ export function PostEditPanel({
 
   return (
     <div
-      className="bg-white border border-[#E5E5E5] border-t-0 px-4 py-4 flex flex-col gap-4"
+      className="px-6 py-6 flex flex-col gap-5"
       role="region"
       aria-label={`Edit ${platformLabel} post`}
     >

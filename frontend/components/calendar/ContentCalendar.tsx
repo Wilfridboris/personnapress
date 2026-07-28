@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import clsx from "clsx";
 import { useCalendarCampaigns } from "@/hooks/useCalendarCampaigns";
@@ -76,7 +76,11 @@ function CalendarEntry({
   connectedPlatforms: string[];
   onNavigate: (id: string) => void;
 }) {
-  const title = extractTitle(campaign.blog_html);
+  const title = campaign.blog_html
+    ? extractTitle(campaign.blog_html)
+    : (campaign.x_post?.trim() || null) ??
+      (campaign.linkedin_post?.trim() || null) ??
+      "Untitled post";
   const shortTitle = title.length > 24 ? title.slice(0, 24) + "…" : title;
 
   const timeLabel =
@@ -135,10 +139,17 @@ function CalendarEntry({
 export function ContentCalendar() {
   const router = useRouter();
   const activeClientId = useClientStore((s) => s.activeClientId);
+  const searchParams = useSearchParams();
+  const monthParam = searchParams.get("month"); // "YYYY-MM" or null
 
   const now = new Date();
-  const [viewYear, setViewYear] = useState(now.getFullYear());
-  const [viewMonth, setViewMonth] = useState(now.getMonth());
+  const parsedYear  = monthParam ? parseInt(monthParam.slice(0, 4), 10) : NaN;
+  const parsedMonth = monthParam ? parseInt(monthParam.slice(5, 7), 10) - 1 : NaN;
+  const initialYear  = !isNaN(parsedYear)  ? parsedYear  : now.getFullYear();
+  const initialMonth = !isNaN(parsedMonth) ? parsedMonth : now.getMonth();
+
+  const [viewYear, setViewYear] = useState(initialYear);
+  const [viewMonth, setViewMonth] = useState(initialMonth);
 
   const { data: campaigns, isLoading, isError } = useCalendarCampaigns(activeClientId);
   const { data: connections } = usePlatformConnections(activeClientId);

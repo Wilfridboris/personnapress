@@ -28,7 +28,7 @@ function formatDate(dateStr: string): string {
   return DATE_FORMAT.format(new Date(dateStr));
 }
 
-export function CampaignList() {
+export function CampaignList({ basePath = "/dashboard" }: { basePath?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeClientId = useClientStore((s) => s.activeClientId);
@@ -52,13 +52,13 @@ export function CampaignList() {
     if (newStatus) params.set("status", newStatus);
     else params.delete("status");
     params.set("page", "1");
-    router.push(`/dashboard?${params.toString()}`);
+    router.push(`${basePath}?${params.toString()}`);
   }
 
   function goToPage(n: number) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("page", String(n));
-    router.push(`/dashboard?${params.toString()}`);
+    router.push(`${basePath}?${params.toString()}`);
   }
 
   return (

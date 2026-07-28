@@ -145,6 +145,7 @@ export function RoadmapReviewClient({ roadmapId }: RoadmapReviewClientProps) {
         roadmapId={roadmapId}
         removedIds={removedIds}
         nonRemovedCount={nonRemovedCount}
+        weekStartDate={roadmap.week_start_date ?? null}
       />
     </>
   );

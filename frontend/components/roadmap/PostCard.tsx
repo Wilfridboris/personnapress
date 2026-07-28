@@ -1,15 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import Image from "next/image";
-import { AnimatePresence, motion } from "framer-motion";
 import { AtSign, BookOpen, Share2, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { PostEditPanel } from "./PostEditPanel";
 import { cn } from "@/lib/utils";
 import type { RoadmapCampaignSummary } from "@/lib/types";
 
-function getPlatformInfo(campaign: RoadmapCampaignSummary): {
+export function getPlatformInfo(campaign: RoadmapCampaignSummary): {
   icon: React.ElementType;
   label: string;
   charLimit: number;
@@ -41,6 +38,7 @@ interface PostCardProps {
   isRemoved: boolean;
   onRemove: () => void;
   onUndo: () => void;
+  onEdit: () => void;
   onUpdate: (updates: Partial<RoadmapCampaignSummary>) => void;
 }
 
@@ -50,10 +48,10 @@ export function PostCard({
   isRemoved,
   onRemove,
   onUndo,
+  onEdit,
   onUpdate,
 }: PostCardProps) {
-  const [editOpen, setEditOpen] = useState(false);
-  const { icon: PlatformIcon, label: platformLabel, charLimit, postText } = getPlatformInfo(campaign);
+  const { icon: PlatformIcon, label: platformLabel, postText } = getPlatformInfo(campaign);
   const timeLabel = formatScheduledTime(scheduledFor);
 
   return (
@@ -134,7 +132,7 @@ export function PostCard({
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setEditOpen((v) => !v)}
+              onClick={onEdit}
               className="text-xs px-3 py-1.5 min-h-[44px]"
               aria-label={`Edit ${platformLabel} post`}
             >
@@ -153,28 +151,6 @@ export function PostCard({
         )}
       </div>
 
-      {/* AnimatePresence lives here so PostEditPanel remounts fresh each open */}
-      <AnimatePresence>
-        {editOpen && !isRemoved && (
-          <motion.div
-            key="edit-panel"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="overflow-hidden"
-          >
-            <PostEditPanel
-              campaign={campaign}
-              charLimit={charLimit}
-              postText={postText}
-              platformLabel={platformLabel}
-              onClose={() => setEditOpen(false)}
-              onUpdate={onUpdate}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

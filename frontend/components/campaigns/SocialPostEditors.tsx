@@ -16,6 +16,8 @@ interface SocialPostEditorsProps {
   initialXPost: string | null;
   initialLinkedInPost: string | null;
   readOnly?: boolean;
+  showXSection?: boolean;
+  showLinkedInSection?: boolean;
 }
 
 export interface SocialPostEditorsHandle {
@@ -25,7 +27,7 @@ export interface SocialPostEditorsHandle {
 export const SocialPostEditors = forwardRef<
   SocialPostEditorsHandle,
   SocialPostEditorsProps
->(({ campaignId, initialXPost, initialLinkedInPost, readOnly = false }, ref) => {
+>(({ campaignId, initialXPost, initialLinkedInPost, readOnly = false, showXSection = true, showLinkedInSection = true }, ref) => {
   const [xPost, setXPost] = useState(initialXPost ?? "");
   const [linkedinPost, setLinkedInPost] = useState(initialLinkedInPost ?? "");
   const [isSaving, setIsSaving] = useState(false);
@@ -75,73 +77,75 @@ export const SocialPostEditors = forwardRef<
 
   return (
     <div className="space-y-8">
-      {/* X Post */}
-      <div>
-        <label
-          htmlFor="x-post"
-          className="block text-xs font-mono uppercase tracking-widest text-graphite mb-2"
-        >
-          X (Twitter)
-        </label>
-        <textarea
-          id="x-post"
-          value={xPost}
-          onChange={(e) => {
-            setXPost(e.target.value);
-            setIsDirty(true);
-          }}
-          disabled={readOnly}
-          rows={4}
-          aria-label="X post content"
-          aria-describedby={!readOnly ? "x-post-counter" : undefined}
-          className={textareaBase}
-          placeholder="X post..."
-        />
-        {!readOnly && (
-          <span
-            id="x-post-counter"
-            className={`text-xs font-mono mt-1 block ${xAtDanger ? "text-danger" : "text-graphite"}`}
-            aria-live="polite"
-            aria-atomic="true"
+      {showXSection !== false && (
+        <div>
+          <label
+            htmlFor="x-post"
+            className="block text-xs font-mono uppercase tracking-widest text-graphite mb-2"
           >
-            {xCount} / {X_LIMIT}
-          </span>
-        )}
-      </div>
+            X (Twitter)
+          </label>
+          <textarea
+            id="x-post"
+            value={xPost}
+            onChange={(e) => {
+              setXPost(e.target.value);
+              setIsDirty(true);
+            }}
+            disabled={readOnly}
+            rows={4}
+            aria-label="X post content"
+            aria-describedby={!readOnly ? "x-post-counter" : undefined}
+            className={textareaBase}
+            placeholder="X post..."
+          />
+          {!readOnly && (
+            <span
+              id="x-post-counter"
+              className={`text-xs font-mono mt-1 block ${xAtDanger ? "text-danger" : "text-graphite"}`}
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {xCount} / {X_LIMIT}
+            </span>
+          )}
+        </div>
+      )}
 
-      {/* LinkedIn Post */}
-      <div>
-        <label
-          htmlFor="linkedin-post"
-          className="block text-xs font-mono uppercase tracking-widest text-graphite mb-2"
-        >
-          LinkedIn
-        </label>
-        <textarea
-          id="linkedin-post"
-          value={linkedinPost}
-          onChange={(e) => {
-            setLinkedInPost(e.target.value);
-            setIsDirty(true);
-          }}
-          disabled={readOnly}
-          rows={8}
-          aria-label="LinkedIn post content"
-          aria-describedby={!readOnly ? "linkedin-post-counter" : undefined}
-          className={textareaBase}
-          placeholder="LinkedIn post..."
-        />
-        {!readOnly && (
-          <span
-            id="linkedin-post-counter"
-            className={`text-xs font-mono mt-1 block ${liAtDanger ? "text-danger" : "text-graphite"}`}
-            aria-live="polite"
-            aria-atomic="true"
+      {showLinkedInSection !== false && (
+        <div>
+          <label
+            htmlFor="linkedin-post"
+            className="block text-xs font-mono uppercase tracking-widest text-graphite mb-2"
           >
-            {liCount} / {LINKEDIN_LIMIT}
-          </span>
-        )}
-      </div>
+            LinkedIn
+          </label>
+          <textarea
+            id="linkedin-post"
+            value={linkedinPost}
+            onChange={(e) => {
+              setLinkedInPost(e.target.value);
+              setIsDirty(true);
+            }}
+            disabled={readOnly}
+            rows={8}
+            aria-label="LinkedIn post content"
+            aria-describedby={!readOnly ? "linkedin-post-counter" : undefined}
+            className={textareaBase}
+            placeholder="LinkedIn post..."
+          />
+          {!readOnly && (
+            <span
+              id="linkedin-post-counter"
+              className={`text-xs font-mono mt-1 block ${liAtDanger ? "text-danger" : "text-graphite"}`}
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {liCount} / {LINKEDIN_LIMIT}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Save button — only shown when editable and dirty */}
       {!readOnly && isDirty && (

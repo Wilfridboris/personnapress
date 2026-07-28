@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
 import { useClientStore } from "@/lib/stores/useClientStore";
 import { clientsApi, subscriptionsApi, roadmapsApi } from "@/lib/api";
@@ -242,6 +242,13 @@ export function PlanMyWeekClient() {
 
   return (
     <div className="max-w-2xl mx-auto">
+      <Link
+        href="/roadmap"
+        className="inline-flex items-center gap-2 text-sm text-graphite hover:text-ink transition-colors font-mono mb-10"
+      >
+        <ArrowLeft className="size-4" aria-hidden="true" />
+        Back to Roadmap
+      </Link>
       <header className="mb-8">
         <p className="font-body text-xs text-graphite uppercase tracking-[0.08em] mb-1">
           Week Planning

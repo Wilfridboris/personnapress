@@ -132,28 +132,48 @@ export function ImagePanel({
             Featured Image
           </h2>
         </div>
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-3">
           <p className="font-mono text-sm text-graphite">
             {jobErrorDetails?.includes("Image generation failed")
               ? "Image generation failed. Blog and social posts are complete."
-              : "No featured image generated."}
+              : "No featured image yet."}
           </p>
           <Button
             variant="primary"
             onClick={handleRegenerate}
-            disabled={isRegenerating}
+            disabled={isRegenerating || isUploading}
             aria-busy={isRegenerating}
             className="w-full font-mono"
           >
             {isRegenerating ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             ) : (
               "Generate image"
             )}
           </Button>
-          {error && (
-            <p className="font-mono text-xs text-danger">{error}</p>
-          )}
+          <Button
+            variant="secondary"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading || isRegenerating}
+            aria-busy={isUploading}
+            className="w-full font-mono"
+          >
+            {isUploading ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              "Upload image"
+            )}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="sr-only"
+            aria-hidden="true"
+            tabIndex={-1}
+            onChange={handleReplaceImage}
+          />
+          {error && <p className="font-mono text-xs text-danger">{error}</p>}
         </div>
       </div>
     );

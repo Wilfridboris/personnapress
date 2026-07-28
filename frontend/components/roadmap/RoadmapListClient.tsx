@@ -20,7 +20,10 @@ function getStatusConfig(status: string) {
 }
 
 function getActionHref(item: RoadmapListItem): string {
-  if (item.status === "approved") return "/calendar";
+  if (item.status === "approved") {
+    const month = item.week_start_date?.slice(0, 7); // "YYYY-MM"
+    return month ? `/calendar?month=${month}` : "/calendar";
+  }
   if (item.status === "failed") return "/roadmap/new";
   return `/roadmap/${item.id}/review`;
 }

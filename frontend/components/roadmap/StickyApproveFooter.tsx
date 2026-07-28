@@ -9,12 +9,14 @@ interface StickyApproveFooterProps {
   roadmapId: string;
   removedIds: Set<string>;
   nonRemovedCount: number;
+  weekStartDate?: string | null;
 }
 
 export function StickyApproveFooter({
   roadmapId,
   removedIds,
   nonRemovedCount,
+  weekStartDate,
 }: StickyApproveFooterProps) {
   const router = useRouter();
   const [isApproving, setIsApproving] = useState(false);
@@ -28,7 +30,8 @@ export function StickyApproveFooter({
     setError(null);
     try {
       await roadmapsApi.approve(roadmapId, [...removedIds]);
-      router.push("/calendar");
+      const month = weekStartDate?.slice(0, 7);
+      router.push(month ? `/calendar?month=${month}` : "/calendar");
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : "Approval failed. Please try again."

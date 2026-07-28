@@ -95,30 +95,34 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
       </header>
 
       {/* Content grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 pb-24">
-        <section className="lg:col-span-3 space-y-6">
-          {campaign.article_id && (
-            <div className="flex items-center justify-between gap-3 border border-[#111111] bg-[#FFF1B8] px-4 py-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <BookOpen className="size-4 shrink-0 text-[#111111]" aria-hidden="true" />
-                <p className="font-mono text-xs text-[#111111] truncate">
-                  Live in headless blog. Content edits go here.
-                </p>
+      <div className={
+        isRoadmapSocialPost
+          ? "grid grid-cols-1 lg:grid-cols-2 gap-8 pb-24"
+          : "grid grid-cols-1 lg:grid-cols-5 gap-8 pb-24"
+      }>
+        {!isRoadmapSocialPost && (
+          <section className="lg:col-span-3 space-y-6">
+            {campaign.article_id && (
+              <div className="flex items-center justify-between gap-3 border border-[#111111] bg-[#FFF1B8] px-4 py-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <BookOpen className="size-4 shrink-0 text-[#111111]" aria-hidden="true" />
+                  <p className="font-mono text-xs text-[#111111] truncate">
+                    Live in headless blog. Content edits go here.
+                  </p>
+                </div>
+                <Link
+                  href={`/articles/${campaign.article_id}`}
+                  className={cn(
+                    "shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#111111]",
+                    "bg-[#111111] text-white hover:bg-white hover:text-[#111111] transition-colors duration-150",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-1"
+                  )}
+                >
+                  Edit article
+                  <ArrowRight className="size-3" aria-hidden="true" />
+                </Link>
               </div>
-              <Link
-                href={`/articles/${campaign.article_id}`}
-                className={cn(
-                  "shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#111111]",
-                  "bg-[#111111] text-white hover:bg-white hover:text-[#111111] transition-colors duration-150",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-1"
-                )}
-              >
-                Edit article
-                <ArrowRight className="size-3" aria-hidden="true" />
-              </Link>
-            </div>
-          )}
-          {!isRoadmapSocialPost && (
+            )}
             <div className="border border-border">
               <div className="px-6 py-4 border-b border-border">
                 <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
@@ -146,10 +150,10 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
                 </div>
               )}
             </div>
-          )}
-        </section>
+          </section>
+        )}
 
-        <aside className="lg:col-span-2 space-y-8">
+        <aside className={isRoadmapSocialPost ? "space-y-8" : "lg:col-span-2 space-y-8"}>
           <ImagePanel
             campaignId={campaign.id}
             clientId={campaign.client_id}
@@ -167,6 +171,8 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
                 initialXPost={campaign.x_post ?? null}
                 initialLinkedInPost={campaign.linkedin_post ?? null}
                 readOnly={!isPending}
+                showXSection={isRoadmapSocialPost ? !!campaign.x_post : true}
+                showLinkedInSection={isRoadmapSocialPost ? !!campaign.linkedin_post : true}
               />
             </div>
           </div>
