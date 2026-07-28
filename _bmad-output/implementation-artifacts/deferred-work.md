@@ -1,5 +1,9 @@
 # Deferred Work
 
+## Deferred from: code review of 3-14-social-standalone-prompt (2026-07-28)
+
+- `_build_standalone_voice_injection` silently drops `opening_pattern`/`closing_pattern` values not present in their respective maps, with no warning or logging. BVP enum values are currently controlled, but new variants will be silently ignored. [backend/app/integrations/generation_prompts.py:_build_standalone_voice_injection]
+
 ## Deferred from: code review of 20-4-plan-my-week-ux-polish (2026-07-27)
 
 - No LIMIT on `list_roadmaps` query: spec explicitly says no pagination (roadmaps rare, ≤52/year per client). Add a safety cap if this assumption changes. [backend/app/routers/roadmaps.py:list_roadmaps]

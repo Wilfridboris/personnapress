@@ -239,3 +239,185 @@ async def test_generate_social_logs_warning_for_short_linkedin(mock_client, capl
     with caplog.at_level(logging.WARNING, logger="app.integrations.anthropic_client"):
         await generate_social("brain dump", "Title", _VALID_BVP)
     assert any("500" in r.message or "below" in r.message for r in caplog.records)
+
+
+# ── generate_social_standalone ────────────────────────────────────────────────
+
+_VALID_STANDALONE_SOCIAL_JSON = json.dumps({
+    "x_post": "I tested 4 Facebook ad setups. One crushed it. Here is what I found.",
+    "linkedin_post": "LinkedIn standalone post. " * 55,  # ~1375 chars
+})
+
+_BVP_WITH_STRUCTURE_HINTS = {
+    **_VALID_BVP,
+    "opening_pattern": "bold_claim",
+    "closing_pattern": "cta",
+    "post_structure_template": "hook -- pain -- insight -- example -- CTA",
+}
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_happy_path(mock_client):
+    from app.integrations.anthropic_client import generate_social_standalone
+
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(_VALID_STANDALONE_SOCIAL_JSON)
+    )
+    result = await generate_social_standalone("brain dump", _VALID_BVP)
+    assert "x_post" in result
+    assert "linkedin_post" in result
+    assert isinstance(result["x_post"], str)
+    assert isinstance(result["linkedin_post"], str)
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_linkedin_over_2500_truncated(mock_client):
+    from app.integrations.anthropic_client import generate_social_standalone
+
+    long_ln = "L" * 2600
+    data = json.dumps({"x_post": "Short X post.", "linkedin_post": long_ln})
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(data)
+    )
+    result = await generate_social_standalone("brain dump", _VALID_BVP)
+    assert len(result["linkedin_post"]) == 2500
+    assert result["linkedin_post"].endswith("…")
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_linkedin_under_1200_logs_warning(mock_client, caplog):
+    import logging
+    from app.integrations.anthropic_client import generate_social_standalone
+
+    short_data = json.dumps({"x_post": "Short X post.", "linkedin_post": "Too short for LinkedIn."})
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(short_data)
+    )
+    with caplog.at_level(logging.WARNING, logger="app.integrations.anthropic_client"):
+        await generate_social_standalone("brain dump", _VALID_BVP)
+    assert any("1200" in r.message or "below" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_x_post_no_read_the_full_guide(mock_client):
+    from app.integrations.anthropic_client import generate_social_standalone
+
+    captured_prompts = []
+
+    async def capture_call(*args, **kwargs):
+        captured_prompts.append(kwargs.get("messages", [{}])[0].get("content", ""))
+        return _make_anthropic_response(_VALID_STANDALONE_SOCIAL_JSON)
+
+    mock_client.messages.create = AsyncMock(side_effect=capture_call)
+    await generate_social_standalone("brain dump", _VALID_BVP)
+
+    prompt_text = captured_prompts[0]
+    assert "no 'Read the full guide'" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_emdash_stripped_from_both_posts(mock_client):
+    from app.integrations.anthropic_client import generate_social_standalone
+
+    data_with_emdash = json.dumps({
+        "x_post": "Great insight—here is what works.",
+        "linkedin_post": ("LinkedIn post with em-dash—example. " * 40),
+    })
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(data_with_emdash)
+    )
+    result = await generate_social_standalone("brain dump", _VALID_BVP)
+    assert "—" not in result["x_post"]
+    assert "—" not in result["linkedin_post"]
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_bvp_structure_hints_injected_into_prompt(mock_client):
+    from app.integrations.anthropic_client import generate_social_standalone
+
+    captured_prompts = []
+
+    async def capture_call(*args, **kwargs):
+        captured_prompts.append(kwargs.get("messages", [{}])[0].get("content", ""))
+        return _make_anthropic_response(_VALID_STANDALONE_SOCIAL_JSON)
+
+    mock_client.messages.create = AsyncMock(side_effect=capture_call)
+    await generate_social_standalone("brain dump", _BVP_WITH_STRUCTURE_HINTS)
+
+    prompt_text = captured_prompts[0]
+    assert "BRAND STRUCTURE HINTS" in prompt_text
+    assert "hook -- pain -- insight -- example -- CTA" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_uses_standalone_prompt(mock_client):
+    from app.integrations.anthropic_client import generate_social_standalone
+
+    captured_prompts = []
+
+    async def capture_call(*args, **kwargs):
+        captured_prompts.append(kwargs.get("messages", [{}])[0].get("content", ""))
+        return _make_anthropic_response(_VALID_STANDALONE_SOCIAL_JSON)
+
+    mock_client.messages.create = AsyncMock(side_effect=capture_call)
+    await generate_social_standalone("brain dump", _VALID_BVP)
+
+    prompt_text = captured_prompts[0]
+    assert "stand alone" in prompt_text
+    assert "no blog article" in prompt_text
+    assert "tease the blog" not in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_none_bvp_uses_default_voice(mock_client):
+    from app.integrations.anthropic_client import generate_social_standalone
+
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(_VALID_STANDALONE_SOCIAL_JSON)
+    )
+    result = await generate_social_standalone("brain dump", None)
+    assert "x_post" in result
+    assert "linkedin_post" in result
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_emdash_stripped_from_both_posts(mock_client):
+    from app.integrations.anthropic_client import generate_social
+
+    data_with_emdash = json.dumps({
+        "x_post": "Great insight—here is what works.",
+        "linkedin_post": ("LinkedIn post with em-dash—example. " * 20),
+    })
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(data_with_emdash)
+    )
+    result = await generate_social("brain dump", "Blog Title", _VALID_BVP)
+    assert "—" not in result["x_post"]
+    assert "—" not in result["linkedin_post"]
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_no_brand_structure_hints_when_bvp_fields_absent(mock_client):
+    from app.integrations.anthropic_client import generate_social_standalone
+
+    captured_prompts = []
+
+    async def capture_call(*args, **kwargs):
+        captured_prompts.append(kwargs.get("messages", [{}])[0].get("content", ""))
+        return _make_anthropic_response(_VALID_STANDALONE_SOCIAL_JSON)
+
+    mock_client.messages.create = AsyncMock(side_effect=capture_call)
+    await generate_social_standalone("brain dump", _VALID_BVP)
+
+    prompt_text = captured_prompts[0]
+    assert "BRAND STRUCTURE HINTS" not in prompt_text

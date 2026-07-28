@@ -326,3 +326,94 @@ async def test_run_generation_pipeline_sets_excerpt_and_meta(mock_llm, mock_logs
 
     assert campaign.excerpt == "Great hook for the article."
     assert campaign.meta_description == "SEO meta description here."
+
+
+# ── generate_social_only (Plan My Week path) ──────────────────────────────────
+
+def _make_campaign_for_social(client_id=None):
+    campaign = MagicMock()
+    campaign.id = uuid.uuid4()
+    campaign.client_id = client_id or uuid.uuid4()
+    campaign.brain_dump = "Social-only brain dump"
+    campaign.x_post = None
+    campaign.linkedin_post = None
+    campaign.updated_at = None
+    return campaign
+
+
+def _make_db_for_social(campaign):
+    db = MagicMock()
+    db.commit = AsyncMock()
+
+    async def mock_execute(stmt):
+        result = MagicMock()
+        result.scalar_one_or_none = MagicMock(return_value=campaign)
+        return result
+
+    db.execute = AsyncMock(side_effect=mock_execute)
+    return db
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation._llm")
+async def test_generate_social_only_x_platform_writes_x_post(mock_llm):
+    """generate_social_only calls generate_social_standalone and writes x_post."""
+    from app.services.generation import generate_social_only
+
+    campaign = _make_campaign_for_social()
+    db = _make_db_for_social(campaign)
+
+    mock_llm.generate_social_standalone = AsyncMock(
+        return_value={"x_post": "Great X post!", "linkedin_post": "LinkedIn post " * 55}
+    )
+
+    await generate_social_only("brain dump", _BVP, "x", campaign.id, db)
+
+    mock_llm.generate_social_standalone.assert_called_once()
+    assert campaign.x_post == "Great X post!"
+    assert campaign.linkedin_post is None
+    db.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation._llm")
+async def test_generate_social_only_linkedin_platform_writes_linkedin_post(mock_llm):
+    """generate_social_only calls generate_social_standalone and writes linkedin_post."""
+    from app.services.generation import generate_social_only
+
+    campaign = _make_campaign_for_social()
+    db = _make_db_for_social(campaign)
+
+    linkedin_text = "LinkedIn standalone post. " * 55
+    mock_llm.generate_social_standalone = AsyncMock(
+        return_value={"x_post": "Some X post.", "linkedin_post": linkedin_text}
+    )
+
+    await generate_social_only("brain dump", _BVP, "linkedin", campaign.id, db)
+
+    mock_llm.generate_social_standalone.assert_called_once()
+    assert campaign.linkedin_post == linkedin_text
+    assert campaign.x_post is None
+    db.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation._llm")
+async def test_generate_social_only_does_not_call_generate_social(mock_llm):
+    """generate_social_only must NOT call the old generate_social function."""
+    from app.services.generation import generate_social_only
+
+    campaign = _make_campaign_for_social()
+    db = _make_db_for_social(campaign)
+
+    mock_llm.generate_social_standalone = AsyncMock(
+        return_value={"x_post": "Tweet!", "linkedin_post": "LinkedIn post " * 55}
+    )
+    mock_llm.generate_social = AsyncMock(
+        return_value={"x_post": "Should not be called", "linkedin_post": ""}
+    )
+
+    await generate_social_only("brain dump", _BVP, "x", campaign.id, db)
+
+    mock_llm.generate_social.assert_not_called()
+    mock_llm.generate_social_standalone.assert_called_once()

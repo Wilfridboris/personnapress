@@ -179,9 +179,72 @@ BLOG TITLE:
 Return ONLY a valid JSON object (no markdown):
 {{
   "x_post": "<X post text, max 280 characters, tease the blog without duplicating it>",
-  "linkedin_post": "<LinkedIn post, 500-1300 characters, use blank lines for paragraph breaks. Must open with a first-person hook tied to the brain dump's key insight. Acceptable openers: 'I just discovered...', 'Last week I...', 'After testing X, I found...'. Tease the specific outcome from the brain dump, not the general topic.>"
+  "linkedin_post": "<LinkedIn post, 500-1300 characters, use blank lines for paragraph breaks. Must open with a first-person hook tied to the brain dump's key insight. Acceptable openers: 'I just discovered...', 'Last week I...', 'After testing X, I found...'. Tease the specific outcome from the brain dump, not the general topic. No em-dash character (—) anywhere in either post.>"
 }}
 """
+
+_SOCIAL_STANDALONE_PROMPT = """You are an expert social media copywriter. Write two native social posts.
+These posts stand alone -- there is no blog article to link to or tease.
+
+BRAND VOICE PROFILE:
+{bvp_json}
+{linkedin_voice_section}
+{bvp_structure_hints}
+BRAIN DUMP:
+{brain_dump}
+
+Return ONLY a valid JSON object (no markdown):
+{{
+  "x_post": "<X post, 70-280 characters. Structure: Hook (first ~70 chars, stops the scroll) then Value (1 core insight or 2-3 short bullets) then Proof (a number or outcome from the brain dump if available) then Nudge (simple ask: Save this / Reply with X / Drop a comment). This is the complete thought -- no 'Read the full guide', no link CTA, no em-dash character (—) anywhere.>",
+  "linkedin_post": "<LinkedIn post, 1200-2500 characters. Use blank lines between each section. Structure must follow this order: (1) HOOK lines 1-2: choose the strongest pattern for this content -- bold data claim (I analyzed N things. Here is the pattern.), before/after transformation (X months ago [pain]. Today [outcome]. Here is what changed.), contrarian one-liner (Everyone says X. Here is why that costs you.), personal reveal (I almost [negative outcome]. The problem was not what you think.), timeline/result (In N days we [result]. Here is exactly what changed.), mistake/pain (Most [audience] do X. Here is the cost.). (2) RE-HOOK lines 3-4: one sharp line clarifying who this is for. (3) PROBLEM/STAKES: 3-6 short lines with concrete specifics -- numbers, budget, time, emotional cost -- pulled from the brain dump. (4) STORY/INSIGHT: 5-10 lines with specific details, named tools, outcomes, or data from the brain dump. (5) STEPS/FRAMEWORK: 3-7 bullets, each a clear action or belief shift, not a vague principle. (6) SOFT CTA: 1-2 lines -- a specific question the reader can answer, a comment trigger ('Comment X and I will send it'), or a DM invite. Never close with 'thoughts?' or 'you can too'. No em-dash character (—) anywhere. No 'Read the full guide' or blog link CTA.>"
+}}
+"""
+
+
+def _build_standalone_voice_injection(bvp: dict) -> str:
+    """Build BRAND STRUCTURE HINTS section for standalone social posts.
+
+    Injects BVP fields that are captured during voice extraction but unused
+    in the standard social prompt: opening_pattern, closing_pattern,
+    post_structure_template.
+    Returns empty string when none of these fields are present.
+    """
+    if not bvp:
+        return ""
+    hints: list[str] = []
+
+    opening = (bvp.get("opening_pattern") or "").strip()
+    opening_map = {
+        "question": "question hook (open with a question the audience is already asking)",
+        "bold_claim": "bold claim or data hook (open with a specific number or contrarian statement)",
+        "anecdote": "personal reveal or before/after hook (open with a micro-story or confession)",
+        "stat": "data/numbers hook (open with a statistic or surprising figure)",
+        "problem": "mistake/pain hook (open by naming a common mistake or its cost)",
+    }
+    if opening and opening in opening_map:
+        hints.append(f"- LinkedIn hook should lean toward: {opening_map[opening]}")
+
+    closing = (bvp.get("closing_pattern") or "").strip()
+    closing_map = {
+        "cta": "end with a direct action CTA (comment trigger or DM invite)",
+        "question": "end with a specific question the reader can answer in the comments",
+        "summary": "end with one crisp sentence that crystallises the main lesson",
+        "one_liner": "end with a punchy one-liner that creates a memorable takeaway",
+    }
+    if closing and closing in closing_map:
+        hints.append(f"- LinkedIn CTA should: {closing_map[closing]}")
+
+    structure = (bvp.get("post_structure_template") or "").strip()
+    if structure:
+        hints.append(f"- Author's preferred post structure: {structure} -- use as guide for section ordering")
+
+    if not hints:
+        return ""
+    return (
+        "\nBRAND STRUCTURE HINTS (from voice profile -- apply to linkedin_post only):\n"
+        + "\n".join(hints)
+        + "\n"
+    )
 
 
 def _build_seo_section(

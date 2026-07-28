@@ -235,7 +235,7 @@ async def generate_social_only(
 ) -> None:
     """Generate a single social post for a roadmap-only-social campaign.
 
-    Calls generate_social (0 thinking tokens) and writes only the requested
+    Calls generate_social_standalone (0 thinking tokens) and writes only the requested
     platform field to the Campaign row. The other platform field is left NULL.
     """
     campaign_result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
@@ -245,9 +245,8 @@ async def generate_social_only(
         return
 
     social: dict = await _llm_with_retry(
-        _llm.generate_social,
+        _llm.generate_social_standalone,
         brain_dump,
-        "",
         bvp,
         _SOCIAL_THINKING_TOKENS,
     )

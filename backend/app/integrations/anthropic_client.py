@@ -17,7 +17,9 @@ from app.integrations.generation_prompts import (
     _BLOG_PROMPT,
     _FIDELITY_PROMPT,
     _SOCIAL_PROMPT,
+    _SOCIAL_STANDALONE_PROMPT,
     _build_seo_section,
+    _build_standalone_voice_injection,
     _build_voice_injection,
     _meta_voice_note,
     _strip_fences,
@@ -283,6 +285,9 @@ async def generate_social(
                 f"generate_social: '{key}' must be a string, got {type(data[key]).__name__}"
             )
 
+    data["x_post"] = data["x_post"].replace("—", "--")
+    data["linkedin_post"] = data["linkedin_post"].replace("—", "--")
+
     if len(data["x_post"]) > 280:
         logger.warning(
             "generate_social: X post exceeded 280 chars (%d), truncating",
@@ -300,6 +305,81 @@ async def generate_social(
     elif ln_len < 500:
         logger.warning(
             "generate_social: LinkedIn post length %d is below expected 500 chars",
+            ln_len,
+        )
+
+    return data
+
+
+async def generate_social_standalone(
+    brain_dump: str,
+    brand_voice_profile: dict | None,
+    thinking_tokens: int = 0,
+) -> dict:
+    """Generate standalone social posts for Plan My Week (no blog exists).
+
+    Uses _SOCIAL_STANDALONE_PROMPT with native-post structure for both
+    LinkedIn (1200-2500 chars, hook/structure/CTA) and X (70-280 chars,
+    Hook->Value->Proof->Nudge). BVP fields opening_pattern, closing_pattern,
+    and post_structure_template are injected as structure hints.
+    """
+    if brand_voice_profile:
+        bvp_without_voice = {k: v for k, v in brand_voice_profile.items() if k != "voice_brief"}
+        bvp_json = json.dumps(bvp_without_voice)
+    else:
+        bvp_json = _DEFAULT_VOICE
+
+    voice_brief = (brand_voice_profile or {}).get("voice_brief") or ""
+    linkedin_voice_section = (
+        "\nLINKEDIN BRAND VOICE (apply to linkedin_post only -- do not apply to x_post):\n"
+        f"{voice_brief}\n"
+    ) if voice_brief else ""
+
+    bvp_structure_hints = _build_standalone_voice_injection(brand_voice_profile or {})
+
+    prompt = _SOCIAL_STANDALONE_PROMPT.format(
+        bvp_json=bvp_json,
+        linkedin_voice_section=linkedin_voice_section,
+        bvp_structure_hints=bvp_structure_hints,
+        brain_dump=brain_dump,
+    )
+
+    raw = _strip_fences((await _call(prompt, max_tokens=1536)).strip())
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        logger.error("generate_social_standalone: Anthropic returned invalid JSON: %r", raw[:200])
+        raise ValueError(f"generate_social_standalone: Anthropic returned invalid JSON: {exc}") from exc
+
+    for key in ("x_post", "linkedin_post"):
+        if key not in data:
+            raise ValueError(f"generate_social_standalone: missing key '{key}' in Anthropic response")
+        if not isinstance(data[key], str):
+            raise ValueError(
+                f"generate_social_standalone: '{key}' must be a string, got {type(data[key]).__name__}"
+            )
+
+    data["x_post"] = data["x_post"].replace("—", "--")
+    data["linkedin_post"] = data["linkedin_post"].replace("—", "--")
+
+    if len(data["x_post"]) > 280:
+        logger.warning(
+            "generate_social_standalone: X post exceeded 280 chars (%d), truncating",
+            len(data["x_post"]),
+        )
+        data["x_post"] = data["x_post"][:279] + "…"
+
+    ln_len = len(data["linkedin_post"])
+    if ln_len > 2500:
+        logger.warning(
+            "generate_social_standalone: LinkedIn post exceeded 2500 chars (%d), truncating",
+            ln_len,
+        )
+        data["linkedin_post"] = data["linkedin_post"][:2499] + "…"
+    elif ln_len < 1200:
+        logger.warning(
+            "generate_social_standalone: LinkedIn post length %d is below expected 1200 chars",
             ln_len,
         )
 
