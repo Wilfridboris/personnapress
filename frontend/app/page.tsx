@@ -89,8 +89,8 @@ const schemaSoftwareApp = {
 const schemaOrganization = {
   "@context": "https://schema.org",
   "@type": "Organization",
+  "@id": `${APP_URL}/#organization`,
   name: "PersonnaPress",
-  // legalName reinforces this as a distinct registered brand entity, not "Personal Press"
   legalName: "PersonnaPress",
   url: APP_URL,
   logo: {
@@ -106,6 +106,9 @@ const schemaOrganization = {
     name: "Boris Kwayep",
     url: `${APP_URL}/about`,
   },
+  sameAs: [
+    "https://www.facebook.com/personnapress/",
+  ],
   knowsAbout: [
     "AI content generation",
     "Brand voice extraction",
@@ -117,12 +120,6 @@ const schemaOrganization = {
     "GitHub Pages publishing",
     "Headless blog API",
   ],
-  // TODO: add social profile URLs here once published (helps Google build the knowledge graph entity)
-  // sameAs: [
-  //   "https://twitter.com/personnapress",
-  //   "https://www.linkedin.com/company/personnapress",
-  //   "https://www.producthunt.com/products/personnapress",
-  // ],
 };
 
 const WORKFLOW_STEPS = [
