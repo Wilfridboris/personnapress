@@ -91,10 +91,11 @@ export default async function CampaignsPage() {
             >
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-ink text-sm truncate mb-1">
-                  {extractTitle(campaign.blog_html) ??
-                    (campaign.x_post ? campaign.x_post.slice(0, 60) + (campaign.x_post.length > 60 ? "…" : "") : null) ??
-                    (campaign.linkedin_post ? campaign.linkedin_post.slice(0, 60) + (campaign.linkedin_post.length > 60 ? "…" : "") : null) ??
-                    "Untitled post"}
+                  {campaign.blog_html
+                    ? extractTitle(campaign.blog_html)
+                    : (campaign.x_post ? campaign.x_post.slice(0, 60) + (campaign.x_post.length > 60 ? "…" : "") : null) ??
+                      (campaign.linkedin_post ? campaign.linkedin_post.slice(0, 60) + (campaign.linkedin_post.length > 60 ? "…" : "") : null) ??
+                      "Untitled post"}
                 </p>
                 <p className="text-xs text-graphite font-mono">
                   {campaign.client_name ?? `Client #${campaign.client_id.slice(0, 8)}`}
