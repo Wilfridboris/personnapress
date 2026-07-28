@@ -214,16 +214,45 @@ SUPPORTING KEYWORDS (mention each at most once, naturally):
     return seo_section, audience_section
 
 
+def _extract_json_object(text: str) -> str:
+    """Return the first complete JSON object from text, discarding any trailing prose."""
+    start = text.find("{")
+    if start == -1:
+        return text
+    depth = 0
+    in_string = False
+    escape_next = False
+    for i, ch in enumerate(text[start:], start):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return text[start:]
+
+
 def _strip_fences(raw: str) -> str:
     fence_start = raw.find("```")
     if fence_start == -1:
-        return raw
+        return _extract_json_object(raw)
     lines = raw[fence_start:].split("\n")
     start = 1
     end = len(lines)
     if lines and lines[-1].strip() == "```":
         end -= 1
-    return "\n".join(lines[start:end]).strip()
+    return _extract_json_object("\n".join(lines[start:end]).strip())
 
 
 def _md_to_html(html: str) -> str:
