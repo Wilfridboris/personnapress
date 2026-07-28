@@ -24,7 +24,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.personnapress.co
 
 export const metadata: Metadata = {
   title: {
-    absolute: "PersonnaPress - AI Blog Writer That Sounds Like You",
+    absolute: "PersonnaPress | Official Site - AI Blog Writer That Sounds Like You",
   },
   description:
     "PersonnaPress is an AI blog writer that learns your voice and turns your notes into SEO-ranked blog posts and social campaigns. Schedule and publish to WordPress, Webflow, X, and LinkedIn — without sounding like AI.",
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     canonical: APP_URL,
   },
   openGraph: {
-    title: "PersonnaPress - AI Blog Writer That Sounds Like You",
+    title: "PersonnaPress | Official Site - AI Blog Writer That Sounds Like You",
     description:
       "Turn your notes into ranked blog posts and social campaigns in your own voice. Schedule and publish everywhere.",
     url: APP_URL,
@@ -90,15 +90,39 @@ const schemaOrganization = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: "PersonnaPress",
+  // legalName reinforces this as a distinct registered brand entity, not "Personal Press"
+  legalName: "PersonnaPress",
   url: APP_URL,
-  logo: `${APP_URL}/images/PersonnaPress-opengraph.png`,
+  logo: {
+    "@type": "ImageObject",
+    url: `${APP_URL}/images/PersonnaPress-opengraph.png`,
+    width: 1200,
+    height: 630,
+  },
   description:
-    "PersonnaPress is an AI content automation platform that learns your brand voice and publishes SEO-structured content across multiple platforms.",
+    "PersonnaPress is an AI-powered software application, not a PR agency or publishing house, that extracts your brand voice and generates SEO-ranked blog posts, social campaigns, and featured images in your authentic style. Founded by Boris Kwayep.",
   founder: {
     "@type": "Person",
     name: "Boris Kwayep",
     url: `${APP_URL}/about`,
   },
+  knowsAbout: [
+    "AI content generation",
+    "Brand voice extraction",
+    "SEO blog writing",
+    "Social media content automation",
+    "WordPress publishing",
+    "Webflow publishing",
+    "LinkedIn content marketing",
+    "GitHub Pages publishing",
+    "Headless blog API",
+  ],
+  // TODO: add social profile URLs here once published (helps Google build the knowledge graph entity)
+  // sameAs: [
+  //   "https://twitter.com/personnapress",
+  //   "https://www.linkedin.com/company/personnapress",
+  //   "https://www.producthunt.com/products/personnapress",
+  // ],
 };
 
 const WORKFLOW_STEPS = [
