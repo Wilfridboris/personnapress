@@ -8,7 +8,7 @@ to services/image.py. No business logic in routers. (AR-19)
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import sentry_sdk
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -180,3 +180,75 @@ def _extract_title(blog_html: str) -> str:
         return "Untitled"
     raw = h1_match.group(1).strip()
     return re.sub(r"<[^>]+>", "", raw).strip() or "Untitled"
+
+
+_X_TIMES = [8, 12, 17]
+_PLATFORM_ORDER = ["blog_full", "linkedin", "x"]
+_STAGGER_HOURS = 3
+
+
+def _campaign_platform(c) -> str:
+    if getattr(c, "blog_html", None) is not None:
+        return "blog_full"
+    if getattr(c, "linkedin_post", None) is not None:
+        return "linkedin"
+    return "x"
+
+
+def distribute_schedule(campaigns: list, week_start_date: date) -> dict[uuid.UUID, datetime]:
+    """Distribute approved roadmap campaigns across the week deterministically.
+
+    Returns {campaign_id: scheduled_datetime_utc_naive} for each campaign that
+    receives a slot. Campaigns beyond available slots are omitted (caller keeps
+    them as approved for manual scheduling).
+
+    Algorithm:
+    - Classify by platform: blog_full > linkedin > x (priority order)
+    - num_days = 5 if total <= 5, else 7 (Mon-Fri or Mon-Sun)
+    - Round-robin: round n assigns one post per platform to day n % num_days
+    - X times cycle globally: 08:00, 12:00, 17:00, 08:00, ...
+    - LinkedIn/blog_full base time: 09:00; stagger 3h on same-day collision
+    """
+    groups: dict[str, list] = {p: [] for p in _PLATFORM_ORDER}
+    for c in campaigns:
+        groups[_campaign_platform(c)].append(c)
+
+    total = len(campaigns)
+    num_days = 5 if total <= 5 else 7
+    days = [week_start_date + timedelta(days=i) for i in range(num_days)]
+
+    max_rounds = max((len(g) for g in groups.values()), default=0)
+
+    # day_hours[(day_i, platform)] = list of assigned hours (for stagger tracking)
+    day_hours: dict[tuple, list[int]] = {}
+
+    x_global_idx = 0  # tracks X cycling position across the whole week
+    result: dict[uuid.UUID, datetime] = {}
+
+    for round_num in range(max_rounds):
+        day_i = round_num % num_days
+        day = days[day_i]
+
+        for platform in _PLATFORM_ORDER:
+            queue = groups[platform]
+            if round_num >= len(queue):
+                continue
+
+            campaign = queue[round_num]
+            key = (day_i, platform)
+            existing = day_hours.get(key, [])
+
+            if platform == "x":
+                if not existing:
+                    hour = _X_TIMES[x_global_idx % 3]
+                    x_global_idx += 1
+                else:
+                    hour = max(existing) + _STAGGER_HOURS
+            else:  # blog_full or linkedin: base 09:00, stagger 3h if collision
+                hour = 9 if not existing else max(existing) + _STAGGER_HOURS
+
+            if hour < 24:
+                day_hours.setdefault(key, []).append(hour)
+                result[campaign.id] = datetime(day.year, day.month, day.day, hour, 0, 0)
+
+    return result

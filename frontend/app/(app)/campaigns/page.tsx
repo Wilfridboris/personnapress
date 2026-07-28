@@ -103,6 +103,11 @@ export default async function CampaignsPage() {
                 >
                   {STATUS_LABELS[campaign.status] ?? campaign.status}
                 </span>
+                {campaign.roadmap_id && (
+                  <span className="bg-border text-graphite border border-border rounded-none text-[10px] font-mono uppercase tracking-wider px-2 py-0.5">
+                    ROADMAP
+                  </span>
+                )}
                 <span className="text-xs text-graphite font-mono">
                   {new Date(campaign.created_at).toLocaleDateString("en-US", {
                     month: "short",

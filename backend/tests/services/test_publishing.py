@@ -911,3 +911,141 @@ async def test_jekyll_double_quote_in_category_is_yaml_escaped():
 
     assert file_content is not None
     assert 'say \\"hi\\"' in file_content
+
+
+# ---------------------------------------------------------------------------
+# Publishing service: image attachment for X (AC 10, 11)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_x_publish_with_image_calls_upload_and_tweet_with_media():
+    """When campaign.image_url is set, downloads image and calls create_tweet_with_media."""
+    from app.services.publishing import dispatch_publish
+
+    campaign = _make_campaign()
+    campaign.status = "approved"
+    x_creds = {"access_token": "x_tok"}
+    x_conn = _make_connection("x", creds=x_creds)
+    db = AsyncMock()
+
+    fake_image_resp = MagicMock()
+    fake_image_resp.content = b"imgdata"
+    fake_image_resp.raise_for_status = MagicMock()
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=[x_conn])),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.httpx.AsyncClient") as mock_httpx,
+        patch("app.services.publishing.twitter_integration.upload_media", AsyncMock(return_value="media_id_123")),
+        patch("app.services.publishing.twitter_integration.create_tweet_with_media", AsyncMock(return_value="tweet_id")),
+        patch("app.services.publishing.twitter_integration.create_tweet") as mock_tweet,
+    ):
+        mock_httpx.return_value.__aenter__ = AsyncMock(return_value=mock_httpx.return_value)
+        mock_httpx.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_httpx.return_value.get = AsyncMock(return_value=fake_image_resp)
+        results = await dispatch_publish(db, campaign.id, uuid.uuid4())
+
+    assert results.get("x") == "success"
+    mock_tweet.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_x_publish_image_download_failure_falls_back_to_text_only():
+    """If image download fails (HTTP error), falls back to text-only tweet."""
+    from app.services.publishing import dispatch_publish
+
+    campaign = _make_campaign()
+    campaign.status = "approved"
+    x_creds = {"access_token": "x_tok"}
+    x_conn = _make_connection("x", creds=x_creds)
+    db = AsyncMock()
+
+    def raise_http_error():
+        raise Exception("404 not found")
+
+    fake_image_resp = MagicMock()
+    fake_image_resp.raise_for_status = MagicMock(side_effect=Exception("404 not found"))
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=[x_conn])),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.httpx.AsyncClient") as mock_httpx,
+        patch("app.services.publishing.twitter_integration.create_tweet", AsyncMock(return_value="t1")) as mock_tweet,
+        patch("app.services.publishing.twitter_integration.create_tweet_with_media") as mock_media_tweet,
+    ):
+        mock_httpx.return_value.__aenter__ = AsyncMock(return_value=mock_httpx.return_value)
+        mock_httpx.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_httpx.return_value.get = AsyncMock(return_value=fake_image_resp)
+        results = await dispatch_publish(db, campaign.id, uuid.uuid4())
+
+    assert results.get("x") == "success"
+    mock_tweet.assert_called_once()
+    mock_media_tweet.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_x_publish_no_image_url_uses_text_only():
+    """When campaign.image_url is None, always calls create_tweet directly."""
+    from app.services.publishing import dispatch_publish
+
+    campaign = _make_campaign()
+    campaign.image_url = None
+    campaign.status = "approved"
+    x_creds = {"access_token": "x_tok"}
+    x_conn = _make_connection("x", creds=x_creds)
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=[x_conn])),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.twitter_integration.create_tweet", AsyncMock(return_value="t1")) as mock_tweet,
+        patch("app.services.publishing.twitter_integration.create_tweet_with_media") as mock_media_tweet,
+    ):
+        results = await dispatch_publish(db, campaign.id, uuid.uuid4())
+
+    assert results.get("x") == "success"
+    mock_tweet.assert_called_once()
+    mock_media_tweet.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Publishing service: image attachment for LinkedIn (AC 10, 11)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_linkedin_publish_image_upload_failure_falls_back_to_ugc_post():
+    """If LinkedIn image upload_image raises, falls back to create_ugc_post."""
+    from app.services.publishing import dispatch_publish
+
+    campaign = _make_campaign()
+    campaign.status = "approved"
+    li_creds = {"access_token": "li_tok"}
+    li_conn = _make_connection("linkedin", creds=li_creds)
+    db = AsyncMock()
+
+    fake_image_resp = MagicMock()
+    fake_image_resp.content = b"imgdata"
+    fake_image_resp.raise_for_status = MagicMock()
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=[li_conn])),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.httpx.AsyncClient") as mock_httpx,
+        patch("app.services.publishing.linkedin_integration._get_linkedin_author_urn", AsyncMock(return_value="author")),
+        patch("app.services.publishing.linkedin_integration.upload_image", AsyncMock(side_effect=Exception("upload failed"))),
+        patch("app.services.publishing.linkedin_integration.create_ugc_post", AsyncMock(return_value="urn")) as mock_ugc,
+        patch("app.services.publishing.linkedin_integration.create_post_with_image") as mock_img_post,
+    ):
+        mock_httpx.return_value.get = AsyncMock(return_value=fake_image_resp)
+        # Also mock the context manager for _get_linkedin_author_urn call
+        mock_httpx.return_value.__aenter__ = AsyncMock(return_value=mock_httpx.return_value)
+        mock_httpx.return_value.__aexit__ = AsyncMock(return_value=False)
+        results = await dispatch_publish(db, campaign.id, uuid.uuid4())
+
+    assert results.get("linkedin") == "success"
+    mock_ugc.assert_called_once()
+    mock_img_post.assert_not_called()

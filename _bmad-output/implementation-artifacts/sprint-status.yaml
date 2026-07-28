@@ -1,5 +1,5 @@
 # generated: 2026-06-14
-# last_updated: 2026-07-27  # 20-2-week-review-ui code review complete: 12 patches applied (UTC date parse, double-click approve guard, configPopulated ref reset on client switch, blog_enabled/images_enabled ?? defaults, image quota warning always shown, quota-locked Toggle disabled, blob: URL conditional img, cancel button disabled during upload, upload URL validation, empty campaigns state, REMOVED badge uppercase, account page Roadmaps row ordering), marked done
+# last_updated: 2026-07-27  # 20-3-roadmap-post-management code review complete: 6 patches applied (unclosed httpx.AsyncClient resource leak x4, scheduler-after-commit + idempotency guard on approve_roadmap, hour overflow guard in distribute_schedule, unguarded media_id key access in twitter.py, create_post_with_image error handling inside async with), marked done
 # project: PersonnaPress
 # project_key: NOKEY
 # tracking_system: file-system
@@ -226,4 +226,4 @@ development_status:
   epic-20: in-progress
   20-1-roadmap-generation-engine: done
   20-2-week-review-ui: done
-  20-3-roadmap-post-management: ready-for-dev
+  20-3-roadmap-post-management: done

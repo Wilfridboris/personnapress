@@ -13,6 +13,7 @@ class RoadmapStatus(str, Enum):
     pending = "pending"
     generating = "generating"
     ready = "ready"
+    approved = "approved"
     failed = "failed"
 
 

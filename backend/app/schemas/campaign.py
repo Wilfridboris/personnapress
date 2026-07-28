@@ -63,6 +63,7 @@ class CampaignResponse(BaseModel):
     scheduled_at: Optional[datetime]
     image_regen_count: int
     github_pr_url: Optional[str] = None
+    roadmap_id: Optional[uuid.UUID] = None
     created_at: datetime
     updated_at: datetime
 

@@ -10,6 +10,8 @@ import re
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+import httpx
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decrypt_credential, encrypt_credential
@@ -484,16 +486,48 @@ async def dispatch_publish_for_platform(
             if not campaign.x_post:
                 logger.debug("dispatch_publish_for_platform: skipping x (null x_post) campaign=%s", campaign_id)
                 return {platform: "skipped"}
-            await twitter_integration.create_tweet(creds["access_token"], campaign.x_post)
+            if campaign.image_url:
+                try:
+                    async with httpx.AsyncClient(timeout=15.0) as _img_client:
+                        img_resp = await _img_client.get(campaign.image_url)
+                    img_resp.raise_for_status()
+                    media_id = await twitter_integration.upload_media(creds["access_token"], img_resp.content)
+                    await twitter_integration.create_tweet_with_media(creds["access_token"], campaign.x_post, media_id)
+                except Exception as exc:
+                    logger.warning(
+                        "social image upload failed for campaign %s on X: %s — falling back to text-only post",
+                        campaign_id, exc,
+                    )
+                    await twitter_integration.create_tweet(creds["access_token"], campaign.x_post)
+            else:
+                await twitter_integration.create_tweet(creds["access_token"], campaign.x_post)
         elif platform == "linkedin":
             if not campaign.linkedin_post:
                 logger.debug("dispatch_publish_for_platform: skipping linkedin (null linkedin_post) campaign=%s", campaign_id)
                 return {platform: "skipped"}
-            await linkedin_integration.create_ugc_post(
-                creds["access_token"],
-                campaign.blog_html or "",
-                campaign.linkedin_post,
-            )
+            if campaign.image_url:
+                try:
+                    async with httpx.AsyncClient(timeout=15.0) as _img_client:
+                        img_resp = await _img_client.get(campaign.image_url)
+                    img_resp.raise_for_status()
+                    async with httpx.AsyncClient(timeout=15.0) as _li_client:
+                        author_urn = await linkedin_integration._get_linkedin_author_urn(creds["access_token"], _li_client)
+                    image_urn = await linkedin_integration.upload_image(creds["access_token"], author_urn, img_resp.content)
+                    await linkedin_integration.create_post_with_image(
+                        creds["access_token"], author_urn, campaign.linkedin_post, image_urn
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "social image upload failed for campaign %s on linkedin: %s — falling back to text-only post",
+                        campaign_id, exc,
+                    )
+                    await linkedin_integration.create_ugc_post(
+                        creds["access_token"], campaign.blog_html or "", campaign.linkedin_post
+                    )
+            else:
+                await linkedin_integration.create_ugc_post(
+                    creds["access_token"], campaign.blog_html or "", campaign.linkedin_post
+                )
         elif platform == "github_pages":
             await _publish_github(campaign, creds, db)
         return {platform: "success"}
@@ -573,9 +607,21 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                 now = asyncio.get_running_loop().time()
                 if last_x_publish_time and now - last_x_publish_time < 2.0:
                     await asyncio.sleep(2.0 - (now - last_x_publish_time))
-                await twitter_integration.create_tweet(
-                    creds["access_token"], campaign.x_post
-                )
+                if campaign.image_url:
+                    try:
+                        async with httpx.AsyncClient(timeout=15.0) as _img_client:
+                            img_resp = await _img_client.get(campaign.image_url)
+                        img_resp.raise_for_status()
+                        media_id = await twitter_integration.upload_media(creds["access_token"], img_resp.content)
+                        await twitter_integration.create_tweet_with_media(creds["access_token"], campaign.x_post, media_id)
+                    except Exception as exc:
+                        logger.warning(
+                            "social image upload failed for campaign %s on X: %s — falling back to text-only post",
+                            campaign_id, exc,
+                        )
+                        await twitter_integration.create_tweet(creds["access_token"], campaign.x_post)
+                else:
+                    await twitter_integration.create_tweet(creds["access_token"], campaign.x_post)
                 last_x_publish_time = asyncio.get_running_loop().time()
 
             elif platform == "linkedin":
@@ -586,11 +632,29 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                 now = asyncio.get_running_loop().time()
                 if last_linkedin_publish_time and now - last_linkedin_publish_time < 5.0:
                     await asyncio.sleep(5.0 - (now - last_linkedin_publish_time))
-                await linkedin_integration.create_ugc_post(
-                    creds["access_token"],
-                    campaign.blog_html or "",
-                    campaign.linkedin_post,
-                )
+                if campaign.image_url:
+                    try:
+                        async with httpx.AsyncClient(timeout=15.0) as _img_client:
+                            img_resp = await _img_client.get(campaign.image_url)
+                        img_resp.raise_for_status()
+                        async with httpx.AsyncClient(timeout=15.0) as _li_client:
+                            author_urn = await linkedin_integration._get_linkedin_author_urn(creds["access_token"], _li_client)
+                        image_urn = await linkedin_integration.upload_image(creds["access_token"], author_urn, img_resp.content)
+                        await linkedin_integration.create_post_with_image(
+                            creds["access_token"], author_urn, campaign.linkedin_post, image_urn
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "social image upload failed for campaign %s on linkedin: %s — falling back to text-only post",
+                            campaign_id, exc,
+                        )
+                        await linkedin_integration.create_ugc_post(
+                            creds["access_token"], campaign.blog_html or "", campaign.linkedin_post
+                        )
+                else:
+                    await linkedin_integration.create_ugc_post(
+                        creds["access_token"], campaign.blog_html or "", campaign.linkedin_post
+                    )
                 last_linkedin_publish_time = asyncio.get_running_loop().time()
 
             elif platform == "github_pages":

@@ -17,7 +17,7 @@ from app.core.dependencies import get_current_user
 from app.db.connection import get_session
 from app.db.repositories.clients import get_client
 from app.db.repositories.models import Campaign, Roadmap, RoadmapStatus
-from app.services.roadmap import generate_roadmap
+from app.services.roadmap import distribute_schedule, generate_roadmap
 from app.services.subscription_service import check_roadmap_limit, check_trial_not_expired
 
 router = APIRouter(prefix="/roadmaps", tags=["roadmaps"])
@@ -25,6 +25,15 @@ router = APIRouter(prefix="/roadmaps", tags=["roadmaps"])
 _INVALID_SESSION = {"error": {"code": "INVALID_SESSION", "message": "Invalid session.", "detail": {}}}
 _NOT_FOUND = {"error": {"code": "ROADMAP_NOT_FOUND", "message": "Roadmap not found.", "detail": {}}}
 _FORBIDDEN = {"error": {"code": "FORBIDDEN", "message": "Access denied.", "detail": {}}}
+
+
+class RoadmapApproveRequest(BaseModel):
+    excluded_campaign_ids: list[uuid.UUID] = []
+
+
+class RoadmapApproveResponse(BaseModel):
+    scheduled_count: int
+    excluded_count: int
 
 
 def _next_monday(ref: date) -> date:
@@ -199,3 +208,84 @@ async def get_roadmap_status(
         week_start_date=roadmap.week_start_date,
         campaigns=campaign_summaries,
     )
+
+
+@router.post("/{roadmap_id}/approve", status_code=200, response_model=RoadmapApproveResponse)
+async def approve_roadmap(
+    roadmap_id: uuid.UUID,
+    body: RoadmapApproveRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> RoadmapApproveResponse:
+    from app.db.repositories.jobs import create_job
+    from app.scheduler.scheduler import scheduler
+    from app.workers.publish import run_publish
+    from apscheduler.triggers.date import DateTrigger
+
+    try:
+        user_id = uuid.UUID(current_user["user_id"])
+    except (ValueError, KeyError):
+        raise HTTPException(status_code=401, detail=_INVALID_SESSION)
+
+    result = await db.execute(
+        select(Roadmap).where(Roadmap.id == roadmap_id, Roadmap.user_id == user_id)
+    )
+    roadmap = result.scalar_one_or_none()
+    if not roadmap:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+
+    if roadmap.status == RoadmapStatus.approved:
+        raise HTTPException(status_code=409, detail={"error": {"code": "ALREADY_APPROVED", "message": "Roadmap is already approved."}})
+
+    excluded_ids = set(body.excluded_campaign_ids)
+    campaigns_result = await db.execute(
+        select(Campaign).where(Campaign.roadmap_id == roadmap_id)
+    )
+    all_campaigns = campaigns_result.scalars().all()
+
+    included = [c for c in all_campaigns if c.id not in excluded_ids]
+    excluded_count = len(all_campaigns) - len(included)
+
+    week_start = roadmap.week_start_date
+    schedule_map = distribute_schedule(included, week_start) if week_start else {}
+
+    pending_jobs: list[tuple[str, str, object]] = []
+    scheduled_count = 0
+    for campaign in included:
+        campaign.status = "approved"
+        scheduled_at = schedule_map.get(campaign.id)
+        if scheduled_at:
+            campaign.scheduled_at = scheduled_at
+            campaign.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            db.add(campaign)
+            await db.flush()
+
+            job = await create_job(
+                db,
+                job_type="scheduled_publish",
+                status="scheduled",
+                campaign_id=campaign.id,
+            )
+            job.scheduled_at = scheduled_at
+            await db.flush()
+
+            pending_jobs.append((str(job.id), str(campaign.id), scheduled_at))
+            scheduled_count += 1
+        else:
+            campaign.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            db.add(campaign)
+
+    roadmap.status = RoadmapStatus.approved
+    roadmap.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.commit()
+
+    for job_id, campaign_id_str, run_date in pending_jobs:
+        scheduler.add_job(
+            run_publish,
+            trigger=DateTrigger(run_date=run_date),
+            args=[job_id, campaign_id_str, []],
+            id=job_id,
+            replace_existing=True,
+        )
+
+    return RoadmapApproveResponse(scheduled_count=scheduled_count, excluded_count=excluded_count)

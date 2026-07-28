@@ -182,6 +182,7 @@ export interface Campaign {
   scheduled_at: string | null;
   image_regen_count: number;
   github_pr_url: string | null;
+  roadmap_id: string | null;
   created_at: string;
   updated_at: string;
   publish_job?: PublishJobInfo | null;
