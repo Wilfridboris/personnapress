@@ -1,4 +1,4 @@
-import type { Article, ArticleListResponse, ExpandedBrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, DeliveryToken, DeliveryTokenCreateResponse, DeliveryTokenListResponse, FileListResponse, GitHubDetectionResult, Job, PlatformConnectionStatus, PublishHeadlessResponse, QuestionnairePayload, RevisionDetail, RevisionListResponse, RoadmapConfig, RoadmapCreateResponse, RoadmapStatusResponse, SubscriptionInfo } from "./types";
+import type { Article, ArticleListResponse, ExpandedBrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, DeliveryToken, DeliveryTokenCreateResponse, DeliveryTokenListResponse, FileListResponse, GitHubDetectionResult, Job, PlatformConnectionStatus, PublishHeadlessResponse, QuestionnairePayload, RevisionDetail, RevisionListResponse, RoadmapConfig, RoadmapCreateResponse, RoadmapListResponse, RoadmapStatusResponse, SubscriptionInfo } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -282,6 +282,8 @@ export const imagesApi = {
 };
 
 export const roadmapsApi = {
+  list: (clientId?: string) =>
+    apiFetch<RoadmapListResponse>("/roadmaps" + (clientId ? `?client_id=${clientId}` : "")),
   create: (data: {
     brain_dump: string;
     client_id: string;

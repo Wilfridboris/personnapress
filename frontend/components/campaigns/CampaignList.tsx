@@ -124,7 +124,11 @@ export function CampaignList() {
       {!isLoading && campaigns.length > 0 && (
         <div className="border border-border divide-y divide-border">
           {campaigns.map((campaign: Campaign) => {
-            const title = extractTitle(campaign.blog_html);
+            const title =
+              extractTitle(campaign.blog_html) ??
+              (campaign.x_post ? campaign.x_post.slice(0, 60) + (campaign.x_post.length > 60 ? "…" : "") : null) ??
+              (campaign.linkedin_post ? campaign.linkedin_post.slice(0, 60) + (campaign.linkedin_post.length > 60 ? "…" : "") : null) ??
+              "Untitled post";
             return (
               <div
                 key={campaign.id}

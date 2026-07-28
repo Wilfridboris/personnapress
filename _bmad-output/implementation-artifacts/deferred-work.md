@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 20-4-plan-my-week-ux-polish (2026-07-27)
+
+- No LIMIT on `list_roadmaps` query: spec explicitly says no pagination (roadmaps rare, ≤52/year per client). Add a safety cap if this assumption changes. [backend/app/routers/roadmaps.py:list_roadmaps]
+- `connectionsData` permanent fetch error keeps `hasLinkedIn`/`hasTwitter` as `true`: guard is spec-advisory only, not a hard block. If connections API becomes critical, make error state explicit. [frontend/components/roadmap/PlanMyWeekClient.tsx]
+- WeekGrid backdrop click during in-flight `PostEditPanel` save closes drawer with no feedback: minor UX edge case. [frontend/components/roadmap/WeekGrid.tsx]
+- Title fallback chain duplicated verbatim in `CampaignList.tsx` and `campaigns/page.tsx`: extract shared helper if additional call sites are added. [frontend/components/campaigns/CampaignList.tsx, frontend/app/(app)/campaigns/page.tsx]
+
 ## Deferred from: code review of 20-2-week-review-ui (2026-07-27)
 
 - Blog title edit not persisted to API: `PostEditPanel` for `blog_full` updates `blog_title` in local state only; `campaignsApi.patch` does not expose a `blog_title` field — backend gap, deferred to story 20-3 scope. [PostEditPanel.tsx:60]

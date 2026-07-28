@@ -7,6 +7,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
 import { useClientStore } from "@/lib/stores/useClientStore";
 import { clientsApi, subscriptionsApi, roadmapsApi } from "@/lib/api";
+import { usePlatformConnections } from "@/hooks/usePlatformConnections";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
@@ -139,6 +140,27 @@ export function PlanMyWeekClient() {
     enabled: !!activeClientId,
     staleTime: 5 * 60_000,
   });
+
+  const { data: connectionsData } = usePlatformConnections(activeClientId);
+  const connectedPlatforms = new Set(
+    (connectionsData?.items ?? [])
+      .filter((c) => c.connected)
+      .map((c) => c.platform)
+  );
+  const hasLinkedIn = connectionsData ? connectedPlatforms.has("linkedin") : true;
+  const hasTwitter = connectionsData ? connectedPlatforms.has("x") : true;
+
+  useEffect(() => {
+    if (!connectionsData) return;
+    const connected = new Set(
+      connectionsData.items.filter((c) => c.connected).map((c) => c.platform)
+    );
+    setConfig((prev) => ({
+      ...prev,
+      linkedinOn: prev.linkedinOn && connected.has("linkedin"),
+      twitterOn: prev.twitterOn && connected.has("x"),
+    }));
+  }, [connectionsData]);
 
   useEffect(() => {
     configPopulated.current = false;
@@ -274,38 +296,60 @@ export function PlanMyWeekClient() {
         {panelOpen && (
           <div className="px-4 py-4 space-y-4">
             {/* LinkedIn */}
-            <div className="flex items-center gap-4">
-              <Toggle
-                id="linkedin-toggle"
-                label="LinkedIn"
-                checked={config.linkedinOn}
-                onChange={(v) => updateConfig({ linkedinOn: v })}
-              />
-              {config.linkedinOn && (
-                <Spinner
-                  value={config.linkedinCount}
-                  onChange={(v) => updateConfig({ linkedinCount: v })}
-                  min={1}
-                  max={7}
+            <div className="space-y-1">
+              <div className="flex items-center gap-4">
+                <Toggle
+                  id="linkedin-toggle"
+                  label="LinkedIn"
+                  checked={config.linkedinOn}
+                  onChange={(v) => updateConfig({ linkedinOn: v })}
+                  disabled={!hasLinkedIn}
                 />
+                {config.linkedinOn && hasLinkedIn && (
+                  <Spinner
+                    value={config.linkedinCount}
+                    onChange={(v) => updateConfig({ linkedinCount: v })}
+                    min={1}
+                    max={7}
+                  />
+                )}
+              </div>
+              {!hasLinkedIn && activeClientId && connectionsData && (
+                <p className="font-body text-xs text-graphite">
+                  Not connected.{" "}
+                  <Link href={`/clients/${activeClientId}/connections`} className="underline hover:text-ink">
+                    Connect LinkedIn
+                  </Link>
+                </p>
               )}
             </div>
 
             {/* X/Twitter */}
-            <div className="flex items-center gap-4">
-              <Toggle
-                id="twitter-toggle"
-                label="X / Twitter"
-                checked={config.twitterOn}
-                onChange={(v) => updateConfig({ twitterOn: v })}
-              />
-              {config.twitterOn && (
-                <Spinner
-                  value={config.twitterCount}
-                  onChange={(v) => updateConfig({ twitterCount: v })}
-                  min={1}
-                  max={14}
+            <div className="space-y-1">
+              <div className="flex items-center gap-4">
+                <Toggle
+                  id="twitter-toggle"
+                  label="X / Twitter"
+                  checked={config.twitterOn}
+                  onChange={(v) => updateConfig({ twitterOn: v })}
+                  disabled={!hasTwitter}
                 />
+                {config.twitterOn && hasTwitter && (
+                  <Spinner
+                    value={config.twitterCount}
+                    onChange={(v) => updateConfig({ twitterCount: v })}
+                    min={1}
+                    max={14}
+                  />
+                )}
+              </div>
+              {!hasTwitter && activeClientId && connectionsData && (
+                <p className="font-body text-xs text-graphite">
+                  Not connected.{" "}
+                  <Link href={`/clients/${activeClientId}/connections`} className="underline hover:text-ink">
+                    Connect X
+                  </Link>
+                </p>
               )}
             </div>
 

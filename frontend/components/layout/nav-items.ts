@@ -10,7 +10,7 @@ export interface NavItemConfig {
 export const NAV_ITEMS: NavItemConfig[] = [
   { href: "/dashboard",   label: "Dashboard",    icon: LayoutDashboard },
   { href: "/clients",     label: "Clients",      icon: Users },
-  { href: "/roadmap/new", label: "Plan My Week", icon: CalendarDays },
+  { href: "/roadmap",     label: "Plan My Week", icon: CalendarDays },
   { href: "/calendar",    label: "Calendar",     icon: Calendar },
 ];
 

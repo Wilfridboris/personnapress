@@ -40,6 +40,16 @@ function parseErrorDetails(raw: string | null | undefined): Record<string, strin
   }
 }
 
+function getCampaignTitle(campaign: Campaign): string {
+  if (campaign.blog_html) return "Campaign";
+  if (campaign.roadmap_id) {
+    if (campaign.x_post) return "X Post";
+    if (campaign.linkedin_post) return "LinkedIn Post";
+    return "Social Post";
+  }
+  return "Generating...";
+}
+
 export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = false }: ApprovalGateClientProps) {
   const router = useRouter();
   const blogEditorRef = useRef<BlogEditorHandle>(null);
@@ -50,6 +60,7 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
   const statusConfig = STATUS_CONFIG[displayStatus] ?? { label: displayStatus, className: "bg-border text-graphite" };
   const isPending = displayStatus === "pending_approval" && campaign.status === "pending_approval";
   const rawBlogHtml = campaign.blog_html ?? null;
+  const isRoadmapSocialPost = !!campaign.roadmap_id && campaign.blog_html === null;
 
   return (
     <>
@@ -57,7 +68,7 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
       <header className="mb-8">
         <div className="flex items-start justify-between gap-4 mb-3">
           <h1 className="font-display text-3xl font-bold text-ink text-balance leading-tight">
-            {campaign.blog_html ? "Campaign" : "Generating..."}
+            {getCampaignTitle(campaign)}
           </h1>
           <div className="flex items-center gap-2 shrink-0 mt-1">
             {displayStatus === "approved" && campaign.github_pr_url && (
@@ -107,33 +118,35 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
               </Link>
             </div>
           )}
-          <div className="border border-border">
-            <div className="px-6 py-4 border-b border-border">
-              <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
-                Blog Post (HTML)
-              </h2>
-            </div>
-            {rawBlogHtml ? (
-              (isPending && !campaign.article_id) ? (
-                <BlogEditor
-                  ref={blogEditorRef}
-                  initialHtml={rawBlogHtml}
-                  campaignId={campaign.id}
-                  clientId={campaign.client_id}
-                  readOnly={false}
-                />
-              ) : (
-                <BlogHtmlRenderer
-                  html={rawBlogHtml}
-                  className="p-6 prose prose-sm max-w-none font-sans text-ink prose-headings:font-display prose-headings:text-ink prose-a:text-ink prose-a:underline"
-                />
-              )
-            ) : (
-              <div className="p-6">
-                <GeneratingPlaceholder lines={8} />
+          {!isRoadmapSocialPost && (
+            <div className="border border-border">
+              <div className="px-6 py-4 border-b border-border">
+                <h2 className="font-mono text-xs text-graphite uppercase tracking-wider">
+                  Blog Post (HTML)
+                </h2>
               </div>
-            )}
-          </div>
+              {rawBlogHtml ? (
+                (isPending && !campaign.article_id) ? (
+                  <BlogEditor
+                    ref={blogEditorRef}
+                    initialHtml={rawBlogHtml}
+                    campaignId={campaign.id}
+                    clientId={campaign.client_id}
+                    readOnly={false}
+                  />
+                ) : (
+                  <BlogHtmlRenderer
+                    html={rawBlogHtml}
+                    className="p-6 prose prose-sm max-w-none font-sans text-ink prose-headings:font-display prose-headings:text-ink prose-a:text-ink prose-a:underline"
+                  />
+                )
+              ) : (
+                <div className="p-6">
+                  <GeneratingPlaceholder lines={8} />
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         <aside className="lg:col-span-2 space-y-8">

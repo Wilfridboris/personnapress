@@ -85,6 +85,18 @@ export interface RoadmapCreateResponse {
   job_id: string;
 }
 
+export interface RoadmapListItem {
+  id: string;
+  status: string;
+  week_start_date: string | null;
+  campaign_count: number;
+  created_at: string;
+}
+
+export interface RoadmapListResponse {
+  items: RoadmapListItem[];
+}
+
 export type BrandVoiceProfileStatus = "ready" | "analyzing" | "incomplete";
 
 export interface ClientListItem {

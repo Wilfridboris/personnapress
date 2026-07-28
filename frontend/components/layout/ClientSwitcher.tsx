@@ -8,9 +8,9 @@ import { cn } from "@/lib/utils";
 import { useClientStore } from "@/lib/stores/useClientStore";
 
 // Top-level routes that are safe to stay on as-is when switching clients.
-const SAFE_BASES = new Set(["/dashboard", "/articles", "/campaigns", "/calendar", "/clients"]);
+const SAFE_BASES = new Set(["/dashboard", "/articles", "/campaigns", "/calendar", "/clients", "/roadmap"]);
 // Routes where a deep path (e.g. /campaigns/[id]) should collapse to the list on switch.
-const COLLAPSE_TO_PARENT = new Set(["articles", "campaigns"]);
+const COLLAPSE_TO_PARENT = new Set(["articles", "campaigns", "roadmap"]);
 
 function getTargetPath(pathname: string, newClientId: string): string {
   const segments = pathname.split("/").filter(Boolean);
@@ -22,6 +22,9 @@ function getTargetPath(pathname: string, newClientId: string): string {
   if (first === "clients" && second && second !== "new") {
     return third ? `/clients/${newClientId}/${third}` : `/clients/${newClientId}`;
   }
+
+  // Creation forms are not client-specific — stay on the same path.
+  if (second === "new" && !third) return `/${first}/new`;
 
   // /campaigns/[id] or /articles/[id] → the item belongs to the old client, go to the list.
   if (COLLAPSE_TO_PARENT.has(first) && second) return `/${first}`;

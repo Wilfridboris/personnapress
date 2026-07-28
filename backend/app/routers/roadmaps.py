@@ -1,6 +1,7 @@
 """Roadmap API endpoints (Epic 20).
 
 POST /api/v1/roadmaps      — create roadmap and kick off generation
+GET  /api/v1/roadmaps      — list roadmaps for current user (optional client_id filter)
 GET  /api/v1/roadmaps/{id} — poll status and list child campaigns
 """
 
@@ -8,8 +9,10 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
+from sqlalchemy import func
+from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -25,6 +28,18 @@ router = APIRouter(prefix="/roadmaps", tags=["roadmaps"])
 _INVALID_SESSION = {"error": {"code": "INVALID_SESSION", "message": "Invalid session.", "detail": {}}}
 _NOT_FOUND = {"error": {"code": "ROADMAP_NOT_FOUND", "message": "Roadmap not found.", "detail": {}}}
 _FORBIDDEN = {"error": {"code": "FORBIDDEN", "message": "Access denied.", "detail": {}}}
+
+
+class RoadmapListItem(BaseModel):
+    id: uuid.UUID
+    status: str
+    week_start_date: Optional[date] = None
+    campaign_count: int
+    created_at: datetime
+
+
+class RoadmapListResponse(BaseModel):
+    items: list[RoadmapListItem]
 
 
 class RoadmapApproveRequest(BaseModel):
@@ -111,6 +126,52 @@ async def _run_roadmap_generation(roadmap_id: uuid.UUID) -> None:
         await generate_roadmap(roadmap_id, db)
 
 
+@router.get("", response_model=RoadmapListResponse)
+async def list_roadmaps(
+    client_id: Optional[uuid.UUID] = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> RoadmapListResponse:
+    try:
+        user_id = uuid.UUID(current_user["user_id"])
+    except (ValueError, KeyError):
+        raise HTTPException(status_code=401, detail=_INVALID_SESSION)
+
+    count_subq = (
+        sa_select(func.count())
+        .where(Campaign.roadmap_id == Roadmap.id)
+        .correlate(Roadmap)
+        .scalar_subquery()
+    )
+
+    stmt = (
+        sa_select(Roadmap, count_subq.label("campaign_count"))
+        .where(Roadmap.user_id == user_id)
+        .order_by(Roadmap.created_at.desc())
+    )
+
+    if client_id is not None:
+        client = await get_client(db, client_id)
+        if not client or client.user_id != user_id:
+            raise HTTPException(status_code=404, detail={"error": {"code": "CLIENT_NOT_FOUND", "message": "Client not found.", "detail": {}}})
+        stmt = stmt.where(Roadmap.client_id == client_id)
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    items = [
+        RoadmapListItem(
+            id=row.Roadmap.id,
+            status=row.Roadmap.status.value if isinstance(row.Roadmap.status, RoadmapStatus) else str(row.Roadmap.status),
+            week_start_date=row.Roadmap.week_start_date,
+            campaign_count=row.campaign_count,
+            created_at=row.Roadmap.created_at,
+        )
+        for row in rows
+    ]
+    return RoadmapListResponse(items=items)
+
+
 @router.post("", status_code=202, response_model=RoadmapCreateResponse)
 async def create_roadmap(
     body: RoadmapCreateRequest,
@@ -189,8 +250,8 @@ async def get_roadmap_status(
             id=c.id,
             campaign_type=_platform_hint(c),
             platform_hint=_platform_hint(c),
-            x_post=c.x_post[:100] if c.x_post else None,
-            linkedin_post=c.linkedin_post[:100] if c.linkedin_post else None,
+            x_post=c.x_post,
+            linkedin_post=c.linkedin_post,
             blog_title=_blog_title(c),
             image_url=c.image_url,
             status=c.status.value if isinstance(c.status, RoadmapStatus) else str(c.status),
