@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { AtSign, BookOpen, ExternalLink, Share2, UploadCloud } from "lucide-react";
+import { AtSign, BookOpen, Share2, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import type { RoadmapCampaignSummary } from "@/lib/types";
@@ -129,34 +129,33 @@ export function PostCard({
             </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-2 mt-1">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={onEdit}
-              className="text-xs px-3 py-1.5 min-h-[44px]"
-              aria-label={`Edit ${platformLabel} post`}
-            >
-              Edit
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={onRemove}
-              className="text-xs px-3 py-1.5 min-h-[44px]"
-              aria-label={`Remove ${platformLabel} post`}
-            >
-              Remove
-            </Button>
+          <div className="flex flex-col gap-1.5 mt-1">
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onEdit}
+                className="text-xs px-3 py-1.5 min-h-[44px]"
+                aria-label={`Edit ${platformLabel} post`}
+              >
+                Edit
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onRemove}
+                className="text-xs px-3 py-1.5 min-h-[44px]"
+                aria-label={`Remove ${platformLabel} post`}
+              >
+                Remove
+              </Button>
+            </div>
             <Link
               href={`/campaigns/${campaign.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
               aria-label={`Open ${platformLabel} campaign in full editor`}
-              className="inline-flex items-center gap-1 font-mono text-xs text-graphite hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-1 min-h-[44px]"
+              className="font-mono text-xs text-graphite hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-1"
             >
-              <ExternalLink className="size-3" aria-hidden="true" />
-              Open
+              Open in full editor
             </Link>
           </div>
         )}
