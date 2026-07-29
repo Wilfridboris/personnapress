@@ -1,8 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { AtSign, BookOpen, ExternalLink, Share2, UploadCloud } from "lucide-react";
+import { AtSign, BookOpen, Share2, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import type { RoadmapCampaignSummary } from "@/lib/types";
@@ -129,7 +128,7 @@ export function PostCard({
             </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex gap-2 mt-1">
             <Button
               type="button"
               variant="secondary"
@@ -148,16 +147,6 @@ export function PostCard({
             >
               Remove
             </Button>
-            <Link
-              href={`/campaigns/${campaign.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Open ${platformLabel} campaign in full editor`}
-              className="inline-flex items-center gap-1 font-mono text-xs text-graphite hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-1 min-h-[44px]"
-            >
-              <ExternalLink className="size-3" aria-hidden="true" />
-              Open
-            </Link>
           </div>
         )}
       </div>
