@@ -38,7 +38,7 @@ async def _get_linkedin_author_urn(access_token: str, client: httpx.AsyncClient)
         raise PlatformError("LinkedIn", resp.status_code, "failed to get user profile")
     sub = resp.json().get("sub", "")
     if not sub:
-        raise PlatformError("LinkedIn", 422, "LinkedIn profile missing 'sub' field — cannot construct author URN")
+        raise PlatformError("LinkedIn", 422, "LinkedIn profile missing 'sub' field, cannot construct author URN")
     return sub
 
 

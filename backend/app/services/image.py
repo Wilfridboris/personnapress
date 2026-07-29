@@ -142,7 +142,7 @@ async def run_image_generation(
         )
         job.status = "complete"
         job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        job.error_details = "Image generation failed — client record not found."
+        job.error_details = "Image generation failed: client record not found."
         await db.commit()
         return
 
@@ -185,7 +185,7 @@ async def run_image_generation(
         sentry_sdk.capture_exception(exc)
         job.status = "complete"
         job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        job.error_details = "Image generation failed — blog and social posts are complete."
+        job.error_details = "Image generation failed: blog and social posts are complete."
         await db.commit()
         return
 
@@ -201,7 +201,7 @@ async def run_image_generation(
         sentry_sdk.capture_exception(exc)
         job.status = "complete"
         job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        job.error_details = "Image generation failed — blog and social posts are complete."
+        job.error_details = "Image generation failed: blog and social posts are complete."
         await db.commit()
         return
 

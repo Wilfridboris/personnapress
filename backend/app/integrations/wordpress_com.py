@@ -24,13 +24,13 @@ async def _fetch_primary_blog(access_token: str) -> tuple[str, str]:
     if resp.status_code != 200:
         raise PlatformError(
             "wordpress-com", resp.status_code,
-            "could not fetch your WordPress.com sites — please try reconnecting"
+            "could not fetch your WordPress.com sites. Please try reconnecting"
         )
     sites = resp.json().get("sites", [])
     if not sites:
         raise PlatformError(
             "wordpress-com", 200,
-            "no WordPress.com site found on your account — create a site at wordpress.com first, then reconnect"
+            "no WordPress.com site found on your account. Create a site at wordpress.com first, then reconnect"
         )
     primary = next((s for s in sites if s.get("is_primary")), sites[0])
     blog_id = str(primary.get("ID") or "")
@@ -53,7 +53,7 @@ async def exchange_code_for_tokens(code: str, redirect_uri: str) -> dict:
             headers={"Accept": "application/json"},
         )
     if resp.status_code != 200:
-        raise PlatformError("wordpress-com", resp.status_code, f"token exchange failed — {resp.text[:200]}")
+        raise PlatformError("wordpress-com", resp.status_code, f"token exchange failed: {resp.text[:200]}")
     data = resp.json()
     if "access_token" not in data:
         raise PlatformError("wordpress-com", 200, "no access_token in response")
@@ -75,7 +75,7 @@ async def publish_post(creds: dict, campaign) -> str:
     access_token = creds["access_token"]
     blog_id = str(creds.get("blog_id") or "")
     if not blog_id or blog_id == "0":
-        raise PlatformError("wordpress-com", 400, "invalid blog_id in stored credentials — disconnect and reconnect your WordPress.com account")
+        raise PlatformError("wordpress-com", 400, "invalid blog_id in stored credentials. Please disconnect and reconnect your WordPress.com account")
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
@@ -114,5 +114,5 @@ async def publish_post(creds: dict, campaign) -> str:
             json=post_body,
         )
         if pub_resp.status_code not in (200, 201):
-            raise PlatformError("wordpress-com", pub_resp.status_code, f"publish failed — {pub_resp.text[:200]}")
+            raise PlatformError("wordpress-com", pub_resp.status_code, f"publish failed: {pub_resp.text[:200]}")
         return pub_resp.json().get("URL", "")

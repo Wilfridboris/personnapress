@@ -187,7 +187,7 @@ async def create_platform_connection(
         except PlatformError as e:
             raise HTTPException(
                 status_code=400,
-                detail={"error": {"code": "CREDENTIAL_VALIDATION_FAILED", "message": f"WordPress returned {e.status_code} — {e.message}", "detail": {}}},
+                detail={"error": {"code": "CREDENTIAL_VALIDATION_FAILED", "message": f"WordPress returned {e.status_code}: {e.message}", "detail": {}}},
             )
         cred_json = json.dumps({"site_url": body.site_url, "username": username, "credential": body.credential})
         account_identifier = body.site_url
@@ -203,7 +203,7 @@ async def create_platform_connection(
         except PlatformError as e:
             raise HTTPException(
                 status_code=400,
-                detail={"error": {"code": "CREDENTIAL_VALIDATION_FAILED", "message": f"Webflow returned {e.status_code} — {e.message}", "detail": {}}},
+                detail={"error": {"code": "CREDENTIAL_VALIDATION_FAILED", "message": f"Webflow returned {e.status_code}: {e.message}", "detail": {}}},
             )
         cred_json = json.dumps({"token": body.token, "collection_id": body.collection_id})
         account_identifier = body.collection_id
@@ -236,7 +236,7 @@ async def get_webflow_collections(
     except PlatformError as e:
         raise HTTPException(
             status_code=400,
-            detail={"error": {"code": "WEBFLOW_API_ERROR", "message": f"Webflow returned {e.status_code} — {e.message}", "detail": {}}},
+            detail={"error": {"code": "WEBFLOW_API_ERROR", "message": f"Webflow returned {e.status_code}: {e.message}", "detail": {}}},
         )
 
     return {"collections": collections}
@@ -347,12 +347,12 @@ async def wordpress_com_oauth_callback(
     except PlatformError as e:
         raise HTTPException(
             status_code=400,
-            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": f"WordPress.com token exchange failed — {e.message}", "detail": {}}},
+            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": f"WordPress.com token exchange failed: {e.message}", "detail": {}}},
         )
     except Exception as e:
         raise HTTPException(
             status_code=400,
-            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": f"WordPress.com token exchange failed — {str(e)[:200]}", "detail": {}}},
+            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": f"WordPress.com token exchange failed: {str(e)[:200]}", "detail": {}}},
         )
 
     cred_json = json.dumps(tokens)

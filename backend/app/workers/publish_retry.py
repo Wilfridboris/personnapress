@@ -58,7 +58,7 @@ async def run_publish_retry(job_id: UUID, campaign_id: UUID, platform: str) -> N
                     db,
                     job_id,
                     status="failed",
-                    error_details=json.dumps({platform: f"Unexpected error — {str(exc)[:100]}"}),
+                    error_details=json.dumps({platform: f"Unexpected error: {str(exc)[:100]}"}),
                     completed_at=utcnow(),
                 )
                 await db.commit()

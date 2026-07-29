@@ -28,7 +28,7 @@ class ClientCreate(BaseModel):
         try:
             HttpUrl(v)
         except Exception:
-            raise ValueError("Invalid URL — must start with http:// or https://")
+            raise ValueError("Invalid URL: must start with http:// or https://")
         return v
 
 
@@ -84,7 +84,7 @@ class ClientUpdate(BaseModel):
         try:
             HttpUrl(v)
         except Exception:
-            raise ValueError("Invalid URL — must start with http:// or https://")
+            raise ValueError("Invalid URL: must start with http:// or https://")
         return v
 
 

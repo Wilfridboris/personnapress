@@ -39,7 +39,7 @@ async def create_tweet(access_token: str, text: str) -> str:
             json={"text": (text or "")[:280]},
         )
     if resp.status_code == 429:
-        raise PlatformError("X", 429, "rate limit exceeded — retry later")
+        raise PlatformError("X", 429, "rate limit exceeded, please retry later")
     if resp.status_code != 201:
         raise PlatformError("X", resp.status_code, resp.json().get("detail", "tweet creation failed"))
     tweet_id = resp.json().get("data", {}).get("id", "")
@@ -108,7 +108,7 @@ async def create_tweet_with_media(access_token: str, text: str, media_id: str) -
             },
         )
     if resp.status_code == 429:
-        raise PlatformError("X", 429, "rate limit exceeded — retry later")
+        raise PlatformError("X", 429, "rate limit exceeded, please retry later")
     if resp.status_code != 201:
         raise PlatformError("X", resp.status_code, resp.json().get("detail", "tweet with media creation failed"))
     tweet_id = resp.json().get("data", {}).get("id", "")

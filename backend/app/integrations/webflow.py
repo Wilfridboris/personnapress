@@ -104,5 +104,5 @@ async def publish_post(creds: dict, campaign) -> str:
                 )
             except Exception as cleanup_exc:
                 logger.warning("Webflow orphan cleanup failed for item %s: %s", item_id, cleanup_exc)
-            raise PlatformError("webflow", pub_resp.status_code, "publish step failed — item cleaned up")
+            raise PlatformError("webflow", pub_resp.status_code, "publish step failed, item cleaned up")
         return item_id

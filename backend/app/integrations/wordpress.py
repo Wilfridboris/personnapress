@@ -106,7 +106,7 @@ async def publish_post(creds: dict, campaign) -> str:
             except Exception as cleanup_exc:
                 logger.warning("WordPress draft cleanup failed for post %s: %s", post_id, cleanup_exc)
             raise PlatformError(
-                "wordpress", pub_resp.status_code, "publish step failed — draft cleaned up"
+                "wordpress", pub_resp.status_code, "publish step failed, draft cleaned up"
             )
 
         return pub_resp.json().get("link", "")

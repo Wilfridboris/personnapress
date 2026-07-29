@@ -532,7 +532,7 @@ async def dispatch_publish_for_platform(
             await _publish_github(campaign, creds, db)
         return {platform: "success"}
     except PlatformError as pe:
-        error_msg = f"{pe.platform.capitalize()} returned {pe.status_code} — {pe.message}"
+        error_msg = f"{pe.platform.capitalize()} returned {pe.status_code}: {pe.message}"
         logger.error(
             "Retry publish failed platform=%s campaign=%s: %s",
             platform,
@@ -548,7 +548,7 @@ async def dispatch_publish_for_platform(
             exc,
             exc_info=True,
         )
-        return {platform: f"Unexpected error — {str(exc)[:100]}"}
+        return {platform: f"Unexpected error: {str(exc)[:100]}"}
 
 
 async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, platforms: list[str] | None = None) -> dict:
