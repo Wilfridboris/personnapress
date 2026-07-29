@@ -254,7 +254,7 @@ async def get_roadmap_status(
             linkedin_post=c.linkedin_post,
             blog_title=_blog_title(c),
             image_url=c.image_url,
-            status=c.status.value if isinstance(c.status, RoadmapStatus) else str(c.status),
+            status=c.status.value,
             scheduled_for=c.scheduled_at,
         )
         for c in campaigns
