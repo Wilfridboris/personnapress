@@ -17,8 +17,18 @@ async def refresh_access_token(refresh_token: str) -> dict:
             auth=(settings.X_CLIENT_ID, settings.X_CLIENT_SECRET),
         )
     if resp.status_code != 200:
-        raise PlatformError("X", resp.status_code, resp.json().get("error_description", "token refresh failed"))
-    return resp.json()
+        try:
+            detail = resp.json().get("error_description", "token refresh failed")
+        except ValueError:
+            detail = "token refresh failed"
+        raise PlatformError("X", resp.status_code, detail)
+    try:
+        tokens = resp.json()
+    except ValueError:
+        raise PlatformError("X", 200, "token refresh returned non-JSON response")
+    if "access_token" not in tokens:
+        raise PlatformError("X", 200, "token refresh returned no access_token")
+    return tokens
 
 
 async def exchange_code_for_tokens(

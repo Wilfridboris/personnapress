@@ -58,6 +58,8 @@ async def upload_image(access_token: str, author_urn: str, image_bytes: bytes) -
             },
             json={"initializeUploadRequest": {"owner": f"urn:li:person:{author_urn}"}},
         )
+        if init_resp.status_code == 401:
+            raise PlatformError("LinkedIn", 401, "LinkedIn connection expired - reconnect your LinkedIn account in Connections")
         if init_resp.status_code not in (200, 201):
             raise PlatformError("LinkedIn", init_resp.status_code, f"image initializeUpload failed: {init_resp.text[:200]}")
 

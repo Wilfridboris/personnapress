@@ -50,15 +50,16 @@ async def _refresh_x_token_if_needed(cred: dict, db: AsyncSession, client_id: UU
         return cred
     try:
         tokens = await twitter_integration.refresh_access_token(refresh_token)
-    except PlatformError:
-        # If refresh fails the caller will get a 401 and the user must reconnect.
+    except (PlatformError, httpx.HTTPError, httpx.TimeoutException) as exc:
+        logger.warning("X token refresh failed for client %s: %s", client_id, exc)
         return cred
-    cred["access_token"] = tokens["access_token"]
+    updated = dict(cred)
+    updated["access_token"] = tokens["access_token"]
     if tokens.get("refresh_token"):
-        cred["refresh_token"] = tokens["refresh_token"]
-    encrypted = encrypt_credential(json.dumps(cred))
+        updated["refresh_token"] = tokens["refresh_token"]
+    encrypted = encrypt_credential(json.dumps(updated))
     await upsert_connection(db, client_id, "x", encrypted)
-    return cred
+    return updated
 
 
 async def _refresh_token_if_needed(cred: dict, db: AsyncSession, client_id: UUID) -> dict:

@@ -57,11 +57,11 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
 
   const [displayStatus, setDisplayStatus] = useState<CampaignStatus>(campaign.status);
 
-  // Sync to server ground truth for terminal states so router.refresh() after a
-  // publish failure propagates without requiring a full page reload.
+  // Sync to server ground truth for terminal states so router.refresh() propagates
+  // without requiring a full page reload (e.g. failed publish, successful retry).
   useEffect(() => {
-    if (campaign.status === "failed") {
-      setDisplayStatus("failed");
+    if (campaign.status === "failed" || campaign.status === "published") {
+      setDisplayStatus(campaign.status);
     }
   }, [campaign.status]);
 
