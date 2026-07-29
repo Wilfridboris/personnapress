@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { roadmapsApi } from "@/lib/api";
 import { TypewriterAnimation } from "@/components/campaigns/TypewriterAnimation";
@@ -76,6 +77,13 @@ export function RoadmapReviewClient({ roadmapId }: RoadmapReviewClientProps) {
   if (!roadmap || roadmap.status === "pending" || roadmap.status === "generating") {
     return (
       <div className="max-w-5xl mx-auto">
+        <Link
+          href="/roadmap"
+          className="inline-flex items-center gap-2 text-sm text-graphite hover:text-ink transition-colors font-mono mb-10"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back to Roadmap
+        </Link>
         <TypewriterAnimation
           statusMessages={messages}
           currentMessageIndex={messageIndex}
@@ -90,6 +98,13 @@ export function RoadmapReviewClient({ roadmapId }: RoadmapReviewClientProps) {
   if (roadmap.status === "failed") {
     return (
       <div className="max-w-2xl mx-auto">
+        <Link
+          href="/roadmap"
+          className="inline-flex items-center gap-2 text-sm text-graphite hover:text-ink transition-colors font-mono mb-10"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back to Roadmap
+        </Link>
         <div className="border border-danger px-6 py-5">
           <p className="font-body text-sm text-danger font-medium mb-2">
             Generation failed
@@ -113,6 +128,13 @@ export function RoadmapReviewClient({ roadmapId }: RoadmapReviewClientProps) {
   return (
     <>
       <div className="max-w-7xl mx-auto pb-24">
+        <Link
+          href="/roadmap"
+          className="inline-flex items-center gap-2 text-sm text-graphite hover:text-ink transition-colors font-mono mb-10"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back to Roadmap
+        </Link>
         <header className="mb-6">
           <p className="font-body text-xs text-graphite uppercase tracking-[0.08em] mb-1">
             Week Review
