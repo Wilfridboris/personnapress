@@ -37,7 +37,6 @@ async def create_tweet(access_token: str, text: str) -> str:
                 "Content-Type": "application/json",
             },
             json={"text": (text or "")[:280]},
-            params={"tweet.fields": "id,text"},
         )
     if resp.status_code == 429:
         raise PlatformError("X", 429, "rate limit exceeded — retry later")
@@ -49,48 +48,44 @@ async def create_tweet(access_token: str, text: str) -> str:
     return tweet_id
 
 
-async def upload_media(access_token: str, image_bytes: bytes, mime_type: str = "image/png") -> str:
-    """Upload image to X via INIT/APPEND/FINALIZE chunked upload. Returns media_id string."""
+async def upload_media(access_token: str, image_bytes: bytes, mime_type: str = "image/jpeg") -> str:
+    """Upload image to X via v2 INIT/APPEND/FINALIZE chunked upload. Returns media_id string."""
     chunk_size = 1_048_576  # 1 MB
+    headers = {"Authorization": f"Bearer {access_token}"}
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        headers = {"Authorization": f"Bearer {access_token}"}
-
-        # INIT
+        # INIT — separate v2 endpoint, JSON body
         init_resp = await client.post(
-            "https://api.x.com/2/media/upload",
+            "https://api.x.com/2/media/upload/initialize",
             headers=headers,
-            data={
-                "command": "INIT",
+            json={
                 "media_type": mime_type,
-                "total_bytes": str(len(image_bytes)),
+                "total_bytes": len(image_bytes),
                 "media_category": "tweet_image",
             },
         )
         if init_resp.status_code not in (200, 201):
             raise PlatformError("X", init_resp.status_code, f"media upload INIT failed: {init_resp.text[:200]}")
-        _init_data = init_resp.json().get("data", {})
-        media_id = _init_data.get("id", "")
+        media_id = init_resp.json().get("data", {}).get("id", "")
         if not media_id:
             raise PlatformError("X", init_resp.status_code, f"media upload INIT response missing data.id: {init_resp.text[:200]}")
 
-        # APPEND
+        # APPEND — media_id now in the path, segment_index as integer
         for segment_index, offset in enumerate(range(0, len(image_bytes), chunk_size)):
             chunk = image_bytes[offset : offset + chunk_size]
             append_resp = await client.post(
-                "https://api.x.com/2/media/upload",
+                f"https://api.x.com/2/media/upload/{media_id}/append",
                 headers=headers,
-                data={"command": "APPEND", "media_id": media_id, "segment_index": str(segment_index)},
+                data={"segment_index": segment_index},
                 files={"media": chunk},
             )
             if append_resp.status_code not in (200, 204):
                 raise PlatformError("X", append_resp.status_code, f"media upload APPEND segment {segment_index} failed")
 
-        # FINALIZE
+        # FINALIZE — media_id in the path, no body needed
         finalize_resp = await client.post(
-            "https://api.x.com/2/media/upload",
+            f"https://api.x.com/2/media/upload/{media_id}/finalize",
             headers=headers,
-            data={"command": "FINALIZE", "media_id": media_id},
         )
         if finalize_resp.status_code not in (200, 201):
             raise PlatformError("X", finalize_resp.status_code, f"media upload FINALIZE failed: {finalize_resp.text[:200]}")
@@ -111,7 +106,6 @@ async def create_tweet_with_media(access_token: str, text: str, media_id: str) -
                 "text": (text or "")[:280],
                 "media": {"media_ids": [media_id]},
             },
-            params={"tweet.fields": "id,text"},
         )
     if resp.status_code == 429:
         raise PlatformError("X", 429, "rate limit exceeded — retry later")

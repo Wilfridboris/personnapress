@@ -96,7 +96,7 @@ export default async function CampaignDetailPage({ params, searchParams }: Props
 
         {isFailed && (
           <div className="border border-danger/30 bg-danger/5 p-4 mb-8 font-mono text-sm text-danger">
-            Content generation failed. Delete this campaign and try again.
+            Content generation failed. You can delete this campaign and start a new one.
           </div>
         )}
 
