@@ -56,35 +56,34 @@ export function PostCard({
   const timeLabel = formatScheduledTime(scheduledFor);
 
   return (
-    <div className="relative">
-      <div
-        className={cn(
-          "bg-white border border-[#E5E5E5] p-3 flex flex-col gap-2",
-          "hover:shadow-[4px_4px_0px_#111111] transition-shadow duration-150",
-          isRemoved && "opacity-50"
-        )}
-      >
-        {/* Status badges — REMOVED takes priority */}
-        {isRemoved ? (
-          <span className="absolute top-2 right-2 font-body text-xs text-graphite uppercase tracking-[0.08em] bg-[#E5E5E5] px-2 py-0.5 z-10">
-            REMOVED
-          </span>
-        ) : campaign.status === "published" ? (
-          <span className="absolute top-2 right-2 font-body text-xs uppercase tracking-[0.08em] bg-[#DCFCE7] text-[#15803D] px-2 py-0.5 z-10">
-            PUBLISHED
-          </span>
-        ) : campaign.status === "failed" ? (
-          <span className="absolute top-2 right-2 font-body text-xs uppercase tracking-[0.08em] bg-[#FEE2E2] text-danger px-2 py-0.5 z-10">
-            FAILED
-          </span>
-        ) : null}
-
-        {/* Platform chip */}
-        <div className="flex items-center gap-1.5">
-          <PlatformIcon className="w-3.5 h-3.5 text-graphite" aria-hidden="true" />
-          <span className="font-body text-xs text-graphite uppercase tracking-[0.08em]">
-            {platformLabel}
-          </span>
+    <div
+      className={cn(
+        "bg-white border border-[#E5E5E5] p-3 flex flex-col gap-2",
+        "hover:shadow-[4px_4px_0px_#111111] transition-shadow duration-150",
+        isRemoved && "opacity-50"
+      )}
+    >
+        {/* Platform chip + status badge — inline row, no absolute positioning */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <PlatformIcon className="w-3.5 h-3.5 text-graphite shrink-0" aria-hidden="true" />
+            <span className="font-body text-xs text-graphite uppercase tracking-[0.08em] truncate">
+              {platformLabel}
+            </span>
+          </div>
+          {isRemoved ? (
+            <span className="font-body text-xs text-graphite uppercase tracking-[0.08em] bg-[#E5E5E5] px-2 py-0.5 shrink-0">
+              REMOVED
+            </span>
+          ) : campaign.status === "published" ? (
+            <span className="font-body text-xs uppercase tracking-[0.08em] bg-success-muted text-success px-2 py-0.5 shrink-0">
+              PUBLISHED
+            </span>
+          ) : campaign.status === "failed" ? (
+            <span className="font-body text-xs uppercase tracking-[0.08em] bg-danger-muted text-danger px-2 py-0.5 shrink-0">
+              FAILED
+            </span>
+          ) : null}
         </div>
 
         {/* Scheduled time chip */}
@@ -166,8 +165,6 @@ export function PostCard({
             </Link>
           </div>
         )}
-      </div>
-
     </div>
   );
 }
