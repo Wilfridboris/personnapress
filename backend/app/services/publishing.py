@@ -43,6 +43,24 @@ def _extract_meta_description(blog_html: str) -> str:
     return ""
 
 
+async def _refresh_x_token_if_needed(cred: dict, db: AsyncSession, client_id: UUID) -> dict:
+    """Refresh the X access token using the stored refresh token, then persist the new tokens."""
+    refresh_token = cred.get("refresh_token")
+    if not refresh_token:
+        return cred
+    try:
+        tokens = await twitter_integration.refresh_access_token(refresh_token)
+    except PlatformError:
+        # If refresh fails the caller will get a 401 and the user must reconnect.
+        return cred
+    cred["access_token"] = tokens["access_token"]
+    if tokens.get("refresh_token"):
+        cred["refresh_token"] = tokens["refresh_token"]
+    encrypted = encrypt_credential(json.dumps(cred))
+    await upsert_connection(db, client_id, "x", encrypted)
+    return cred
+
+
 async def _refresh_token_if_needed(cred: dict, db: AsyncSession, client_id: UUID) -> dict:
     """Refresh the GitHub installation token if within 5 minutes of expiry."""
     expires_at = cred.get("expires_at", "")
@@ -486,6 +504,7 @@ async def dispatch_publish_for_platform(
             if not campaign.x_post:
                 logger.debug("dispatch_publish_for_platform: skipping x (null x_post) campaign=%s", campaign_id)
                 return {platform: "skipped"}
+            creds = await _refresh_x_token_if_needed(creds, db, campaign.client_id)
             if campaign.image_url:
                 try:
                     async with httpx.AsyncClient(timeout=15.0) as _img_client:
@@ -604,6 +623,7 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                     logger.debug("dispatch_publish: skipping x (null x_post) campaign=%s", campaign_id)
                     results[platform] = "skipped"
                     continue
+                creds = await _refresh_x_token_if_needed(creds, db, campaign.client_id)
                 now = asyncio.get_running_loop().time()
                 if last_x_publish_time and now - last_x_publish_time < 2.0:
                     await asyncio.sleep(2.0 - (now - last_x_publish_time))

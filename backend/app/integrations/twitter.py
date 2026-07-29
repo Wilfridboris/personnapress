@@ -4,6 +4,23 @@ from app.core.config import settings
 from app.core.exceptions import PlatformError
 
 
+async def refresh_access_token(refresh_token: str) -> dict:
+    """Use the stored refresh token to obtain a new access + refresh token pair."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            "https://api.twitter.com/2/oauth2/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "client_id": settings.X_CLIENT_ID,
+            },
+            auth=(settings.X_CLIENT_ID, settings.X_CLIENT_SECRET),
+        )
+    if resp.status_code != 200:
+        raise PlatformError("X", resp.status_code, resp.json().get("error_description", "token refresh failed"))
+    return resp.json()
+
+
 async def exchange_code_for_tokens(
     code: str,
     code_verifier: str,
