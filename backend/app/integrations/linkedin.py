@@ -34,6 +34,8 @@ async def _get_linkedin_author_urn(access_token: str, client: httpx.AsyncClient)
         "https://api.linkedin.com/v2/userinfo",
         headers={"Authorization": f"Bearer {access_token}", "LinkedIn-Version": "202602"},
     )
+    if resp.status_code == 401:
+        raise PlatformError("LinkedIn", 401, "LinkedIn connection expired - reconnect your LinkedIn account in Connections")
     if resp.status_code != 200:
         raise PlatformError("LinkedIn", resp.status_code, "failed to get user profile")
     sub = resp.json().get("sub", "")
@@ -103,6 +105,8 @@ async def create_post_with_image(access_token: str, author_urn: str, text: str, 
                 "isReshareDisabledByAuthor": False,
             },
         )
+        if resp.status_code == 401:
+            raise PlatformError("LinkedIn", 401, "LinkedIn connection expired - reconnect your LinkedIn account in Connections")
         if resp.status_code != 201:
             raise PlatformError("LinkedIn", resp.status_code, resp.json().get("message", "image post creation failed"))
         return resp.headers.get("x-restli-id", "")
@@ -133,6 +137,8 @@ async def create_ugc_post(access_token: str, blog_html: str, linkedin_text: str)
                 "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"},
             },
         )
+    if post_resp.status_code == 401:
+        raise PlatformError("LinkedIn", 401, "LinkedIn connection expired - reconnect your LinkedIn account in Connections")
     if post_resp.status_code not in (200, 201):
         raise PlatformError(
             "LinkedIn", post_resp.status_code, post_resp.json().get("message", "UGC post failed")
