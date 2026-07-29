@@ -147,7 +147,9 @@ export function WeekGrid({
         >
           <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E5E5]">
             <p className="font-body text-xs text-graphite uppercase tracking-[0.08em]">
-              Editing {getPlatformInfo(editingCampaign).label} post
+              {editingCampaign.status === "published"
+                ? `Published ${getPlatformInfo(editingCampaign).label} post`
+                : `Editing ${getPlatformInfo(editingCampaign).label} post`}
             </p>
             <button
               type="button"
@@ -163,6 +165,7 @@ export function WeekGrid({
             charLimit={getPlatformInfo(editingCampaign).charLimit}
             postText={getPlatformInfo(editingCampaign).postText}
             platformLabel={getPlatformInfo(editingCampaign).label}
+            readOnly={editingCampaign.status === "published"}
             onClose={() => setEditingCampaign(null)}
             onUpdate={(updates) => {
               onUpdateCampaign(editingCampaign.id, updates);

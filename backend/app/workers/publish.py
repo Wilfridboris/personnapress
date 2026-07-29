@@ -152,7 +152,7 @@ async def run_publish(job_id: UUID, campaign_id: UUID, platforms: list[str] | No
                 db,
                 job_id,
                 status="failed",
-                error_details=json.dumps({"error": str(exc)}),
+                error_details=json.dumps({"general": str(exc)}),
                 completed_at=utcnow(),
             )
             await db.commit()

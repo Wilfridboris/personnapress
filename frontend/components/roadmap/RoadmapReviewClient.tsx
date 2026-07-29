@@ -40,13 +40,25 @@ export function RoadmapReviewClient({ roadmapId }: RoadmapReviewClientProps) {
       return status === "ready" || status === "failed" ? false : 2000;
     },
     staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
-  // Populate local campaign state once when roadmap first becomes ready
+  // Two-phase sync: full populate on first ready, status-only merge on subsequent refetches
   useEffect(() => {
-    if (populatedRef.current || roadmap?.status !== "ready") return;
-    populatedRef.current = true;
-    setLocalCampaigns(roadmap.campaigns);
+    if (!roadmap) return;
+    if (!populatedRef.current && roadmap.status === "ready") {
+      populatedRef.current = true;
+      setLocalCampaigns(roadmap.campaigns);
+      return;
+    }
+    if (populatedRef.current && roadmap.status === "ready") {
+      setLocalCampaigns((prev) =>
+        (prev ?? []).map((local) => {
+          const fresh = roadmap.campaigns.find((c) => c.id === local.id);
+          return fresh ? { ...local, status: fresh.status } : local;
+        })
+      );
+    }
   }, [roadmap]);
 
   const messages = roadmap
@@ -54,7 +66,9 @@ export function RoadmapReviewClient({ roadmapId }: RoadmapReviewClientProps) {
     : ["Analyzing your voice profile..."];
 
   const campaigns = localCampaigns ?? roadmap?.campaigns ?? [];
-  const nonRemovedCount = campaigns.filter((c) => !removedIds.has(c.id)).length;
+  const nonRemovedCampaigns = campaigns.filter((c) => !removedIds.has(c.id));
+  const publishedCount = nonRemovedCampaigns.filter((c) => c.status === "published").length;
+  const nonRemovedCount = nonRemovedCampaigns.length;
 
   function handleRemove(id: string) {
     setRemovedIds((prev) => new Set([...prev, id]));
@@ -167,6 +181,7 @@ export function RoadmapReviewClient({ roadmapId }: RoadmapReviewClientProps) {
         roadmapId={roadmapId}
         removedIds={removedIds}
         nonRemovedCount={nonRemovedCount}
+        publishedCount={publishedCount}
         weekStartDate={roadmap.week_start_date ?? null}
       />
     </>

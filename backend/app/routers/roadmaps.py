@@ -19,7 +19,7 @@ from sqlmodel import select
 from app.core.dependencies import get_current_user
 from app.db.connection import get_session
 from app.db.repositories.clients import get_client
-from app.db.repositories.models import Campaign, Roadmap, RoadmapStatus
+from app.db.repositories.models import Campaign, CampaignStatus, Roadmap, RoadmapStatus
 from app.services.roadmap import distribute_schedule, generate_roadmap
 from app.services.subscription_service import check_roadmap_limit, check_trial_not_expired
 
@@ -313,6 +313,8 @@ async def approve_roadmap(
     pending_jobs: list[tuple[str, str, object]] = []
     scheduled_count = 0
     for campaign in included:
+        if campaign.status == CampaignStatus.published:
+            continue
         campaign.status = "approved"
         scheduled_at = schedule_map.get(campaign.id)
         if scheduled_at:

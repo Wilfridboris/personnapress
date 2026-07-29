@@ -9,6 +9,7 @@ interface StickyApproveFooterProps {
   roadmapId: string;
   removedIds: Set<string>;
   nonRemovedCount: number;
+  publishedCount?: number;
   weekStartDate?: string | null;
 }
 
@@ -16,6 +17,7 @@ export function StickyApproveFooter({
   roadmapId,
   removedIds,
   nonRemovedCount,
+  publishedCount = 0,
   weekStartDate,
 }: StickyApproveFooterProps) {
   const router = useRouter();
@@ -41,6 +43,8 @@ export function StickyApproveFooter({
     }
   }
 
+  const pendingCount = nonRemovedCount - publishedCount;
+
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#E5E5E5] md:left-14 lg:left-60">
       <div className="max-w-7xl mx-auto px-8 lg:px-12 py-3 flex items-center justify-between gap-4">
@@ -49,7 +53,12 @@ export function StickyApproveFooter({
           aria-live="polite"
           aria-atomic="true"
         >
-          {nonRemovedCount} post{nonRemovedCount === 1 ? "" : "s"} selected
+          {pendingCount} post{pendingCount === 1 ? "" : "s"} to schedule
+          {publishedCount > 0 && (
+            <span className="text-graphite/60 ml-2">
+              · {publishedCount} already published
+            </span>
+          )}
         </p>
         <div className="flex items-center gap-3">
           {error && (
@@ -59,7 +68,7 @@ export function StickyApproveFooter({
             type="button"
             variant="primary"
             onClick={handleApprove}
-            disabled={isApproving || nonRemovedCount === 0}
+            disabled={isApproving || pendingCount === 0}
             className="whitespace-nowrap"
           >
             {isApproving ? "Scheduling..." : "Approve All & Schedule"}

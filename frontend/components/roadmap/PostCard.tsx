@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { AtSign, BookOpen, Share2, UploadCloud } from "lucide-react";
+import Link from "next/link";
+import { AtSign, BookOpen, ExternalLink, Share2, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import type { RoadmapCampaignSummary } from "@/lib/types";
@@ -63,12 +64,20 @@ export function PostCard({
           isRemoved && "opacity-50"
         )}
       >
-        {/* Removed badge */}
-        {isRemoved && (
+        {/* Status badges — REMOVED takes priority */}
+        {isRemoved ? (
           <span className="absolute top-2 right-2 font-body text-xs text-graphite uppercase tracking-[0.08em] bg-[#E5E5E5] px-2 py-0.5 z-10">
             REMOVED
           </span>
-        )}
+        ) : campaign.status === "published" ? (
+          <span className="absolute top-2 right-2 font-body text-xs uppercase tracking-[0.08em] bg-[#DCFCE7] text-[#15803D] px-2 py-0.5 z-10">
+            PUBLISHED
+          </span>
+        ) : campaign.status === "failed" ? (
+          <span className="absolute top-2 right-2 font-body text-xs uppercase tracking-[0.08em] bg-[#FEE2E2] text-danger px-2 py-0.5 z-10">
+            FAILED
+          </span>
+        ) : null}
 
         {/* Platform chip */}
         <div className="flex items-center gap-1.5">
@@ -128,15 +137,15 @@ export function PostCard({
             </Button>
           </div>
         ) : (
-          <div className="flex gap-2 mt-1">
+          <div className="flex flex-wrap gap-2 mt-1 items-center">
             <Button
               type="button"
               variant="secondary"
               onClick={onEdit}
               className="text-xs px-3 py-1.5 min-h-[44px]"
-              aria-label={`Edit ${platformLabel} post`}
+              aria-label={campaign.status === "published" ? `View ${platformLabel} post` : `Edit ${platformLabel} post`}
             >
-              Edit
+              {campaign.status === "published" ? "View" : "Edit"}
             </Button>
             <Button
               type="button"
@@ -147,6 +156,14 @@ export function PostCard({
             >
               Remove
             </Button>
+            <Link
+              href={`/campaigns/${campaign.id}`}
+              className="inline-flex items-center gap-1 font-body text-xs text-graphite hover:text-ink transition-colors underline underline-offset-2 min-h-[44px]"
+              aria-label={`Open full campaign page for ${platformLabel} post`}
+            >
+              <ExternalLink className="w-3 h-3" aria-hidden="true" />
+              Campaign
+            </Link>
           </div>
         )}
       </div>

@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 20-6-roadmap-campaign-sync-ux-fixes (2026-07-28)
+
+- `SYNTHETIC_KEYS` set includes legacy `"error"` key with no comment or expiry plan; a platform genuinely named "error" would have its retry button silently suppressed. [frontend/components/publishing/RetryPanel.tsx:17]
+- Already-approved/failed campaigns can be re-queued on re-approval — the published guard is the only skip added; existing idempotency guard in `approve_roadmap` covers re-submission in practice. [backend/app/routers/roadmaps.py:approve_roadmap]
+- Old Voice tab deep-links (`#tabpanel-voice`, `?tab=Voice`) silently broken after Profile & Voice tab merge — no deep-link mechanism in active use in the codebase. [frontend/components/clients/ClientDetailTabs.tsx]
+- Roadmap badge link navigates to 404 when roadmap has been deleted — no roadmap deletion mechanism currently exists; hypothetical future concern. [frontend/components/campaigns/CampaignList.tsx:144]
+
 ## Deferred from: code review of 3-14-social-standalone-prompt (2026-07-28)
 
 - `_build_standalone_voice_injection` silently drops `opening_pattern`/`closing_pattern` values not present in their respective maps, with no warning or logging. BVP enum values are currently controlled, but new variants will be silently ignored. [backend/app/integrations/generation_prompts.py:_build_standalone_voice_injection]

@@ -3,21 +3,23 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
-const TABS = ["Profile", "Voice", "Connections"] as const;
+const TABS = ["Profile & Voice", "Connections"] as const;
 type Tab = (typeof TABS)[number];
+
+function tabSlug(tab: Tab): string {
+  return tab.toLowerCase().replace(/\s*&\s*/g, "-").replace(/\s+/g, "-");
+}
 
 interface Props {
   defaultTab?: Tab;
-  profileContent: React.ReactNode;
-  voiceContent: React.ReactNode;
+  profileVoiceContent: React.ReactNode;
   connectionsContent: React.ReactNode;
 }
 
 export function ClientDetailTabs({
-  profileContent,
-  voiceContent,
+  profileVoiceContent,
   connectionsContent,
-  defaultTab = "Profile",
+  defaultTab = "Profile & Voice",
 }: Props) {
   const [active, setActive] = useState<Tab>(defaultTab);
 
@@ -29,8 +31,8 @@ export function ClientDetailTabs({
             key={tab}
             role="tab"
             aria-selected={active === tab}
-            aria-controls={`tabpanel-${tab.toLowerCase()}`}
-            id={`tab-${tab.toLowerCase()}`}
+            aria-controls={`tabpanel-${tabSlug(tab)}`}
+            id={`tab-${tabSlug(tab)}`}
             onClick={() => setActive(tab)}
             className={cn(
               "font-mono text-xs uppercase tracking-widest px-6 py-3 border-b-2 -mb-px transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-inset",
@@ -45,25 +47,17 @@ export function ClientDetailTabs({
       </div>
 
       <div
-        id="tabpanel-profile"
+        id={`tabpanel-${tabSlug("Profile & Voice")}`}
         role="tabpanel"
-        aria-labelledby="tab-profile"
-        hidden={active !== "Profile"}
+        aria-labelledby={`tab-${tabSlug("Profile & Voice")}`}
+        hidden={active !== "Profile & Voice"}
       >
-        {profileContent}
+        {profileVoiceContent}
       </div>
       <div
-        id="tabpanel-voice"
+        id={`tabpanel-${tabSlug("Connections")}`}
         role="tabpanel"
-        aria-labelledby="tab-voice"
-        hidden={active !== "Voice"}
-      >
-        {voiceContent}
-      </div>
-      <div
-        id="tabpanel-connections"
-        role="tabpanel"
-        aria-labelledby="tab-connections"
+        aria-labelledby={`tab-${tabSlug("Connections")}`}
         hidden={active !== "Connections"}
       >
         {connectionsContent}

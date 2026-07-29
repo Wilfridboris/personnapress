@@ -14,6 +14,7 @@ interface RetryPanelProps {
 }
 
 const MAX_RETRIES = 3;
+const SYNTHETIC_KEYS = new Set(["general", "error"]);
 
 export function RetryPanel({
   campaign,
@@ -71,14 +72,16 @@ export function RetryPanel({
           className="flex items-center justify-between py-2 border-b border-border last:border-0"
         >
           <div>
-            <p className="text-sm font-medium text-ink capitalize">{platform}</p>
+            <p className="text-sm font-medium text-ink capitalize">
+              {SYNTHETIC_KEYS.has(platform) ? "Publishing error" : platform}
+            </p>
             {isSuccess ? (
               <p className="text-xs text-[#2E4F2E]">Published</p>
             ) : (
               <p className="text-xs text-[#8B0000]">{error}</p>
             )}
           </div>
-          {!isSuccess && (
+          {!isSuccess && !SYNTHETIC_KEYS.has(platform) && (
             <div className="flex items-center gap-3">
               <span className="text-xs text-graphite">
                 Attempt {attemptCount} of {MAX_RETRIES}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Map as MapIcon } from "lucide-react";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { usePlatformConnections } from "@/hooks/usePlatformConnections";
 import { useClientStore } from "@/lib/stores/useClientStore";
@@ -141,6 +141,17 @@ export function CampaignList({ basePath = "/dashboard" }: { basePath?: string })
                 </div>
                 <div className="flex flex-wrap items-center gap-2 ml-4 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <StatusBadge status={campaign.status} />
+                  {campaign.roadmap_id && (
+                    <Link
+                      href={`/roadmap/${campaign.roadmap_id}/review`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 font-body text-xs uppercase tracking-[0.08em] text-graphite border border-[#E5E5E5] px-2 py-0.5 hover:text-ink hover:border-ink transition-colors"
+                      aria-label="View source roadmap"
+                    >
+                      <MapIcon className="size-3" aria-hidden="true" />
+                      Roadmap
+                    </Link>
+                  )}
                   {(campaign.status === "approved" || campaign.status === "published") && (
                     <RevoiceButton
                       campaignId={campaign.id}

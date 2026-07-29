@@ -15,6 +15,7 @@ interface PostEditPanelProps {
   charLimit: number;
   postText: string | null;
   platformLabel: string;
+  readOnly?: boolean;
   onClose: () => void;
   onUpdate: (updates: Partial<RoadmapCampaignSummary>) => void;
 }
@@ -24,6 +25,7 @@ export function PostEditPanel({
   charLimit,
   postText,
   platformLabel,
+  readOnly = false,
   onClose,
   onUpdate,
 }: PostEditPanelProps) {
@@ -117,12 +119,12 @@ export function PostEditPanel({
     <div
       className="px-6 py-6 flex flex-col gap-5"
       role="region"
-      aria-label={`Edit ${platformLabel} post`}
+      aria-label={`${readOnly ? "View" : "Edit"} ${platformLabel} post`}
     >
-      {/* Header */}
-      <h2 className="font-display text-lg text-ink">
-        Editing {platformLabel} post
-      </h2>
+      {/* Published note — shown for all platforms in read-only mode */}
+      {readOnly && (
+        <p className="font-body text-xs text-graphite">This post has already been published.</p>
+      )}
 
       {/* Text area — not shown for blog (only title exists in summary) */}
       {campaign.platform_hint !== "blog_full" && (
@@ -135,10 +137,12 @@ export function PostEditPanel({
                 charLimit > 0 ? e.target.value.slice(0, charLimit) : e.target.value
               )
             }
+            disabled={readOnly}
             className={cn(
               "w-full bg-transparent resize-none font-mono text-sm text-ink leading-[1.7]",
               "border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink",
-              "py-2 focus:outline-none transition-all"
+              "py-2 focus:outline-none transition-all",
+              readOnly && "opacity-50 cursor-default"
             )}
             rows={4}
             aria-label={`${platformLabel} post content`}
@@ -156,62 +160,64 @@ export function PostEditPanel({
         </div>
       )}
 
-      {/* Image section */}
-      <div>
-        {imagePreview ? (
-          <div className="flex flex-col gap-2">
-            {imagePreview.startsWith("blob:") ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={imagePreview}
-                alt=""
-                width={240}
-                className="w-full max-w-[240px] h-auto object-cover"
-                style={{ objectFit: "cover" }}
-              />
-            ) : (
-              <Image
-                src={imagePreview}
-                alt=""
-                width={240}
-                height={135}
-                className="w-full max-w-[240px] h-auto object-cover"
-                style={{ objectFit: "cover" }}
-              />
-            )}
+      {/* Image section — hidden in read-only mode */}
+      {!readOnly && (
+        <div>
+          {imagePreview ? (
+            <div className="flex flex-col gap-2">
+              {imagePreview.startsWith("blob:") ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={imagePreview}
+                  alt=""
+                  width={240}
+                  className="w-full max-w-[240px] h-auto object-cover"
+                  style={{ objectFit: "cover" }}
+                />
+              ) : (
+                <Image
+                  src={imagePreview}
+                  alt=""
+                  width={240}
+                  height={135}
+                  className="w-full max-w-[240px] h-auto object-cover"
+                  style={{ objectFit: "cover" }}
+                />
+              )}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="text-xs self-start"
+                aria-label="Replace image"
+              >
+                {isUploading ? "Uploading..." : "Replace image"}
+              </Button>
+            </div>
+          ) : (
             <Button
               type="button"
               variant="secondary"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className="text-xs self-start"
-              aria-label="Replace image"
+              className="text-xs"
+              aria-label="Upload your own image"
             >
-              {isUploading ? "Uploading..." : "Replace image"}
+              {isUploading ? "Uploading..." : "Upload your own image"}
             </Button>
-          </div>
-        ) : (
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="text-xs"
-            aria-label="Upload your own image"
-          >
-            {isUploading ? "Uploading..." : "Upload your own image"}
-          </Button>
-        )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          className="sr-only"
-          tabIndex={-1}
-          aria-hidden="true"
-          onChange={handleFileSelect}
-        />
-      </div>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden="true"
+            onChange={handleFileSelect}
+          />
+        </div>
+      )}
 
       {saveError && (
         <p className="font-body text-xs text-danger">{saveError}</p>
@@ -219,24 +225,37 @@ export function PostEditPanel({
 
       {/* Footer */}
       <div className="flex gap-2">
-        <Button
-          type="button"
-          variant="primary"
-          onClick={handleSave}
-          disabled={isSaving || isUploading}
-          className="text-xs"
-        >
-          {isSaving ? "Saving..." : "Save changes"}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={onClose}
-          disabled={isSaving || isUploading}
-          className="text-xs"
-        >
-          Cancel
-        </Button>
+        {readOnly ? (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={onClose}
+            className="text-xs"
+          >
+            Close
+          </Button>
+        ) : (
+          <>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleSave}
+              disabled={isSaving || isUploading}
+              className="text-xs"
+            >
+              {isSaving ? "Saving..." : "Save changes"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onClose}
+              disabled={isSaving || isUploading}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );

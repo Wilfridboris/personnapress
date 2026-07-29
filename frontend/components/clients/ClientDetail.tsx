@@ -349,11 +349,18 @@ export function ClientDetail({ client }: Props) {
     <PlatformConnectionsClient clientId={client.id} />
   );
 
+  const profileVoiceContent = (
+    <>
+      {profileContent}
+      <hr className="border-[#E5E5E5] my-8" />
+      {voiceContent}
+    </>
+  );
+
   return (
     <>
       <ClientDetailTabs
-        profileContent={profileContent}
-        voiceContent={voiceContent}
+        profileVoiceContent={profileVoiceContent}
         connectionsContent={connectionsContent}
       />
 
