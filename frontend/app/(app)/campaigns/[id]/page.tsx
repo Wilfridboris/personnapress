@@ -67,7 +67,9 @@ export default async function CampaignDetailPage({ params, searchParams }: Props
   const job = jobId ? await getJob(jobId) : null;
   const jobErrorDetails = job?.error_details ?? null;
 
-  const isFailed = campaign.status === "failed";
+  // Only a generation failure (no publish_job) shows the "delete and retry" banner.
+  // Publish failures are handled by RetryPanel inside ApprovalGateClient.
+  const isFailed = campaign.status === "failed" && !campaign.publish_job;
   const isPublished = campaign.status === "published";
 
   // Show overlay only while content hasn't been generated yet (blog_html is the canonical signal)

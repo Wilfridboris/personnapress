@@ -40,6 +40,8 @@ async def create_tweet(access_token: str, text: str) -> str:
         )
     if resp.status_code == 429:
         raise PlatformError("X", 429, "rate limit exceeded, please retry later")
+    if resp.status_code == 401:
+        raise PlatformError("X", 401, "X connection expired - reconnect your X account in Connections")
     if resp.status_code != 201:
         raise PlatformError("X", resp.status_code, resp.json().get("detail", "tweet creation failed"))
     tweet_id = resp.json().get("data", {}).get("id", "")

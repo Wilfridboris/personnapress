@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { BlogEditor } from "@/components/campaigns/BlogEditor";
 import { BlogHtmlRenderer } from "@/components/ui/BlogHtmlRenderer";
@@ -56,6 +56,14 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
   const socialEditorsRef = useRef<SocialPostEditorsHandle>(null);
 
   const [displayStatus, setDisplayStatus] = useState<CampaignStatus>(campaign.status);
+
+  // Sync to server ground truth for terminal states so router.refresh() after a
+  // publish failure propagates without requiring a full page reload.
+  useEffect(() => {
+    if (campaign.status === "failed") {
+      setDisplayStatus("failed");
+    }
+  }, [campaign.status]);
 
   const statusConfig = STATUS_CONFIG[displayStatus] ?? { label: displayStatus, className: "bg-border text-graphite" };
   const isPending = displayStatus === "pending_approval" && campaign.status === "pending_approval";
