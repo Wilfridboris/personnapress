@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useId, useRef, useCallback } from "react";
-import { ChevronDown, ChevronUp, Lightbulb } from "lucide-react";
+import { useState, useEffect, useId, useMemo, useRef, useCallback } from "react";
+import { ChevronDown, ChevronUp, Lightbulb, Link as LinkIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { authApi, clientsApi, campaignsApi } from "@/lib/api";
 import { useClientStore } from "@/lib/stores/useClientStore";
@@ -241,6 +241,10 @@ export function OnboardingFlow() {
 
   // Step 4 state (brain dump)
   const [brainDump, setBrainDump] = useState("");
+  const linkCount = useMemo(
+    () => (brainDump.match(/https?:\/\/[^\s]+/g) ?? []).length,
+    [brainDump]
+  );
   const [tipsOpen, setTipsOpen] = useState(false);
   const tipsToggleId = useId();
   const tipsPanelId = useId();
@@ -582,6 +586,14 @@ export function OnboardingFlow() {
               <p className="flex items-center gap-1 text-xs text-[#555555] mt-1">
                 <Lightbulb size={12} aria-hidden="true" />
                 Tip: include a specific number, personal outcome, or named tool for best results.
+              </p>
+            )}
+          </div>
+          <div aria-live="polite" aria-atomic="true">
+            {linkCount > 0 && (
+              <p className="flex items-center gap-1 text-xs font-mono text-sky-600 mt-1">
+                <LinkIcon size={12} aria-hidden="true" />
+                {linkCount === 1 ? "1 link detected" : `${linkCount} links detected`} -- will be cited in your article
               </p>
             )}
           </div>

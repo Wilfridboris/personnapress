@@ -125,7 +125,7 @@ _BLOG_PROMPT = """You are a direct, expert blog writer. Write a blog post that s
 BRAND VOICE PROFILE:
 {voice_section}
 
-BRAIN DUMP (author's raw ideas: build the blog around the core argument, but RETAIN all first-person experiences, specific numbers, dates, named tools, or unique outcomes. These are E-E-A-T and Information Gain signals; do not generalize or anonymize them):
+BRAIN DUMP (author's raw ideas: build the blog around the core argument, but RETAIN all first-person experiences, specific numbers, dates, named tools, or unique outcomes. These are E-E-A-T and Information Gain signals; do not generalize or anonymize them. If the brain dump contains any URLs (http:// or https://), embed each as an HTML anchor link <a href="[URL]" rel="noopener noreferrer" target="_blank">[natural anchor text describing what the URL points to]</a> at the point in the article where it is most relevant; preserve each URL exactly as provided. If the brain dump contains no URLs, do not add any anchor tags or links):
 {brain_dump}
 
 {seo_target_section}

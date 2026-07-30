@@ -266,3 +266,14 @@
 - Prompt injection via user-controlled BVP content -- pre-existing pattern across all BVP fields; user's own voice content injected into their own prompts; sanitization beyond em-dash substitution is a future hardening concern. [backend/app/integrations/generation_prompts.py:_build_voice_injection, _build_standalone_voice_injection]
 - Standalone ANTI-PATTERN hint fires independently of `signature_phrases` (AC 6 "also add" spec ambiguity) -- implementation treats it as independent condition; more functionally correct and test `test_anti_pattern_without_signature_phrases` explicitly validates this behavior. [backend/app/integrations/generation_prompts.py:_build_standalone_voice_injection]
 - Standalone hint hardcodes "(not in x_post)" in a shared builder -- pre-existing design choice; this function is exclusively used for the Plan My Week LinkedIn/X post path. [backend/app/integrations/generation_prompts.py:287]
+
+## Deferred from: code review of 3-16-brain-dump-link-detection (2026-07-30)
+
+- Trailing punctuation (`.`, `,`, `)`) matched into URL by regex `[^\s]+` -- spec prescribes this exact regex in AC 2; changing it would be a spec deviation. [frontend/app/(app)/campaigns/new/page.tsx, frontend/components/onboarding/OnboardingFlow.tsx]
+- URL regex duplicated verbatim in two frontend files with no shared utility -- maintenance risk; future fix must be applied in both places. [campaigns/new/page.tsx, OnboardingFlow.tsx]
+- `javascript:`/`data:` scheme injection via user-supplied URLs in LLM prompt -- LLM instruction is conditioned on `http://`/`https://` only; authenticated users' own content only; low real-world risk. [generation_prompts.py:128]
+- Duplicate URLs in brain dump produce non-deterministic LLM anchor placement -- spec only addresses UI count (no deduplication), not LLM placement for repeated URLs. [generation_prompts.py:128]
+- Malformed URLs (e.g., `https://` with no host) not guarded in prompt -- LLM may produce `<a href="https://">` with hallucinated anchor text; edge case. [generation_prompts.py:128]
+- URL inside Markdown link syntax `[text](https://...)` double-counted by regex and potentially double-linked in output -- brain dump is plain text; very edge case. [both frontend files]
+- `{brain_dump}` format-string injection if user inserts `}` in content -- pre-existing pattern across all prompt placeholders in this file. [generation_prompts.py]
+- No upper bound on link count displayed in UI indicator -- "47 links detected" is technically correct but may warrant a warning for very large counts in a future story. [both frontend files]

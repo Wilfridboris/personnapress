@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronDown, ChevronUp, Lightbulb, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Lightbulb, Link as LinkIcon, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -72,6 +72,10 @@ export default function NewCampaignPage() {
     .map((c) => platformLabel(c.platform));
 
   const charCount = brainDump.length;
+  const linkCount = useMemo(
+    () => (brainDump.match(/https?:\/\/[^\s]+/g) ?? []).length,
+    [brainDump]
+  );
   const hasActiveClient = activeClient !== null;
   const hasBvp = activeClient?.brand_voice_profile_status === "ready";
   const isDisabled = charCount < MIN_CHARS || !hasActiveClient || isSubmitting;
@@ -255,6 +259,14 @@ export default function NewCampaignPage() {
             <p className="flex items-center gap-1 text-xs text-[#555555] mt-1">
               <Lightbulb size={12} aria-hidden="true" />
               Tip: include a specific number, personal outcome, or named tool for best results.
+            </p>
+          )}
+        </div>
+        <div aria-live="polite" aria-atomic="true">
+          {linkCount > 0 && (
+            <p className="flex items-center gap-1 text-xs font-mono text-sky-600 mt-1">
+              <LinkIcon size={12} aria-hidden="true" />
+              {linkCount === 1 ? "1 link detected" : `${linkCount} links detected`} -- will be cited in your article
             </p>
           )}
         </div>
