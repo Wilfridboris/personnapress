@@ -104,6 +104,30 @@ def _build_voice_injection(bvp: dict) -> str:
     )
 
 
+_URL_PATTERN = re.compile(r"https?://\S+")
+
+
+def _build_url_section(brain_dump: str) -> str:
+    """Return a standalone LINK EMBEDDING block when the brain dump contains URLs.
+
+    Returns empty string when no URLs are present so the {url_section} placeholder
+    collapses to nothing in the formatted prompt.
+    """
+    urls = _URL_PATTERN.findall(brain_dump)
+    if not urls:
+        return ""
+    url_list = "\n".join(f"  - {u}" for u in urls)
+    return (
+        "LINK EMBEDDING (MANDATORY -- do not skip):\n"
+        f"The brain dump contains {len(urls)} URL(s) that MUST appear as HTML anchor links in the article.\n"
+        "For each URL below, embed it as: "
+        '<a href="URL" rel="noopener noreferrer" target="_blank">natural anchor text describing the resource</a>\n'
+        "Place each link at the point in the article where the linked resource is most relevant. "
+        "Preserve each URL exactly as provided -- do not shorten or alter it.\n"
+        f"URLs to embed:\n{url_list}"
+    )
+
+
 def _meta_voice_note(bvp: dict) -> str:
     """Return the condensed voice note for the meta description instruction.
 
@@ -125,8 +149,10 @@ _BLOG_PROMPT = """You are a direct, expert blog writer. Write a blog post that s
 BRAND VOICE PROFILE:
 {voice_section}
 
-BRAIN DUMP (author's raw ideas: build the blog around the core argument, but RETAIN all first-person experiences, specific numbers, dates, named tools, or unique outcomes. These are E-E-A-T and Information Gain signals; do not generalize or anonymize them. If the brain dump contains any URLs (http:// or https://), embed each as an HTML anchor link <a href="[URL]" rel="noopener noreferrer" target="_blank">[natural anchor text describing what the URL points to]</a> at the point in the article where it is most relevant; preserve each URL exactly as provided. If the brain dump contains no URLs, do not add any anchor tags or links):
+BRAIN DUMP (author's raw ideas: build the blog around the core argument, but RETAIN all first-person experiences, specific numbers, dates, named tools, or unique outcomes. These are E-E-A-T and Information Gain signals; do not generalize or anonymize them):
 {brain_dump}
+
+{url_section}
 
 {seo_target_section}
 {audience_section}
