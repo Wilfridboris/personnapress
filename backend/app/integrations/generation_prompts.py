@@ -47,6 +47,46 @@ def _build_voice_injection(bvp: dict) -> str:
     if closing_pat:
         closing_rule = f"\n- Conclusion should follow a {closing_pat} closing pattern"
 
+    _raw_sig = bvp.get("signature_phrases")
+    sig_phrases = [
+        p for p in (_raw_sig if isinstance(_raw_sig, list) else [])
+        if isinstance(p, str) and p.strip()
+    ][:10]
+    _raw_anchors = bvp.get("voice_anchor_sentences")
+    voice_anchors = [
+        s for s in (_raw_anchors if isinstance(_raw_anchors, list) else [])
+        if isinstance(s, str) and s.strip()
+    ][:5]
+    _raw_anti = bvp.get("anti_pattern_example")
+    anti_pattern = ((_raw_anti if isinstance(_raw_anti, str) else "") or "").strip().replace("—", "--").replace('"', "'")
+
+    sig_block = ""
+    if sig_phrases:
+        phrases_clean = [p.replace("—", "--").replace("\n", " ").replace("\r", "") for p in sig_phrases]
+        sig_bullet_list = "\n".join(f"- {p}" for p in phrases_clean)
+        sig_block = (
+            "\nSIGNATURE PHRASES (short phrases this writer uses naturally -- weave 2-3 into the post "
+            "where they fit organically; never force them and never repeat the same phrase twice):\n"
+            + sig_bullet_list
+        )
+
+    anchor_block = ""
+    if voice_anchors:
+        anchors_clean = [s.replace("—", "--").replace("\n", " ").replace("\r", "") for s in voice_anchors]
+        anchor_bullet_list = "\n".join(f"- {s}" for s in anchors_clean)
+        anchor_block = (
+            "\nVOICE ANCHORS (verbatim sentences from this writer -- these represent the target register, "
+            "rhythm, and directness; match this level throughout the post):\n"
+            + anchor_bullet_list
+        )
+
+    anti_block = ""
+    if anti_pattern:
+        anti_block = (
+            f'\nANTI-PATTERN (this writer would NEVER produce a sentence like this -- avoid this register, '
+            f'vocabulary, and structure throughout):\n"{anti_pattern}"'
+        )
+
     return (
         f"{voice_brief}\n\n"
         "VOICE APPLICATION RULES (apply within the SEO structure -- do not override structure):\n"
@@ -58,6 +98,9 @@ def _build_voice_injection(bvp: dict) -> str:
         f"- {spec_rule}"
         f"{header_rule}"
         f"{closing_rule}"
+        + sig_block
+        + anchor_block
+        + anti_block
     )
 
 
@@ -237,6 +280,22 @@ def _build_standalone_voice_injection(bvp: dict) -> str:
     structure = (bvp.get("post_structure_template") or "").strip()
     if structure:
         hints.append(f"- Author's preferred post structure: {structure} -- use as guide for section ordering")
+
+    _raw_sig = bvp.get("signature_phrases")
+    sig_phrases = [
+        p for p in (_raw_sig if isinstance(_raw_sig, list) else [])
+        if isinstance(p, str) and p.strip()
+    ][:5]
+    _raw_anti = bvp.get("anti_pattern_example")
+    anti_pattern = ((_raw_anti if isinstance(_raw_anti, str) else "") or "").strip().replace("—", "--").replace('"', "'")
+
+    if sig_phrases:
+        phrases_str = ", ".join(p.replace("—", "--").replace("\n", " ").replace("\r", "") for p in sig_phrases)
+        hints.append(
+            f"- Writer's signature phrases -- use 1-2 naturally in the LinkedIn post (not in x_post): {phrases_str}"
+        )
+    if anti_pattern:
+        hints.append(f'- ANTI-PATTERN: never produce text like "{anti_pattern}"')
 
     if not hints:
         return ""

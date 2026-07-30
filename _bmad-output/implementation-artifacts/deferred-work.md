@@ -249,3 +249,9 @@
 ## Deferred from: code review of spec-fix-blog-save-comments-stripped (2026-07-24)
 
 - Unconditional overwrite on re-generation — `run_generation_pipeline` always overwrites `campaign.excerpt` / `campaign.meta_description` without checking whether the fields were set by a previous run. Design intent per spec: revoice creates fresh campaigns, not re-runs on existing ones. Revisit if a user-editable excerpt workflow is added later. [backend/app/services/generation.py:165-166]
+
+## Deferred from: code review of 16-6-voice-signal-injection (2026-07-29)
+
+- Prompt injection via user-controlled BVP content -- pre-existing pattern across all BVP fields; user's own voice content injected into their own prompts; sanitization beyond em-dash substitution is a future hardening concern. [backend/app/integrations/generation_prompts.py:_build_voice_injection, _build_standalone_voice_injection]
+- Standalone ANTI-PATTERN hint fires independently of `signature_phrases` (AC 6 "also add" spec ambiguity) -- implementation treats it as independent condition; more functionally correct and test `test_anti_pattern_without_signature_phrases` explicitly validates this behavior. [backend/app/integrations/generation_prompts.py:_build_standalone_voice_injection]
+- Standalone hint hardcodes "(not in x_post)" in a shared builder -- pre-existing design choice; this function is exclusively used for the Plan My Week LinkedIn/X post path. [backend/app/integrations/generation_prompts.py:287]
