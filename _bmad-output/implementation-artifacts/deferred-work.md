@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of 16-7-low-confidence-voice-warning (2026-07-30)
+
+- Banner "Add writing samples" button triggers native file picker only (via `triggerFileInput`) -- the scrape URL option in `FileUploadPanel` is not reachable via this path. Spec expected a modal state setter; no such setter exists in the codebase. The `FileUploadPanel` scrape section is still accessible directly on the same tab. [frontend/components/clients/FileUploadPanel.tsx, LowConfidenceBanner.tsx]
+- `forwardRef` + `useImperativeHandle` coupling between `ClientDetail` and `FileUploadPanel` internals -- adds tight coupling for a DOM-access concern. Acceptable for now; could be replaced with a `scrollToUpload` prop pattern if `FileUploadPanel` is ever refactored. [frontend/components/clients/ClientDetail.tsx, FileUploadPanel.tsx]
+
 ## Deferred from: code review of 20-6-roadmap-campaign-sync-ux-fixes (2026-07-28)
 
 - `SYNTHETIC_KEYS` set includes legacy `"error"` key with no comment or expiry plan; a platform genuinely named "error" would have its retry button silently suppressed. [frontend/components/publishing/RetryPanel.tsx:17]

@@ -892,6 +892,37 @@ So that my onboarding experience leads directly to my first real Campaign withou
 
 ---
 
+### Story 3.15: Brain Dump Quality Guidance
+
+As a PersonnaPress user writing a Brain Dump,
+I want in-context guidance that helps me provide richer, more specific input,
+so that the AI has enough E-E-A-T material to generate content that sounds genuinely like me and ranks better.
+
+**Acceptance Criteria:**
+
+1. **Given** the Brain Dump textarea on `/campaigns/new` (and the onboarding Step 3 brain dump), **When** the textarea is empty or focused for the first time, **Then** the existing short placeholder is replaced with a multi-line placeholder that models ideal input:
+   ```
+   e.g. "I ran a 90-day LinkedIn test comparing 3 posting strategies -- daily tips vs. 3x storytelling posts vs. 2x case studies. Case studies drove 4x more DMs than the other two. Most people I talk to post daily tips because it feels 'safe'. Here's what I found and why I changed my approach..."
+   ```
+   The placeholder text disappears on first keystroke as standard textarea behavior.
+
+2. **Given** the Brain Dump textarea, **When** the user has typed at least 1 character and the current input is fewer than 150 characters, **Then** a subtle quality hint appears below the character counter: Lucide `Lightbulb` icon (12px) + "Tip: include a specific number, personal outcome, or named tool for best voice match." in `text-xs text-[#888888]`. The hint disappears once the textarea reaches 150+ characters.
+
+3. **Given** the Brain Dump textarea has 150 or more characters, **When** the hint is evaluated, **Then** no hint is shown (the 150-char threshold is a proxy for sufficient specificity; no NLP analysis required).
+
+4. **Given** a collapsible "Tips for better results" disclosure panel below the textarea, **When** the user clicks the toggle (Lucide `ChevronDown` / `ChevronUp`), **Then** it expands to show a compact list of brain dump tips:
+   - Start with a specific number, date, or named outcome ("I increased conversion 28% in 6 weeks")
+   - Mention tools, platforms, or methods by name ("We switched from Mailchimp to ConvertKit")
+   - Include first-person experience: "I found", "I tested", "my client saw"
+   - Describe the before/after or the problem you solved
+   The panel is collapsed by default and its state is not persisted (resets on page reload).
+
+5. **Given** the Paper Style design system, **When** the hints and disclosure panel render, **Then** all elements use `text-xs` typography, Lucide icons only (no emojis), `text-[#888888]` for hint text, `rounded-none` on any bordered surfaces, no em-dash in any visible text. The disclosure toggle button meets `min-h-[44px]`.
+
+6. **Given** the existing character counter and submit button validation, **When** this story is implemented, **Then** no existing validation logic is changed -- the 20-character minimum, 10,000-character maximum, and disabled-until-minimum behavior are unaffected.
+
+---
+
 ## Epic 4: Approval Gate & Content Review
 
 A user can view a full preview of all Campaign content — rendered blog HTML, social posts, and featured image — edit the blog post via WYSIWYG, edit social posts with live character counters, see an advisory voice fidelity score, and approve or reject the Campaign before publishing. The Approval Gate's state machine UI adapts to each Campaign lifecycle state.
@@ -1929,6 +1960,8 @@ Expands the Brand Voice Profile from 3 fields (tone, cadence, banned_jargon) to 
 - Story 16.3: Expanded BVP Review and Edit UI
 - Story 16.4: Voice-Driven Blog Generation Update
 - Story 16.5: Re-voice Existing Posts
+- Story 16.6: Voice Signal Injection -- Signature Phrases, Voice Anchors & Anti-Pattern
+- Story 16.7: Low Confidence Voice Warning
 
 ---
 
@@ -2053,6 +2086,52 @@ so that older posts written with a weaker voice profile benefit from the richer 
 6. **Given** the revoice call succeeds, **When** the modal closes, **Then** the user navigates to the new campaign approval gate page (`/campaigns/{new_id}`).
 
 7. **Given** the Paper Style design system, **When** the Re-voice UI renders, **Then** it uses Lucide icons only (no emojis), rounded-none modal surfaces, Ink 1px borders, no em-dash in any visible text.
+
+---
+
+### Story 16.6: Voice Signal Injection -- Signature Phrases, Voice Anchors & Anti-Pattern
+
+As a PersonnaPress system,
+I want to inject `signature_phrases`, `voice_anchor_sentences`, and `anti_pattern_example` from the Brand Voice Profile into blog and social generation prompts as explicit few-shot style signals,
+so that generated content uses the writer's actual verbal patterns rather than only descriptor-based approximations.
+
+**Acceptance Criteria:**
+
+1. **Given** `_build_voice_injection(bvp)` in `generation_prompts.py`, **When** `bvp` contains a non-empty `signature_phrases` list, **Then** a `SIGNATURE PHRASES` block is appended after the existing VOICE APPLICATION RULES section. The block lists each phrase as a bullet and instructs the model to use 2-3 naturally, never forcing or repeating the same phrase twice.
+
+2. **Given** `_build_voice_injection(bvp)`, **When** `bvp` contains a non-empty `voice_anchor_sentences` list, **Then** a `VOICE ANCHORS` block is appended after SIGNATURE PHRASES. The block presents each sentence as a bullet and instructs the model to match this level of directness, formality, and cadence throughout.
+
+3. **Given** `_build_voice_injection(bvp)`, **When** `bvp` contains a non-empty `anti_pattern_example` string, **Then** an `ANTI-PATTERN` line is appended after VOICE ANCHORS, presenting the example in quotes and instructing the model to never produce sentences with that register, structure, or vocabulary.
+
+4. **Given** a BVP where `signature_phrases`, `voice_anchor_sentences`, and `anti_pattern_example` are all absent or empty, **When** `_build_voice_injection(bvp)` is called, **Then** no new blocks are added and the function output is identical to Story 16.4 (backward compatible with all existing BVPs).
+
+5. **Given** any injected phrase or sentence that contains an em-dash character, **When** `_build_voice_injection(bvp)` formats it for the prompt, **Then** all em-dashes are replaced with `--` before injection so the em-dash ban is never violated inside the voice section.
+
+6. **Given** `_build_standalone_voice_injection(bvp)` in `generation_prompts.py` (used for standalone social posts -- Plan My Week path), **When** `bvp` contains non-empty `signature_phrases`, **Then** the BRAND STRUCTURE HINTS section also includes a bullet: "Writer's signature phrases -- use 1-2 if organic in the LinkedIn post: [top 5 phrases, comma separated]". When `anti_pattern_example` is non-empty, an additional bullet states: "NEVER produce: [anti_pattern_example]".
+
+7. **Given** a regression test suite for `generation_prompts.py`, **When** run, **Then** tests cover: (a) blog prompt with all three new fields populated includes all three blocks; (b) blog prompt with empty/absent fields produces no new blocks and matches Story 16.4 output; (c) em-dash in a signature phrase is converted to `--` before injection; (d) standalone social prompt includes phrase hint and anti-pattern when fields are present.
+
+---
+
+### Story 16.7: Low Confidence Voice Warning
+
+As a PersonnaPress user,
+I want to be notified when my Brand Voice Profile was built on insufficient writing samples,
+so that I understand why my generated content might not match my voice and know how to improve it.
+
+**Acceptance Criteria:**
+
+1. **Given** the voice profile page at `/clients/{id}/voice` (the `ClientDetailTabs` voice tab), **When** the loaded `brand_voice_profile` contains `low_confidence: true`, **Then** an alert banner appears at the top of the voice profile section before any profile fields: background `#FFF8E1` (warm amber tint), `1px solid #F59E0B` border, Lucide `AlertTriangle` icon (14px, amber), text "Your voice profile was built from limited content -- fewer than 300 words were available. Add more writing samples or uploaded files for a more accurate voice match." with a "Add content" secondary button that opens the upload/scrape modal. The banner disappears once the user refreshes their profile with sufficient content.
+
+2. **Given** the approval gate page for a pending campaign (`/campaigns/{id}`), **When** the active client's `brand_voice_profile` contains `low_confidence: true`, **Then** a subtle inline note appears near the voice fidelity badge: a Lucide `Info` icon (12px) followed by "Voice profile built from limited samples -- results may vary." in `text-xs text-[#888888]`. Clicking the info icon or note text navigates to `/clients/{client_id}/voice`.
+
+3. **Given** a client whose `brand_voice_profile` does not contain `low_confidence: true` (the flag is absent, false, or null), **When** either page renders, **Then** no warning, banner, or note appears. The existing UI is unchanged.
+
+4. **Given** a client with a legacy BVP (Story 16.1 has not run for that client -- no `low_confidence` field at all), **When** either page renders, **Then** no warning appears (treat absent as not-low-confidence).
+
+5. **Given** the Paper Style design system, **When** the banner and note render, **Then** all surfaces are `rounded-none`; Lucide icons only (no emojis); all interactive elements `min-h-[44px]`; no em-dash in any visible text.
+
+6. **Given** no backend changes are needed, **When** this story is implemented, **Then** the `low_confidence` flag is already stored in `clients.brand_voice_profile` JSONB by Story 16.1; this story only reads and surfaces it in the frontend. No API changes, no schema changes, no backend changes.
 
 ---
 

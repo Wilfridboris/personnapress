@@ -12,6 +12,8 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FileUploadPanel } from "@/components/clients/FileUploadPanel";
+import type { FileUploadPanelHandle } from "@/components/clients/FileUploadPanel";
+import { LowConfidenceBanner } from "@/components/clients/LowConfidenceBanner";
 import { ClientDetailTabs } from "@/components/clients/ClientDetailTabs";
 import { PlatformConnectionsClient } from "@/components/publishing/PlatformConnectionsClient";
 import type { ClientResponse } from "@/lib/types";
@@ -139,6 +141,9 @@ export function ClientDetail({ client }: Props) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const deleteBtnRef = useRef<HTMLButtonElement>(null);
+
+  // ── File upload panel ref (used by low-confidence banner) ─────────────────
+  const fileUploadRef = useRef<FileUploadPanelHandle>(null);
 
   const handleSave = async () => {
     setEditError(null);
@@ -285,6 +290,12 @@ export function ClientDetail({ client }: Props) {
 
   const voiceContent = (
     <>
+      {client.brand_voice_profile?.low_confidence === true && (
+        <div className="mb-6">
+          <LowConfidenceBanner onAddContent={() => fileUploadRef.current?.triggerFileInput()} />
+        </div>
+      )}
+
       {/* ── Brand voice ────────────────────────────────────────────────── */}
       <section aria-labelledby="bvp-heading" className="mb-10">
         <p
@@ -340,7 +351,7 @@ export function ClientDetail({ client }: Props) {
 
       {/* ── Content files ───────────────────────────────────────────────── */}
       <section className="mb-10">
-        <FileUploadPanel clientId={client.id} />
+        <FileUploadPanel ref={fileUploadRef} clientId={client.id} />
       </section>
     </>
   );

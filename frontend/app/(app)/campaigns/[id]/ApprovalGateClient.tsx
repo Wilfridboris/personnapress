@@ -11,8 +11,9 @@ import { useRouter } from "next/navigation";
 import { ApprovalPanel } from "./approval-panel";
 import { RetryPanel } from "@/components/publishing/RetryPanel";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { BookOpen, ArrowRight } from "lucide-react";
+import { BookOpen, ArrowRight, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useClientStore } from "@/lib/stores/useClientStore";
 import type { Campaign, CampaignStatus } from "@/lib/types";
 import type { BlogEditorHandle } from "@/components/campaigns/BlogEditor";
 import type { SocialPostEditorsHandle } from "@/components/campaigns/SocialPostEditors";
@@ -55,6 +56,10 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
   const blogEditorRef = useRef<BlogEditorHandle>(null);
   const socialEditorsRef = useRef<SocialPostEditorsHandle>(null);
 
+  const storeClient = useClientStore((s) => s.clients.find((c) => c.id === campaign.client_id));
+  const isLowConfidence = storeClient?.brand_voice_profile?.low_confidence === true;
+  const clientName = storeClient?.name ?? campaign.client_name ?? "this client";
+
   const [displayStatus, setDisplayStatus] = useState<CampaignStatus>(campaign.status);
 
   // Sync to server ground truth for terminal states so router.refresh() propagates
@@ -95,9 +100,21 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
             year: "numeric",
           })}
         </p>
-        {campaign.voice_score && (
+        {(campaign.voice_score || isLowConfidence) && (
           <div className="mt-3">
-            <VoiceFidelityBadge voiceScore={campaign.voice_score} />
+            {campaign.voice_score && (
+              <VoiceFidelityBadge voiceScore={campaign.voice_score} />
+            )}
+            {isLowConfidence && (
+              <Link
+                href={`/clients/${campaign.client_id}/voice`}
+                aria-label={`View voice profile for ${clientName} -- accuracy may vary due to limited samples`}
+                className="flex items-center gap-1 text-xs text-[#555555] hover:text-[#111111] transition-colors duration-150 mt-1 focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-1"
+              >
+                <Info size={12} aria-hidden="true" />
+                Voice profile built from limited samples -- accuracy may vary.
+              </Link>
+            )}
           </div>
         )}
       </header>

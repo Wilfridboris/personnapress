@@ -1,12 +1,16 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Check, AlertTriangle } from "lucide-react";
 import { filesApi, clientsApi } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import type { FileItem } from "@/lib/types";
+
+export interface FileUploadPanelHandle {
+  triggerFileInput: () => void;
+}
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -33,9 +37,15 @@ interface FileProgress {
   error?: string;
 }
 
-export function FileUploadPanel({ clientId }: Props) {
+export const FileUploadPanel = forwardRef<FileUploadPanelHandle, Props>(function FileUploadPanel({ clientId }, ref) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    triggerFileInput: () => {
+      fileInputRef.current?.click();
+    },
+  }), []);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [uploading, setUploading] = useState<FileProgress[]>([]);
 
@@ -384,4 +394,4 @@ export function FileUploadPanel({ clientId }: Props) {
       )}
     </section>
   );
-}
+});
