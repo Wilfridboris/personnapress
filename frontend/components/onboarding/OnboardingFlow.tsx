@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useId, useRef, useCallback } from "react";
+import { ChevronDown, ChevronUp, Lightbulb } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { authApi, clientsApi, campaignsApi } from "@/lib/api";
 import { useClientStore } from "@/lib/stores/useClientStore";
@@ -240,6 +241,9 @@ export function OnboardingFlow() {
 
   // Step 4 state (brain dump)
   const [brainDump, setBrainDump] = useState("");
+  const [tipsOpen, setTipsOpen] = useState(false);
+  const tipsToggleId = useId();
+  const tipsPanelId = useId();
   const [step4Loading, setStep4Loading] = useState(false);
   const [step4Error, setStep4Error] = useState<string | null>(null);
 
@@ -562,7 +566,7 @@ export function OnboardingFlow() {
               }
             }}
             onKeyDown={handleBrainDumpKeyDown}
-            placeholder="What are you thinking about this week?"
+            placeholder={`e.g. "I ran a 90-day test comparing 3 LinkedIn posting strategies -- daily tips vs. 3x storytelling vs. 2x case studies. Case studies drove 4x more DMs. Most people post daily tips because it feels safe. Here's what I found and why I switched..."`}
             className="min-h-[200px] border-b border-[#E5E5E5] focus:border-b-2 focus:border-[#111111]"
             aria-describedby="brain-dump-count"
             maxLength={MAX_BRAIN_DUMP}
@@ -573,6 +577,58 @@ export function OnboardingFlow() {
           >
             {brainDump.length} / {MAX_BRAIN_DUMP.toLocaleString()} characters
           </p>
+          <div aria-live="polite" aria-atomic="true">
+            {brainDump.length > 0 && brainDump.length < 150 && (
+              <p className="flex items-center gap-1 text-xs text-[#555555] mt-1">
+                <Lightbulb size={12} aria-hidden="true" />
+                Tip: include a specific number, personal outcome, or named tool for best results.
+              </p>
+            )}
+          </div>
+          <div className="mt-2">
+            <button
+              id={tipsToggleId}
+              type="button"
+              onClick={() => setTipsOpen(!tipsOpen)}
+              aria-expanded={tipsOpen}
+              aria-controls={tipsPanelId}
+              className="flex items-center gap-1 text-xs text-[#555555] min-h-[44px] px-2 py-0 hover:text-[#111111] transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-1"
+            >
+              {tipsOpen
+                ? <ChevronUp size={12} aria-hidden="true" />
+                : <ChevronDown size={12} aria-hidden="true" />}
+              {tipsOpen ? "Hide tips" : "Tips for better results"}
+            </button>
+            <div
+              id={tipsPanelId}
+              role="region"
+              aria-labelledby={tipsToggleId}
+              className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
+                tipsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+              }`}
+            >
+              <div className="overflow-hidden">
+                <ul role="list" className="mt-2 border border-[#E5E5E5] bg-[#F9F9F6] p-3 rounded-none list-none space-y-2 text-sm text-[#555555]">
+                  <li>Start with a specific number, date, or outcome:{" "}
+                    <code className="font-mono text-xs bg-[#F0F0ED] px-1">
+                      I increased conversion 28% in 6 weeks
+                    </code>
+                  </li>
+                  <li>Mention tools or platforms by name:{" "}
+                    <code className="font-mono text-xs bg-[#F0F0ED] px-1">
+                      We switched from Mailchimp to ConvertKit
+                    </code>
+                  </li>
+                  <li>Use first-person:{" "}
+                    <code className="font-mono text-xs bg-[#F0F0ED] px-1">I found</code>,{" "}
+                    <code className="font-mono text-xs bg-[#F0F0ED] px-1">I tested</code>,{" "}
+                    <code className="font-mono text-xs bg-[#F0F0ED] px-1">my client saw</code>
+                  </li>
+                  <li>Describe the before/after or the problem you solved</li>
+                </ul>
+              </div>
+            </div>
+          </div>
         </div>
 
         {step4Error && (

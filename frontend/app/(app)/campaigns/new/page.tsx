@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Lightbulb, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,9 @@ export default function NewCampaignPage() {
   const [targetKeyword, setTargetKeyword] = useState("");
   const [supportingKeywords, setSupportingKeywords] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
+  const [tipsOpen, setTipsOpen] = useState(false);
+  const tipsToggleId = useId();
+  const tipsPanelId = useId();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [limitExceeded, setLimitExceeded] = useState<{ message: string; nextTier: string } | null>(null);
@@ -229,7 +232,7 @@ export default function NewCampaignPage() {
           value={brainDump}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder="Paste your raw idea here — voice note transcript, rough bullets, half-finished thoughts. No structure needed."
+          placeholder={`e.g. "I ran a 90-day test comparing 3 LinkedIn posting strategies -- daily tips vs. 3x storytelling vs. 2x case studies. Case studies drove 4x more DMs. Most people post daily tips because it feels safe. Here's what I found and why I switched..."`}
           className={cn(
             "w-full bg-transparent resize-none font-mono text-sm text-ink leading-[1.7]",
             "border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink",
@@ -247,6 +250,58 @@ export default function NewCampaignPage() {
         >
           {charCount} / {MAX_CHARS.toLocaleString()} characters
         </p>
+        <div aria-live="polite" aria-atomic="true">
+          {charCount > 0 && charCount < 150 && (
+            <p className="flex items-center gap-1 text-xs text-[#555555] mt-1">
+              <Lightbulb size={12} aria-hidden="true" />
+              Tip: include a specific number, personal outcome, or named tool for best results.
+            </p>
+          )}
+        </div>
+        <div className="mt-2">
+          <button
+            id={tipsToggleId}
+            type="button"
+            onClick={() => setTipsOpen(!tipsOpen)}
+            aria-expanded={tipsOpen}
+            aria-controls={tipsPanelId}
+            className="flex items-center gap-1 text-xs text-[#555555] min-h-[44px] px-2 py-0 hover:text-[#111111] transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-1"
+          >
+            {tipsOpen
+              ? <ChevronUp size={12} aria-hidden="true" />
+              : <ChevronDown size={12} aria-hidden="true" />}
+            {tipsOpen ? "Hide tips" : "Tips for better results"}
+          </button>
+          <div
+            id={tipsPanelId}
+            role="region"
+            aria-labelledby={tipsToggleId}
+            className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
+              tipsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+            }`}
+          >
+            <div className="overflow-hidden">
+              <ul role="list" className="mt-2 border border-[#E5E5E5] bg-[#F9F9F6] p-3 rounded-none list-none space-y-2 text-sm text-[#555555]">
+                <li>Start with a specific number, date, or outcome:{" "}
+                  <code className="font-mono text-xs bg-[#F0F0ED] px-1">
+                    I increased conversion 28% in 6 weeks
+                  </code>
+                </li>
+                <li>Mention tools or platforms by name:{" "}
+                  <code className="font-mono text-xs bg-[#F0F0ED] px-1">
+                    We switched from Mailchimp to ConvertKit
+                  </code>
+                </li>
+                <li>Use first-person:{" "}
+                  <code className="font-mono text-xs bg-[#F0F0ED] px-1">I found</code>,{" "}
+                  <code className="font-mono text-xs bg-[#F0F0ED] px-1">I tested</code>,{" "}
+                  <code className="font-mono text-xs bg-[#F0F0ED] px-1">my client saw</code>
+                </li>
+                <li>Describe the before/after or the problem you solved</li>
+              </ul>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-1 mb-2">

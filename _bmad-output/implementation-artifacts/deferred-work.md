@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 3-15-brain-dump-quality-guidance (2026-07-30)
+
+- Onboarding step numbering mismatch: spec says "Step 3" but code has `// Step 4 state (brain dump)`. Pre-existing label drift; not a runtime bug.
+- DRY violation: tips panel JSX duplicated verbatim in `page.tsx` and `OnboardingFlow.tsx`. Consider extracting a `<BrainDumpTipsPanel>` shared component in a future story.
+- `tipsOpen` not reset when user navigates between onboarding steps; only resets on page reload (per spec). Minor UX concern if user re-visits Step 4 with panel open.
+
 ## Deferred from: code review of 16-7-low-confidence-voice-warning (2026-07-30)
 
 - Banner "Add writing samples" button triggers native file picker only (via `triggerFileInput`) -- the scrape URL option in `FileUploadPanel` is not reachable via this path. Spec expected a modal state setter; no such setter exists in the codebase. The `FileUploadPanel` scrape section is still accessible directly on the same tab. [frontend/components/clients/FileUploadPanel.tsx, LowConfidenceBanner.tsx]
