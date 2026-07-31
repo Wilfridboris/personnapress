@@ -566,3 +566,189 @@ def test_extract_identifier_threads():
 
     creds = json.dumps({"threads_user_id": "444", "username": "mybrand", "user_access_token": "tok"})
     assert _extract_identifier("threads", encrypt_credential(creds)) == "mybrand"
+
+
+# ── publish_instagram_feed_post ───────────────────────────────────────────────
+
+async def test_publish_instagram_success():
+    """publish_instagram_feed_post: container created, polled FINISHED, media published, media_id returned."""
+    from app.integrations.meta import publish_instagram_feed_post
+
+    container_resp = _make_httpx_response(200, {"id": "container_abc"})
+    status_finished = _make_httpx_response(200, {"status_code": "FINISHED"})
+    publish_resp = _make_httpx_response(200, {"id": "media_xyz"})
+
+    call_count = 0
+
+    async def fake_request(url, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return container_resp
+        if call_count == 2:
+            return status_finished
+        return publish_resp
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=lambda url, **kw: container_resp if "media_publish" not in url else publish_resp)
+        mock_client.get = AsyncMock(return_value=status_finished)
+        mock_cls.return_value = mock_client
+
+        media_id = await publish_instagram_feed_post(
+            instagram_user_id="ig_222",
+            page_access_token="page_tok",
+            image_url="https://example.com/image.jpg",
+            caption="Hello world",
+        )
+
+    assert media_id == "media_xyz"
+
+
+async def test_publish_instagram_container_error():
+    """publish_instagram_feed_post raises PlatformError when container status is ERROR."""
+    from app.integrations.meta import publish_instagram_feed_post
+    from app.core.exceptions import PlatformError
+
+    container_resp = _make_httpx_response(200, {"id": "container_abc"})
+    status_error = _make_httpx_response(200, {"status_code": "ERROR"})
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=container_resp)
+        mock_client.get = AsyncMock(return_value=status_error)
+        mock_cls.return_value = mock_client
+
+        with pytest.raises(PlatformError) as exc_info:
+            await publish_instagram_feed_post("ig_222", "page_tok", "https://example.com/img.jpg", "caption")
+
+    assert exc_info.value.status_code == 422
+    assert "container processing failed" in exc_info.value.message
+
+
+async def test_publish_instagram_container_timeout():
+    """publish_instagram_feed_post raises 408 PlatformError after 6 IN_PROGRESS polls."""
+    from app.integrations.meta import publish_instagram_feed_post
+    from app.core.exceptions import PlatformError
+
+    container_resp = _make_httpx_response(200, {"id": "container_abc"})
+    status_in_progress = _make_httpx_response(200, {"status_code": "IN_PROGRESS"})
+
+    with patch("httpx.AsyncClient") as mock_cls, patch("asyncio.sleep", AsyncMock()):
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=container_resp)
+        mock_client.get = AsyncMock(return_value=status_in_progress)
+        mock_cls.return_value = mock_client
+
+        with pytest.raises(PlatformError) as exc_info:
+            await publish_instagram_feed_post("ig_222", "page_tok", "https://example.com/img.jpg", "caption")
+
+    assert exc_info.value.status_code == 408
+    assert "timed out" in exc_info.value.message
+
+
+async def test_publish_instagram_rate_limit():
+    """publish_instagram_feed_post raises PlatformError(429) when media_publish returns 429."""
+    from app.integrations.meta import publish_instagram_feed_post
+    from app.core.exceptions import PlatformError
+
+    container_resp = _make_httpx_response(200, {"id": "container_abc"})
+    status_finished = _make_httpx_response(200, {"status_code": "FINISHED"})
+    rate_limit_resp = _make_httpx_response(429, {"error": {"message": "Application request limit reached"}})
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=lambda url, **kw: container_resp if "media_publish" not in url else rate_limit_resp)
+        mock_client.get = AsyncMock(return_value=status_finished)
+        mock_cls.return_value = mock_client
+
+        with pytest.raises(PlatformError) as exc_info:
+            await publish_instagram_feed_post("ig_222", "page_tok", "https://example.com/img.jpg", "caption")
+
+    assert exc_info.value.status_code == 429
+
+
+async def test_publish_instagram_caption_truncated_at_2200():
+    """publish_instagram_feed_post truncates caption to 2200 chars before API call."""
+    from app.integrations.meta import publish_instagram_feed_post
+
+    long_caption = "x" * 3000
+    container_resp = _make_httpx_response(200, {"id": "container_abc"})
+    status_finished = _make_httpx_response(200, {"status_code": "FINISHED"})
+    publish_resp = _make_httpx_response(200, {"id": "media_xyz"})
+
+    captured_data = {}
+
+    async def capture_post(url, data=None, **kwargs):
+        if data and "caption" in data:
+            captured_data["caption"] = data["caption"]
+        if "media_publish" in url:
+            return publish_resp
+        return container_resp
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=capture_post)
+        mock_client.get = AsyncMock(return_value=status_finished)
+        mock_cls.return_value = mock_client
+
+        await publish_instagram_feed_post("ig_222", "page_tok", "https://example.com/img.jpg", long_caption)
+
+    assert len(captured_data["caption"]) == 2200
+
+
+async def test_dispatch_publish_instagram_platform_independence():
+    """dispatch_publish: instagram failure does not affect x result."""
+    from app.services.publishing import dispatch_publish
+    from app.core.exceptions import PlatformError
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+
+    mock_campaign = MagicMock()
+    mock_campaign.client_id = client_id
+    mock_campaign.x_post = "test tweet"
+    mock_campaign.linkedin_post = "test caption"
+    mock_campaign.image_url = "https://example.com/img.jpg"
+    mock_campaign.scheduled_at = None
+    mock_campaign.status = "approved"
+
+    from app.core.security import encrypt_credential
+    ig_creds = json.dumps({"instagram_user_id": "ig_222", "page_access_token": "page_tok", "username": "mybrand"})
+    x_creds = json.dumps({"access_token": "x_tok", "refresh_token": "x_ref"})
+
+    def make_connection(platform, creds_json):
+        conn = MagicMock()
+        conn.platform = platform
+        conn.encrypted_credentials = encrypt_credential(creds_json)
+        return conn
+
+    connections = [make_connection("instagram", ig_creds), make_connection("x", x_creds)]
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=mock_campaign)),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=connections)),
+        patch("app.services.publishing.meta_integration.publish_instagram_feed_post",
+              AsyncMock(side_effect=PlatformError("instagram", 500, "Internal error"))),
+        patch("app.services.publishing.twitter_integration.create_tweet", AsyncMock()),
+        patch("app.services.publishing._refresh_x_token_if_needed",
+              AsyncMock(return_value={"access_token": "x_tok"})),
+    ):
+        db = AsyncMock()
+        results = await dispatch_publish(db, campaign_id, job_id, platforms=["instagram", "x"])
+
+    assert "x" in results and results["x"] == "success"
+    assert "instagram" in results
+    assert results["instagram"] != "success"

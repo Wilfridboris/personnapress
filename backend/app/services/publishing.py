@@ -22,6 +22,7 @@ from app.db.repositories.platform_connections import get_connection_for_platform
 from bs4 import BeautifulSoup
 from app.integrations import github as github_integration
 from app.integrations import linkedin as linkedin_integration
+from app.integrations import meta as meta_integration
 from app.integrations import twitter as twitter_integration
 from app.integrations import webflow as webflow_integration
 from app.integrations import wordpress as wordpress_integration
@@ -548,6 +549,19 @@ async def dispatch_publish_for_platform(
                 await linkedin_integration.create_ugc_post(
                     creds["access_token"], campaign.blog_html or "", campaign.linkedin_post
                 )
+        elif platform == "instagram":
+            if not campaign.image_url:
+                logger.debug("dispatch_publish_for_platform: skipping instagram (no image_url) campaign=%s", campaign_id)
+                return {platform: "skipped"}
+            if not campaign.linkedin_post:
+                logger.debug("dispatch_publish_for_platform: skipping instagram (no linkedin_post for caption) campaign=%s", campaign_id)
+                return {platform: "skipped"}
+            await meta_integration.publish_instagram_feed_post(
+                creds["instagram_user_id"],
+                creds["page_access_token"],
+                campaign.image_url,
+                campaign.linkedin_post,
+            )
         elif platform == "github_pages":
             await _publish_github(campaign, creds, db)
         return {platform: "success"}
@@ -677,6 +691,22 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                         creds["access_token"], campaign.blog_html or "", campaign.linkedin_post
                     )
                 last_linkedin_publish_time = asyncio.get_running_loop().time()
+
+            elif platform == "instagram":
+                if not campaign.image_url:
+                    logger.debug("dispatch_publish: skipping instagram (no image_url) campaign=%s", campaign_id)
+                    results[platform] = "skipped"
+                    continue
+                if not campaign.linkedin_post:
+                    logger.debug("dispatch_publish: skipping instagram (no linkedin_post for caption) campaign=%s", campaign_id)
+                    results[platform] = "skipped"
+                    continue
+                await meta_integration.publish_instagram_feed_post(
+                    creds["instagram_user_id"],
+                    creds["page_access_token"],
+                    campaign.image_url,
+                    campaign.linkedin_post,
+                )
 
             elif platform == "github_pages":
                 github_result = await _publish_github(campaign, creds, db)

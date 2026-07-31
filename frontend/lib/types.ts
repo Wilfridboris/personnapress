@@ -14,7 +14,7 @@ export type CampaignStatus =
 
 export type PlanTier = "starter" | "growth" | "agency";
 
-export type Platform = "wordpress" | "webflow" | "x" | "linkedin";
+export type Platform = "wordpress" | "webflow" | "x" | "linkedin" | "instagram" | "facebook_page" | "threads";
 
 export interface User {
   id: string;
@@ -286,7 +286,7 @@ export interface GitHubDetectionResult {
 }
 
 export interface PlatformConnectionStatus {
-  platform: "wordpress" | "webflow" | "x" | "linkedin" | "github_pages";
+  platform: "wordpress" | "webflow" | "x" | "linkedin" | "github_pages" | "instagram" | "facebook_page" | "threads";
   connected: boolean;
   account_identifier?: string;
   connected_via?: "wordpress-com";

@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { GitBranch, Database, Loader2, CheckCircle2, XCircle, RefreshCw, Check, Globe, Layout, AtSign, Share2 } from "lucide-react";
+import { GitBranch, Database, Loader2, CheckCircle2, XCircle, RefreshCw, Check, Globe, Layout, AtSign, Share2, Camera } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { campaignsApi, clientsApi, jobsApi, publishingApi, fetchAPI, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
@@ -24,6 +24,7 @@ function platformLabel(platform: string): string {
     x: "X",
     linkedin: "LinkedIn",
     github_pages: "GitHub Pages",
+    instagram: "Instagram",
   };
   return MAP[platform] ?? platform;
 }
@@ -111,6 +112,7 @@ const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
   webflow: Layout,
   x: AtSign,
   linkedin: Share2,
+  instagram: Camera,
   headless: Database,
 };
 
@@ -120,6 +122,7 @@ const PLATFORM_LABEL_MAP: Record<string, string> = {
   webflow: "Webflow",
   x: "X",
   linkedin: "LinkedIn",
+  instagram: "Instagram",
   headless: "Headless Blog",
 };
 
@@ -128,14 +131,16 @@ function DestinationChip({
   selected,
   onToggle,
   disabled,
+  label: labelOverride,
 }: {
   platform: string;
   selected: boolean;
   onToggle: () => void;
   disabled?: boolean;
+  label?: string;
 }) {
   const Icon = PLATFORM_ICON_MAP[platform] ?? Globe;
-  const label = PLATFORM_LABEL_MAP[platform] ?? platform;
+  const label = labelOverride ?? PLATFORM_LABEL_MAP[platform] ?? platform;
   return (
     <button
       type="button"
@@ -188,6 +193,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
   const [publishedPlatforms, setPublishedPlatforms] = useState<string[]>([]);
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set());
+  const [platformLabels, setPlatformLabels] = useState<Record<string, string>>({});
 
   // Headless blog publish state
   const [isHeadlessPublishing, setIsHeadlessPublishing] = useState(false);
@@ -267,6 +273,10 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
             setDirectCommitDefault(defaultCommit);
             if (defaultCommit) setPublishMode("commit");
           }
+          const igConn = items.find((c) => c.platform === "instagram" && c.connected);
+          if (igConn?.account_identifier) {
+            setPlatformLabels((prev) => ({ ...prev, instagram: `@${igConn.account_identifier}` }));
+          }
           const connectedPlatforms = items
             .filter((c) => c.connected && c.platform !== "github_pages")
             .map((c) => c.platform);
@@ -310,6 +320,10 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
             const defaultCommit = ghConn.direct_commit_default ?? false;
             setDirectCommitDefault(defaultCommit);
             if (defaultCommit) setPublishMode("commit");
+          }
+          const igConn2 = items.find((c) => c.platform === "instagram" && c.connected);
+          if (igConn2?.account_identifier) {
+            setPlatformLabels((prev) => ({ ...prev, instagram: `@${igConn2.account_identifier}` }));
           }
           const connectedPlatforms = items
             .filter((c) => c.connected && c.platform !== "github_pages")
@@ -694,10 +708,21 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                           return next;
                         })
                       }
-                      disabled={isPublishing || isGitHubPublishing}
+                      disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url)}
+                      label={platformLabels[p]}
                     />
                   ))}
                 </div>
+              )}
+              {availablePlatforms.includes("instagram") && !campaign.image_url && (
+                <p className="font-mono text-xs text-graphite">
+                  Instagram requires a featured image. Generate or upload one first.
+                </p>
+              )}
+              {selectedPlatforms.has("instagram") && campaign.image_url && (
+                <p className="font-mono text-xs text-graphite">
+                  {(campaign.linkedin_post ?? "").length}/2200 chars (Instagram caption)
+                </p>
               )}
               {nothingSelected && (
                 <p className="font-mono text-xs text-danger" role="alert">
@@ -1087,10 +1112,21 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                           return next;
                         })
                       }
-                      disabled={isPublishing || isGitHubPublishing}
+                      disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url)}
+                      label={platformLabels[p]}
                     />
                   ))}
                 </div>
+              )}
+              {availablePlatforms.includes("instagram") && !campaign.image_url && (
+                <p className="font-mono text-xs text-graphite">
+                  Instagram requires a featured image. Generate or upload one first.
+                </p>
+              )}
+              {selectedPlatforms.has("instagram") && campaign.image_url && (
+                <p className="font-mono text-xs text-graphite">
+                  {(campaign.linkedin_post ?? "").length}/2200 chars (Instagram caption)
+                </p>
               )}
               {nothingSelected && (
                 <p className="font-mono text-xs text-danger" role="alert">

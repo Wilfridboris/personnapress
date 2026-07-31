@@ -2,6 +2,7 @@
 
 All endpoints use Graph API v25.0.
 """
+import asyncio
 import logging
 from typing import Optional
 
@@ -14,6 +15,15 @@ logger = logging.getLogger(__name__)
 
 META_API_VERSION = "v25.0"
 META_GRAPH_BASE = f"https://graph.facebook.com/{META_API_VERSION}"
+
+
+def _extract_error(resp: httpx.Response) -> str:
+    """Extract a human-readable error message from a Meta API error response."""
+    try:
+        body = resp.json()
+        return body.get("error", {}).get("message", resp.text[:200])
+    except Exception:
+        return resp.text[:200]
 
 
 async def exchange_code_for_short_lived_token(code: str, redirect_uri: str) -> str:
@@ -79,6 +89,59 @@ async def discover_accounts(long_lived_user_token: str) -> list[dict]:
         detail = body.get("error", {}).get("message") or "account discovery failed"
         raise PlatformError("Meta", resp.status_code, detail)
     return resp.json().get("data", [])
+
+
+async def publish_instagram_feed_post(
+    instagram_user_id: str,
+    page_access_token: str,
+    image_url: str,
+    caption: str,
+) -> str:
+    """Create and publish an Instagram feed image post. Returns the published media_id."""
+    caption_truncated = (caption or "")[:2200]
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"{META_GRAPH_BASE}/{instagram_user_id}/media",
+            data={
+                "image_url": image_url,
+                "caption": caption_truncated,
+                "access_token": page_access_token,
+            },
+        )
+    if resp.status_code != 200:
+        raise PlatformError("instagram", resp.status_code, _extract_error(resp))
+    container_id = resp.json().get("id", "")
+    if not container_id:
+        raise PlatformError("instagram", 200, "media container creation returned no id")
+
+    for attempt in range(6):
+        if attempt > 0:
+            await asyncio.sleep(10)
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            status_resp = await client.get(
+                f"{META_GRAPH_BASE}/{container_id}",
+                params={"fields": "status_code", "access_token": page_access_token},
+            )
+        status_code = status_resp.json().get("status_code", "")
+        if status_code == "FINISHED":
+            break
+        if status_code in ("ERROR", "EXPIRED"):
+            raise PlatformError("instagram", 422, f"container processing failed: {status_code}")
+    else:
+        raise PlatformError("instagram", 408, "instagram container processing timed out after 60s")
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        pub_resp = await client.post(
+            f"{META_GRAPH_BASE}/{instagram_user_id}/media_publish",
+            data={"creation_id": container_id, "access_token": page_access_token},
+        )
+    if pub_resp.status_code != 200:
+        raise PlatformError("instagram", pub_resp.status_code, _extract_error(pub_resp))
+    media_id = pub_resp.json().get("id", "")
+    if not media_id:
+        raise PlatformError("instagram", 200, "media_publish returned no id")
+    return media_id
 
 
 async def discover_threads_user_id(
