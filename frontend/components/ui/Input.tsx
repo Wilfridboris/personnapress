@@ -41,6 +41,21 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
 
 Input.displayName = "Input";
 
+const MAX_BRAIN_DUMP_HEIGHT = 360;
+
+function resizeTextarea(ta: HTMLTextAreaElement, maxH: number) {
+  if (ta.scrollHeight >= maxH && parseFloat(ta.style.height || "0") >= maxH) {
+    ta.style.overflowY = "auto";
+    return;
+  }
+  const scrollY = window.scrollY;
+  ta.style.height = "auto";
+  const newH = Math.min(ta.scrollHeight, maxH);
+  ta.style.height = `${newH}px`;
+  ta.style.overflowY = ta.scrollHeight > maxH ? "auto" : "hidden";
+  window.scrollTo({ top: scrollY, behavior: "instant" });
+}
+
 type BrainDumpProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onInput"> & {
   onInput?: (e: FormEvent<HTMLTextAreaElement>) => void;
 };
@@ -51,9 +66,7 @@ export const BrainDumpInput = forwardRef<HTMLTextAreaElement, BrainDumpProps>(
     useImperativeHandle(ref, () => internalRef.current!, []);
 
     const handleInput = (e: FormEvent<HTMLTextAreaElement>) => {
-      const el = e.currentTarget;
-      el.style.height = "auto";
-      el.style.height = `${el.scrollHeight}px`;
+      resizeTextarea(e.currentTarget, MAX_BRAIN_DUMP_HEIGHT);
       onInput?.(e);
     };
 
@@ -61,8 +74,7 @@ export const BrainDumpInput = forwardRef<HTMLTextAreaElement, BrainDumpProps>(
     useEffect(() => {
       const el = internalRef.current;
       if (!el) return;
-      el.style.height = "auto";
-      el.style.height = `${el.scrollHeight}px`;
+      resizeTextarea(el, MAX_BRAIN_DUMP_HEIGHT);
     }, []);
 
     // Resize when controlled value changes
@@ -70,8 +82,7 @@ export const BrainDumpInput = forwardRef<HTMLTextAreaElement, BrainDumpProps>(
     useEffect(() => {
       const el = internalRef.current;
       if (!el) return;
-      el.style.height = "auto";
-      el.style.height = `${el.scrollHeight}px`;
+      resizeTextarea(el, MAX_BRAIN_DUMP_HEIGHT);
     }, [controlledValue]);
 
     return (

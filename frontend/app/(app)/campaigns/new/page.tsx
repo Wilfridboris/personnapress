@@ -25,6 +25,20 @@ function platformLabel(platform: string): string {
 
 const MAX_CHARS = 10000;
 const MIN_CHARS = 20;
+const MAX_TEXTAREA_HEIGHT = 480;
+
+function resizeTextarea(ta: HTMLTextAreaElement, maxH: number) {
+  if (ta.scrollHeight >= maxH && parseFloat(ta.style.height || "0") >= maxH) {
+    ta.style.overflowY = "auto";
+    return;
+  }
+  const scrollY = window.scrollY;
+  ta.style.height = "auto";
+  const newH = Math.min(ta.scrollHeight, maxH);
+  ta.style.height = `${newH}px`;
+  ta.style.overflowY = ta.scrollHeight > maxH ? "auto" : "hidden";
+  window.scrollTo({ top: scrollY, behavior: "instant" });
+}
 
 export default function NewCampaignPage() {
   const router = useRouter();
@@ -83,8 +97,7 @@ export default function NewCampaignPage() {
   useEffect(() => {
     const ta = textareaRef.current;
     if (!ta) return;
-    ta.style.height = "auto";
-    ta.style.height = `${ta.scrollHeight}px`;
+    resizeTextarea(ta, MAX_TEXTAREA_HEIGHT);
   }, [brainDump]);
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -240,7 +253,7 @@ export default function NewCampaignPage() {
           className={cn(
             "w-full bg-transparent resize-none font-mono text-sm text-ink leading-[1.7]",
             "border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink",
-            "py-3 focus:outline-none transition-all min-h-[200px]",
+            "py-3 focus:outline-none transition-[border-width] duration-100 min-h-[200px]",
             "placeholder:text-graphite/40"
           )}
           rows={8}
