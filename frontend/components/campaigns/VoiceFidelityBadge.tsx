@@ -10,10 +10,13 @@ interface Props {
 export function VoiceFidelityBadge({ voiceScore }: Props) {
   const [isExpanded, setIsExpanded] = useState(false);
 
+  const passagesRewritten = voiceScore.authored_passages_preserved === false;
+
   const hasFailed =
     voiceScore.tone_score < 7 ||
     voiceScore.cadence_score < 6 ||
-    voiceScore.jargon_violations > 0;
+    voiceScore.jargon_violations > 0 ||
+    passagesRewritten;
 
   if (!hasFailed) return null;
 
@@ -40,6 +43,9 @@ export function VoiceFidelityBadge({ voiceScore }: Props) {
         <p>Tone: {voiceScore.tone_score}/10</p>
         <p>Cadence: {voiceScore.cadence_score}/10</p>
         <p>Jargon violations: {voiceScore.jargon_violations}</p>
+        {passagesRewritten && (
+          <p>Authored passages: rewritten by AI -- consider regenerating</p>
+        )}
       </div>
     </div>
   );

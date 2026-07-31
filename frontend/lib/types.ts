@@ -210,6 +210,7 @@ export interface VoiceScore {
   seo_h2_count?: number;
   seo_faq_present?: boolean;
   seo_fluff_detected?: boolean;
+  authored_passages_preserved?: boolean;
   tags?: string[];
 }
 

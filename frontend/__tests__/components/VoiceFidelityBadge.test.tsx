@@ -36,6 +36,25 @@ describe("VoiceFidelityBadge", () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it("renders badge when authored_passages_preserved is false", () => {
+    const score: VoiceScore = { tone_score: 8, cadence_score: 7, jargon_violations: 0, authored_passages_preserved: false };
+    render(<VoiceFidelityBadge voiceScore={score} />);
+    expect(screen.getByRole("button")).toBeInTheDocument();
+  });
+
+  it("shows authored passages message in detail panel when passages were rewritten", () => {
+    const score: VoiceScore = { tone_score: 8, cadence_score: 7, jargon_violations: 0, authored_passages_preserved: false };
+    render(<VoiceFidelityBadge voiceScore={score} />);
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByText(/authored passages: rewritten by ai/i)).toBeInTheDocument();
+  });
+
+  it("renders null when authored_passages_preserved is true and other scores pass", () => {
+    const score: VoiceScore = { tone_score: 8, cadence_score: 7, jargon_violations: 0, authored_passages_preserved: true };
+    const { container } = render(<VoiceFidelityBadge voiceScore={score} />);
+    expect(container.firstChild).toBeNull();
+  });
+
   it("detail panel is hidden by default", () => {
     render(<VoiceFidelityBadge voiceScore={failingTone} />);
     const button = screen.getByRole("button");
