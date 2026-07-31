@@ -3,8 +3,8 @@
 epic: "epic21"
 epicName: "Meta Platform Publishing (Phase 2)"
 storyRange: ["21.1", "21.2", "21.3", "21.4"]
-status: "IN_PROGRESS"
-currentStory: "21.4"
+status: "DONE"
+currentStory: "done"
 currentStep: "step-03-execute"
 stepsCompleted: []
 lastUpdated: "2026-07-31T14:12:53Z"
@@ -57,7 +57,7 @@ after each story review fix all critical through low issues, mark the story done
 | 21.1 | skip | done | skip | done | done | done |
 | 21.2 | skip | done | skip | done | done | done |
 | 21.3 | skip | done | skip | done | done | done |
-| 21.4 | skip | ⏳ | ⏳ | ⏳ | ⏳ | in-progress |
+| 21.4 | skip | done | skip | done | done | done |
 
 ---
 

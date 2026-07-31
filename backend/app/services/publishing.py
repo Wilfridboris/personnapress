@@ -572,6 +572,15 @@ async def dispatch_publish_for_platform(
                 campaign.linkedin_post,
                 campaign.image_url or None,
             )
+        elif platform == "threads":
+            if not campaign.x_post:
+                logger.debug("dispatch_publish_for_platform: skipping threads (no x_post) campaign=%s", campaign_id)
+                return {platform: "skipped"}
+            await meta_integration.publish_threads_post(
+                creds["threads_user_id"],
+                creds["user_access_token"],
+                campaign.x_post,
+            )
         elif platform == "github_pages":
             await _publish_github(campaign, creds, db)
         return {platform: "success"}
@@ -728,6 +737,17 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                     creds["page_access_token"],
                     campaign.linkedin_post,
                     campaign.image_url or None,
+                )
+
+            elif platform == "threads":
+                if not campaign.x_post:
+                    logger.debug("dispatch_publish: skipping threads (no x_post) campaign=%s", campaign_id)
+                    results[platform] = "skipped"
+                    continue
+                await meta_integration.publish_threads_post(
+                    creds["threads_user_id"],
+                    creds["user_access_token"],
+                    campaign.x_post,
                 )
 
             elif platform == "github_pages":

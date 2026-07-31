@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { GitBranch, Database, Loader2, CheckCircle2, XCircle, RefreshCw, Check, Globe, Layout, AtSign, Share2, Camera, Users } from "lucide-react";
+import { GitBranch, Database, Loader2, CheckCircle2, XCircle, RefreshCw, Check, Globe, Layout, AtSign, Share2, Camera, Users, MessageSquare } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { campaignsApi, clientsApi, jobsApi, publishingApi, fetchAPI, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
@@ -26,6 +26,7 @@ function platformLabel(platform: string): string {
     github_pages: "GitHub Pages",
     instagram: "Instagram",
     facebook_page: "Facebook Page",
+    threads: "Threads",
   };
   return MAP[platform] ?? platform;
 }
@@ -115,6 +116,7 @@ const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
   linkedin: Share2,
   instagram: Camera,
   facebook_page: Users,
+  threads: MessageSquare,
   headless: Database,
 };
 
@@ -126,6 +128,7 @@ const PLATFORM_LABEL_MAP: Record<string, string> = {
   linkedin: "LinkedIn",
   instagram: "Instagram",
   facebook_page: "Facebook Page",
+  threads: "Threads",
   headless: "Headless Blog",
 };
 
@@ -284,6 +287,10 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           if (fbConn?.account_identifier) {
             setPlatformLabels((prev) => ({ ...prev, facebook_page: fbConn.account_identifier! }));
           }
+          const thConn = items.find((c) => c.platform === "threads" && c.connected);
+          if (thConn?.account_identifier) {
+            setPlatformLabels((prev) => ({ ...prev, threads: `@${thConn.account_identifier}` }));
+          }
           const connectedPlatforms = items
             .filter((c) => c.connected && c.platform !== "github_pages")
             .map((c) => c.platform);
@@ -335,6 +342,10 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           const fbConn2 = items.find((c) => c.platform === "facebook_page" && c.connected);
           if (fbConn2?.account_identifier) {
             setPlatformLabels((prev) => ({ ...prev, facebook_page: fbConn2.account_identifier! }));
+          }
+          const thConn2 = items.find((c) => c.platform === "threads" && c.connected);
+          if (thConn2?.account_identifier) {
+            setPlatformLabels((prev) => ({ ...prev, threads: `@${thConn2.account_identifier}` }));
           }
           const connectedPlatforms = items
             .filter((c) => c.connected && c.platform !== "github_pages")
@@ -719,7 +730,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                           return next;
                         })
                       }
-                      disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url)}
+                      disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url) || (p === "threads" && !campaign.x_post)}
                       label={platformLabels[p]}
                     />
                   ))}
@@ -734,6 +745,14 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                 <p className="font-mono text-xs text-graphite">
                   {(campaign.linkedin_post ?? "").length}/2200 chars (Instagram caption)
                 </p>
+              )}
+              {availablePlatforms.includes("threads") && !campaign.x_post && (
+                <p className="font-mono text-xs text-graphite">
+                  Threads requires an X post to be generated.
+                </p>
+              )}
+              {selectedPlatforms.has("threads") && selectedPlatforms.has("x") && (
+                <p className="text-xs text-graphite mt-1">Also posts to Threads</p>
               )}
               {nothingSelected && (
                 <p className="font-mono text-xs text-danger" role="alert">
@@ -1123,7 +1142,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                           return next;
                         })
                       }
-                      disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url)}
+                      disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url) || (p === "threads" && !campaign.x_post)}
                       label={platformLabels[p]}
                     />
                   ))}
@@ -1138,6 +1157,14 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                 <p className="font-mono text-xs text-graphite">
                   {(campaign.linkedin_post ?? "").length}/2200 chars (Instagram caption)
                 </p>
+              )}
+              {availablePlatforms.includes("threads") && !campaign.x_post && (
+                <p className="font-mono text-xs text-graphite">
+                  Threads requires an X post to be generated.
+                </p>
+              )}
+              {selectedPlatforms.has("threads") && selectedPlatforms.has("x") && (
+                <p className="text-xs text-graphite mt-1">Also posts to Threads</p>
               )}
               {nothingSelected && (
                 <p className="font-mono text-xs text-danger" role="alert">

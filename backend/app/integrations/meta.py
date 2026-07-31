@@ -175,6 +175,44 @@ async def publish_facebook_page_post(
     return post_id
 
 
+async def publish_threads_post(
+    threads_user_id: str,
+    user_access_token: str,
+    text: str,
+) -> str:
+    """Create and publish a Threads text post. Returns Threads post ID."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"{META_GRAPH_BASE}/{threads_user_id}/threads",
+            data={
+                "media_type": "TEXT",
+                "text": (text or ""),
+                "access_token": user_access_token,
+            },
+        )
+    if resp.status_code != 200:
+        raise PlatformError("threads", resp.status_code, _extract_error(resp))
+    container_id = resp.json().get("id", "")
+    if not container_id:
+        raise PlatformError("threads", 200, "threads container creation returned no id")
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        pub_resp = await client.post(
+            f"{META_GRAPH_BASE}/{threads_user_id}/threads_publish",
+            data={"creation_id": container_id, "access_token": user_access_token},
+        )
+    if pub_resp.status_code == 429:
+        raise PlatformError("threads", 429, "Threads rate limit reached. Try again later.")
+    if pub_resp.status_code == 401:
+        raise PlatformError("threads", 401, "Threads connection expired - reconnect in Connections")
+    if pub_resp.status_code != 200:
+        raise PlatformError("threads", pub_resp.status_code, _extract_error(pub_resp))
+    post_id = pub_resp.json().get("id", "")
+    if not post_id:
+        raise PlatformError("threads", 200, "threads_publish returned no id")
+    return post_id
+
+
 async def discover_threads_user_id(
     instagram_user_id: str,
     long_lived_user_token: str,

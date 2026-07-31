@@ -927,3 +927,194 @@ async def test_dispatch_publish_facebook_page_independence():
 
     assert "instagram" in results and results["instagram"] == "success"
     assert "facebook_page" in results and results["facebook_page"] != "success"
+
+
+# ── publish_threads_post ──────────────────────────────────────────────────────
+
+async def test_publish_threads_success():
+    """publish_threads_post: container created with media_type=TEXT, published, post_id returned."""
+    from app.integrations.meta import publish_threads_post
+
+    container_resp = _make_httpx_response(200, {"id": "container_th_abc"})
+    publish_resp = _make_httpx_response(200, {"id": "threads_post_xyz"})
+
+    call_count = 0
+
+    async def fake_post(url, data=None, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            assert data["media_type"] == "TEXT"
+            assert data["text"] == "Hello threads"
+            return container_resp
+        return publish_resp
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=fake_post)
+        mock_cls.return_value = mock_client
+
+        post_id = await publish_threads_post("th_444", "user_tok", "Hello threads")
+
+    assert post_id == "threads_post_xyz"
+    assert call_count == 2
+
+
+async def test_publish_threads_401():
+    """publish_threads_post: PlatformError(401) with reconnect message when threads_publish returns 401."""
+    from app.integrations.meta import publish_threads_post
+    from app.core.exceptions import PlatformError
+
+    container_resp = _make_httpx_response(200, {"id": "container_th_abc"})
+    auth_error = _make_httpx_response(401, {"error": {"message": "Invalid OAuth access token"}})
+
+    call_count = 0
+
+    async def fake_post(url, data=None, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return container_resp if call_count == 1 else auth_error
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=fake_post)
+        mock_cls.return_value = mock_client
+
+        with pytest.raises(PlatformError) as exc_info:
+            await publish_threads_post("th_444", "expired_tok", "Hello")
+
+    assert exc_info.value.status_code == 401
+    assert "reconnect" in exc_info.value.message.lower()
+
+
+async def test_publish_threads_429():
+    """publish_threads_post: PlatformError(429) with rate-limit message on threads_publish 429."""
+    from app.integrations.meta import publish_threads_post
+    from app.core.exceptions import PlatformError
+
+    container_resp = _make_httpx_response(200, {"id": "container_th_abc"})
+    rate_limit = _make_httpx_response(429, {"error": {"message": "Application request limit reached"}})
+
+    call_count = 0
+
+    async def fake_post(url, data=None, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return container_resp if call_count == 1 else rate_limit
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=fake_post)
+        mock_cls.return_value = mock_client
+
+        with pytest.raises(PlatformError) as exc_info:
+            await publish_threads_post("th_444", "user_tok", "Hello")
+
+    assert exc_info.value.status_code == 429
+    assert "rate limit" in exc_info.value.message.lower()
+
+
+async def test_publish_threads_no_x_post():
+    """dispatch_publish: threads skipped when campaign has no x_post."""
+    from app.services.publishing import dispatch_publish
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+
+    mock_campaign = MagicMock()
+    mock_campaign.client_id = client_id
+    mock_campaign.x_post = None
+    mock_campaign.status = "approved"
+
+    from app.core.security import encrypt_credential
+    th_creds = json.dumps({"threads_user_id": "th_444", "username": "mybrand", "user_access_token": "user_tok"})
+
+    def make_connection(platform, creds_json):
+        conn = MagicMock()
+        conn.platform = platform
+        conn.encrypted_credentials = encrypt_credential(creds_json)
+        return conn
+
+    connections = [make_connection("threads", th_creds)]
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=mock_campaign)),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=connections)),
+    ):
+        db = AsyncMock()
+        results = await dispatch_publish(db, campaign_id, job_id, platforms=["threads"])
+
+    assert results.get("threads") == "skipped"
+
+
+async def test_dispatch_publish_threads_independence():
+    """dispatch_publish: threads failure does not affect linkedin result."""
+    from app.services.publishing import dispatch_publish
+    from app.core.exceptions import PlatformError
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+
+    mock_campaign = MagicMock()
+    mock_campaign.client_id = client_id
+    mock_campaign.x_post = "Hello threads"
+    mock_campaign.linkedin_post = "LinkedIn post text"
+    mock_campaign.image_url = None
+    mock_campaign.blog_html = None
+    mock_campaign.status = "approved"
+
+    from app.core.security import encrypt_credential
+    th_creds = json.dumps({"threads_user_id": "th_444", "username": "mybrand", "user_access_token": "user_tok"})
+    li_creds = json.dumps({"access_token": "li_tok"})
+
+    def make_connection(platform, creds_json):
+        conn = MagicMock()
+        conn.platform = platform
+        conn.encrypted_credentials = encrypt_credential(creds_json)
+        return conn
+
+    connections = [make_connection("threads", th_creds), make_connection("linkedin", li_creds)]
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=mock_campaign)),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=connections)),
+        patch("app.services.publishing.meta_integration.publish_threads_post",
+              AsyncMock(side_effect=PlatformError("threads", 500, "Server error"))),
+        patch("app.services.publishing.linkedin_integration.create_ugc_post", AsyncMock()),
+    ):
+        db = AsyncMock()
+        results = await dispatch_publish(db, campaign_id, job_id, platforms=["threads", "linkedin"])
+
+    assert "linkedin" in results and results["linkedin"] == "success"
+    assert "threads" in results and results["threads"] != "success"
+
+
+async def test_publish_threads_container_no_id():
+    """publish_threads_post: PlatformError raised when container creation returns no id."""
+    from app.integrations.meta import publish_threads_post
+    from app.core.exceptions import PlatformError
+
+    no_id_resp = _make_httpx_response(200, {})
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=no_id_resp)
+        mock_cls.return_value = mock_client
+
+        with pytest.raises(PlatformError) as exc_info:
+            await publish_threads_post("th_444", "user_tok", "Hello")
+
+    assert exc_info.value.status_code == 200
+    assert "no id" in exc_info.value.message
