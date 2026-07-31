@@ -157,11 +157,6 @@ Threads has its own tester management, independent of app Facebook Roles. Under 
 | `pages_manage_posts` | Create, edit, and delete Page posts | Publish campaign text/image to `/{page_id}/feed` |
 | `instagram_basic` | Instagram profile info and the user's posted media/text | Read account ID and username only |
 | `instagram_content_publish` | Publish media to Instagram as feed posts | Publish campaign images via the media container flow |
-| `business_management` | Required by Facebook Login for Business | Verify the user has permission to manage the Pages they are connecting |
-| `ads_management` | Read and manage ad accounts | **Required only when** the user was granted their Page role via Meta Business Manager (not directly as Page admin). If absent, account discovery returns an empty Pages list for those users. |
-| `ads_read` | Read ad account data | Same condition as `ads_management` — required for Business Manager-assigned Page roles. |
-
-> **Note on `ads_management` and `ads_read`:** The official Instagram Content Publishing API (updated Jun 30, 2026) explicitly lists these as required when a user's Page access was granted through Business Manager. You cannot predict at connection time which users fall into this category, so request both scopes in the OAuth flow alongside the core permissions above.
 
 **Threads OAuth flow (separate consent):**
 
