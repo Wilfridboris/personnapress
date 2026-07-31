@@ -46,7 +46,7 @@ describe("VoiceFidelityBadge", () => {
     const score: VoiceScore = { tone_score: 8, cadence_score: 7, jargon_violations: 0, authored_passages_preserved: false };
     render(<VoiceFidelityBadge voiceScore={score} />);
     fireEvent.click(screen.getByRole("button"));
-    expect(screen.getByText(/authored passages: rewritten by ai/i)).toBeInTheDocument();
+    expect(screen.getByText(/authored passages: rewritten by ai, consider regenerating/i)).toBeInTheDocument();
   });
 
   it("renders null when authored_passages_preserved is true and other scores pass", () => {

@@ -44,7 +44,7 @@ export function VoiceFidelityBadge({ voiceScore }: Props) {
         <p>Cadence: {voiceScore.cadence_score}/10</p>
         <p>Jargon violations: {voiceScore.jargon_violations}</p>
         {passagesRewritten && (
-          <p>Authored passages: rewritten by AI -- consider regenerating</p>
+          <p>Authored passages: rewritten by AI, consider regenerating</p>
         )}
       </div>
     </div>
