@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { GitBranch, Database, Loader2, CheckCircle2, XCircle, RefreshCw, Check, Globe, Layout, AtSign, Share2, Camera } from "lucide-react";
+import { GitBranch, Database, Loader2, CheckCircle2, XCircle, RefreshCw, Check, Globe, Layout, AtSign, Share2, Camera, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { campaignsApi, clientsApi, jobsApi, publishingApi, fetchAPI, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
@@ -25,6 +25,7 @@ function platformLabel(platform: string): string {
     linkedin: "LinkedIn",
     github_pages: "GitHub Pages",
     instagram: "Instagram",
+    facebook_page: "Facebook Page",
   };
   return MAP[platform] ?? platform;
 }
@@ -113,6 +114,7 @@ const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
   x: AtSign,
   linkedin: Share2,
   instagram: Camera,
+  facebook_page: Users,
   headless: Database,
 };
 
@@ -123,6 +125,7 @@ const PLATFORM_LABEL_MAP: Record<string, string> = {
   x: "X",
   linkedin: "LinkedIn",
   instagram: "Instagram",
+  facebook_page: "Facebook Page",
   headless: "Headless Blog",
 };
 
@@ -277,6 +280,10 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           if (igConn?.account_identifier) {
             setPlatformLabels((prev) => ({ ...prev, instagram: `@${igConn.account_identifier}` }));
           }
+          const fbConn = items.find((c) => c.platform === "facebook_page" && c.connected);
+          if (fbConn?.account_identifier) {
+            setPlatformLabels((prev) => ({ ...prev, facebook_page: fbConn.account_identifier! }));
+          }
           const connectedPlatforms = items
             .filter((c) => c.connected && c.platform !== "github_pages")
             .map((c) => c.platform);
@@ -324,6 +331,10 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           const igConn2 = items.find((c) => c.platform === "instagram" && c.connected);
           if (igConn2?.account_identifier) {
             setPlatformLabels((prev) => ({ ...prev, instagram: `@${igConn2.account_identifier}` }));
+          }
+          const fbConn2 = items.find((c) => c.platform === "facebook_page" && c.connected);
+          if (fbConn2?.account_identifier) {
+            setPlatformLabels((prev) => ({ ...prev, facebook_page: fbConn2.account_identifier! }));
           }
           const connectedPlatforms = items
             .filter((c) => c.connected && c.platform !== "github_pages")

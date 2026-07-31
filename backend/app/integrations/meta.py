@@ -144,6 +144,37 @@ async def publish_instagram_feed_post(
     return media_id
 
 
+async def publish_facebook_page_post(
+    page_id: str,
+    page_access_token: str,
+    message: str,
+    image_url: Optional[str] = None,
+) -> str:
+    """Post to a Facebook Page feed. Returns post ID."""
+    payload: dict = {
+        "message": (message or ""),
+        "access_token": page_access_token,
+    }
+    if image_url:
+        payload["link"] = image_url
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"{META_GRAPH_BASE}/{page_id}/feed",
+            data=payload,
+        )
+    if resp.status_code == 429:
+        raise PlatformError("facebook_page", 429, "Facebook Page rate limit reached")
+    if resp.status_code == 401:
+        raise PlatformError("facebook_page", 401, "Facebook Page connection expired - reconnect in Connections")
+    if resp.status_code != 200:
+        raise PlatformError("facebook_page", resp.status_code, _extract_error(resp))
+    post_id = resp.json().get("id", "")
+    if not post_id:
+        raise PlatformError("facebook_page", 200, "feed post returned no id")
+    return post_id
+
+
 async def discover_threads_user_id(
     instagram_user_id: str,
     long_lived_user_token: str,

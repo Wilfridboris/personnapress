@@ -752,3 +752,178 @@ async def test_dispatch_publish_instagram_platform_independence():
     assert "x" in results and results["x"] == "success"
     assert "instagram" in results
     assert results["instagram"] != "success"
+
+
+# ── publish_facebook_page_post ────────────────────────────────────────────────
+
+async def test_publish_facebook_page_success():
+    """publish_facebook_page_post: POST to /{page_id}/feed, returns post_id."""
+    from app.integrations.meta import publish_facebook_page_post
+
+    post_resp = _make_httpx_response(200, {"id": "page_post_abc"})
+
+    captured = {}
+
+    async def fake_post(url, data=None, **kwargs):
+        captured["url"] = url
+        captured["data"] = data
+        return post_resp
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=fake_post)
+        mock_cls.return_value = mock_client
+
+        post_id = await publish_facebook_page_post("page_111", "page_tok", "Hello world")
+
+    assert post_id == "page_post_abc"
+    assert "page_111/feed" in captured["url"]
+    assert captured["data"]["message"] == "Hello world"
+    assert "link" not in captured["data"]
+
+
+async def test_publish_facebook_page_with_image():
+    """publish_facebook_page_post: link field included when image_url provided."""
+    from app.integrations.meta import publish_facebook_page_post
+
+    post_resp = _make_httpx_response(200, {"id": "post_xyz"})
+    captured = {}
+
+    async def fake_post(url, data=None, **kwargs):
+        captured["data"] = data
+        return post_resp
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=fake_post)
+        mock_cls.return_value = mock_client
+
+        await publish_facebook_page_post("page_111", "page_tok", "Hello", "https://example.com/img.jpg")
+
+    assert captured["data"]["link"] == "https://example.com/img.jpg"
+
+
+async def test_publish_facebook_page_no_image():
+    """publish_facebook_page_post: link field absent when image_url is None."""
+    from app.integrations.meta import publish_facebook_page_post
+
+    post_resp = _make_httpx_response(200, {"id": "post_xyz"})
+    captured = {}
+
+    async def fake_post(url, data=None, **kwargs):
+        captured["data"] = data
+        return post_resp
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=fake_post)
+        mock_cls.return_value = mock_client
+
+        await publish_facebook_page_post("page_111", "page_tok", "Hello", None)
+
+    assert "link" not in captured["data"]
+
+
+async def test_publish_facebook_page_401():
+    """publish_facebook_page_post: PlatformError(401) with reconnect message on expired token."""
+    from app.integrations.meta import publish_facebook_page_post
+    from app.core.exceptions import PlatformError
+
+    error_resp = _make_httpx_response(401, {"error": {"message": "Invalid OAuth access token"}})
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=error_resp)
+        mock_cls.return_value = mock_client
+
+        with pytest.raises(PlatformError) as exc_info:
+            await publish_facebook_page_post("page_111", "expired_tok", "Hello")
+
+    assert exc_info.value.status_code == 401
+    assert "reconnect" in exc_info.value.message.lower()
+
+
+async def test_publish_facebook_page_no_linkedin_post():
+    """dispatch_publish: facebook_page skipped when campaign has no linkedin_post."""
+    from app.services.publishing import dispatch_publish
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+
+    mock_campaign = MagicMock()
+    mock_campaign.client_id = client_id
+    mock_campaign.linkedin_post = None
+    mock_campaign.image_url = "https://example.com/img.jpg"
+    mock_campaign.status = "approved"
+
+    from app.core.security import encrypt_credential
+    fb_creds = json.dumps({"page_id": "page_111", "page_name": "My Page", "page_access_token": "page_tok"})
+
+    def make_connection(platform, creds_json):
+        conn = MagicMock()
+        conn.platform = platform
+        conn.encrypted_credentials = encrypt_credential(creds_json)
+        return conn
+
+    connections = [make_connection("facebook_page", fb_creds)]
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=mock_campaign)),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=connections)),
+    ):
+        db = AsyncMock()
+        results = await dispatch_publish(db, campaign_id, job_id, platforms=["facebook_page"])
+
+    assert results.get("facebook_page") == "skipped"
+
+
+async def test_dispatch_publish_facebook_page_independence():
+    """dispatch_publish: facebook_page failure does not affect instagram result."""
+    from app.services.publishing import dispatch_publish
+    from app.core.exceptions import PlatformError
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+
+    mock_campaign = MagicMock()
+    mock_campaign.client_id = client_id
+    mock_campaign.linkedin_post = "test post"
+    mock_campaign.image_url = "https://example.com/img.jpg"
+    mock_campaign.status = "approved"
+
+    from app.core.security import encrypt_credential
+    fb_creds = json.dumps({"page_id": "page_111", "page_name": "My Page", "page_access_token": "page_tok"})
+    ig_creds = json.dumps({"instagram_user_id": "ig_222", "page_access_token": "page_tok", "username": "mybrand"})
+
+    def make_connection(platform, creds_json):
+        conn = MagicMock()
+        conn.platform = platform
+        conn.encrypted_credentials = encrypt_credential(creds_json)
+        return conn
+
+    connections = [make_connection("facebook_page", fb_creds), make_connection("instagram", ig_creds)]
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=mock_campaign)),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=connections)),
+        patch("app.services.publishing.meta_integration.publish_facebook_page_post",
+              AsyncMock(side_effect=PlatformError("facebook_page", 500, "Server error"))),
+        patch("app.services.publishing.meta_integration.publish_instagram_feed_post", AsyncMock(return_value="media_xyz")),
+    ):
+        db = AsyncMock()
+        results = await dispatch_publish(db, campaign_id, job_id, platforms=["facebook_page", "instagram"])
+
+    assert "instagram" in results and results["instagram"] == "success"
+    assert "facebook_page" in results and results["facebook_page"] != "success"

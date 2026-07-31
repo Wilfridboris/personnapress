@@ -562,6 +562,16 @@ async def dispatch_publish_for_platform(
                 campaign.image_url,
                 campaign.linkedin_post,
             )
+        elif platform == "facebook_page":
+            if not campaign.linkedin_post:
+                logger.debug("dispatch_publish_for_platform: skipping facebook_page (no linkedin_post) campaign=%s", campaign_id)
+                return {platform: "skipped"}
+            await meta_integration.publish_facebook_page_post(
+                creds["page_id"],
+                creds["page_access_token"],
+                campaign.linkedin_post,
+                campaign.image_url or None,
+            )
         elif platform == "github_pages":
             await _publish_github(campaign, creds, db)
         return {platform: "success"}
@@ -706,6 +716,18 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                     creds["page_access_token"],
                     campaign.image_url,
                     campaign.linkedin_post,
+                )
+
+            elif platform == "facebook_page":
+                if not campaign.linkedin_post:
+                    logger.debug("dispatch_publish: skipping facebook_page (no linkedin_post) campaign=%s", campaign_id)
+                    results[platform] = "skipped"
+                    continue
+                await meta_integration.publish_facebook_page_post(
+                    creds["page_id"],
+                    creds["page_access_token"],
+                    campaign.linkedin_post,
+                    campaign.image_url or None,
                 )
 
             elif platform == "github_pages":
