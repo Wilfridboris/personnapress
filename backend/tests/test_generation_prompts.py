@@ -2,6 +2,10 @@
 import pytest
 
 from app.integrations.generation_prompts import (
+    _BLOG_PROMPT,
+    _FIDELITY_PROMPT,
+    _SOCIAL_PROMPT,
+    _SOCIAL_STANDALONE_PROMPT,
     _build_standalone_voice_injection,
     _build_voice_injection,
 )
@@ -242,3 +246,28 @@ class TestBuildStandaloneVoiceInjection:
         bvp = {"anti_pattern_example": 'he said "yes"'}
         result = _build_standalone_voice_injection(bvp)
         assert "he said 'yes'" in result
+
+
+# ── TestPromptStructure -- Story 3.19: Personal voice preservation ─────────────
+
+class TestPromptStructure:
+    def test_blog_prompt_contains_authored_passage_classification(self):
+        assert "AUTHORED PASSAGE" in _BLOG_PROMPT
+        assert "FRAGMENT/NOTE" in _BLOG_PROMPT
+        assert "DIRECTIVE" in _BLOG_PROMPT
+
+    def test_blog_prompt_directive_markers_listed(self):
+        assert "Note:" in _BLOG_PROMPT
+        assert "Final note:" in _BLOG_PROMPT
+        assert "PS:" in _BLOG_PROMPT
+
+    def test_blog_prompt_passive_voice_rule_present(self):
+        assert "passive voice" in _BLOG_PROMPT.lower()
+
+    def test_fidelity_prompt_contains_authored_passages_preserved_field(self):
+        assert "authored_passages_preserved" in _FIDELITY_PROMPT
+        assert "brain_dump_sample" in _FIDELITY_PROMPT
+
+    def test_social_prompts_contain_authored_passage_instruction(self):
+        assert "AUTHORED PASSAGE" in _SOCIAL_PROMPT or "authored passage" in _SOCIAL_PROMPT.lower()
+        assert "AUTHORED PASSAGE" in _SOCIAL_STANDALONE_PROMPT or "authored passage" in _SOCIAL_STANDALONE_PROMPT.lower()

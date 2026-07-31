@@ -145,6 +145,7 @@ async def check_fidelity(
     blog_html: str,
     brand_voice_profile: dict | None,
     thinking_tokens: int = 256,    # unused -- no thinking on fidelity check
+    brain_dump: str = "",
 ) -> dict:
     if brand_voice_profile is None:
         return {
@@ -155,6 +156,7 @@ async def check_fidelity(
             "seo_h2_count": 3,
             "seo_faq_present": True,
             "seo_fluff_detected": False,
+            "authored_passages_preserved": True,
             "tags": [],
         }
 
@@ -187,6 +189,7 @@ async def check_fidelity(
     prompt = _FIDELITY_PROMPT.format(
         bvp_json=json.dumps(brand_voice_profile),
         blog_html=blog_html,
+        brain_dump_sample=brain_dump[:1500],
         expanded_scoring_section=expanded_scoring_section,
     )
 

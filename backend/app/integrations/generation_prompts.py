@@ -125,8 +125,44 @@ _BLOG_PROMPT = """You are a direct, expert blog writer. Write a blog post that s
 BRAND VOICE PROFILE:
 {voice_section}
 
-BRAIN DUMP (author's raw ideas: build the blog around the core argument, but RETAIN all first-person experiences, specific numbers, dates, named tools, or unique outcomes. These are E-E-A-T and Information Gain signals; do not generalize or anonymize them. If the brain dump contains any URLs (http:// or https://), embed each as an HTML anchor link <a href="[URL]" rel="noopener noreferrer" target="_blank">[natural anchor text describing what the URL points to]</a> at the point in the article where it is most relevant; preserve each URL exactly as provided. If the brain dump contains no URLs, do not add any anchor tags or links):
+BRAIN DUMP:
 {brain_dump}
+
+Before writing, silently classify every part of the brain dump above into one of three types:
+
+AUTHORED PASSAGE -- 2 or more coherent first-person sentences that read as finished prose (not
+a list, not a fragment, not a label:value pair). These are Information Gain signals: content
+that exists nowhere else on the web because only this author lived it. Google's ranking
+algorithm scores this uniqueness directly.
+
+FRAGMENT/NOTE -- bullet points, single-line fragments, data lists, label:value pairs (e.g.
+"Tools: Apollo, Clay"), shorthand notes. Raw material for you to expand.
+
+DIRECTIVE -- any line beginning with "Note:", "Final note:", "PS:", or "Important:". These are
+author instructions to you. Follow them silently. Do not output them as content.
+
+TREATMENT RULES:
+- AUTHORED PASSAGES: reproduce in the blog with grammar corrections only. Do not rewrite
+  structure, improve vocabulary, or apply the Brand Voice Profile to these passages -- the
+  author's own words ARE the voice here. If a passage contains an em-dash, rewrite that
+  sentence naturally without one but change nothing else. Preserve expressions of uncertainty,
+  self-deprecation, conversational asides, and off-script moments exactly as written -- these
+  are authenticity signals, not errors.
+- AUTHORED PASSAGES must open the section they belong to: place them as the first content after
+  the H2 or H3 heading. The authored passage is the Information Gain delta; surface it first so
+  Google's passage indexing can capture it independently.
+- For sections you generate from FRAGMENT/NOTE content: match the directness, sentence length,
+  and register of the AUTHORED PASSAGES in this brain dump. Do not default to a generic
+  professional blog voice -- the authored passages are your register benchmark.
+- FRAGMENT/NOTE content: expand into full prose using the Brand Voice Profile and SEO structure.
+- DIRECTIVES: follow them silently. Never quote or reference them in the output.
+
+RETAIN all first-person experiences, specific numbers, dates, named tools, and unique outcomes
+regardless of classification. These are E-E-A-T signals; do not generalize or anonymize them.
+If the brain dump contains any URLs (http:// or https://), embed each as an HTML anchor link
+<a href="[URL]" rel="noopener noreferrer" target="_blank">[natural anchor text describing what
+the URL points to]</a> at the point in the article where it is most relevant; preserve each URL
+exactly as provided. If the brain dump contains no URLs, do not add any anchor tags or links.
 
 {seo_target_section}
 {audience_section}
@@ -167,6 +203,12 @@ REQUIREMENTS:
 - Before writing the FAQ section: identify the most likely follow-up question a reader still has after finishing the body. If it is not answered, add it as an additional FAQ entry. A reader who searched for your focus keyword should not need to open another tab. Never write "for more information, see..." -- answer it here.
 - Never write "many", "several", "some", "most", "often", "significant", "considerable", or "various" without attaching a specific number, timeframe, or qualifier from the brain dump. If the brain dump does not supply the data: either omit the claim entirely or hedge it explicitly ("in my experience", "from what I've seen", "your results may vary depending on").
 - Contractions: if the brand tone list includes "casual", "friendly", "conversational", or "approachable" -- use contractions naturally throughout (don't, can't, I've, you'll, it's). If the tone list includes "formal", "professional", "authoritative", or "corporate" -- avoid contractions entirely.
+- Never use passive voice when active voice is possible. Write "I tested this" not "this was
+  tested", "the data showed" not "it was shown by the data". Passive voice is the single most
+  detectable AI writing pattern.
+- In 1-2 sections, take a clear direct opinion: "I think X is wrong", "most advice on this is
+  backwards", "in my view Y is overrated". State it as the author's personal view, not
+  universal fact. Opinion statements are the strongest authenticity signal in written content.
 - When making a claim not directly supported by specific data in the brain dump: use first-person hedging ("in my experience", "from what I've seen", "based on the above") rather than stating it as universal fact. Never assert something is always true when the brain dump only documents a single case.
 - Output ONLY valid HTML tags. NEVER use markdown syntax like **bold**, *italic*, ##, ###
 - Bold text must use <strong>, italics must use <em>
@@ -192,6 +234,9 @@ _FIDELITY_PROMPT = """Evaluate the following blog post against the Brand Voice P
 BRAND VOICE PROFILE:
 {bvp_json}
 
+BRAIN DUMP SAMPLE (first 1500 characters of the original brain dump -- used only to verify authored passage preservation):
+{brain_dump_sample}
+
 BLOG HTML:
 {blog_html}
 
@@ -204,6 +249,7 @@ Return ONLY a valid JSON object (no markdown):
   "seo_h2_count": <integer: count of <h2> tags in the blog HTML>,
   "seo_faq_present": <boolean: true if a FAQ section with at least 3 Q&A pairs (as <dl> or similar) is present>,
   "seo_fluff_detected": <boolean: true if any banned opener phrase like "In today's fast-paced world", "As we all know", "It's no secret that" appears anywhere in the content>,
+  "authored_passages_preserved": <boolean: true if at least one passage of 2+ coherent first-person sentences from the brain dump sample appears in the blog HTML with only minor grammar changes; false if all brain dump content has been fully rewritten>,
   "tags": [<list of 3-5 concise lowercase SEO tags relevant to this specific post, e.g. ["brand voice", "content marketing", "ai tools"]>]
 }}
 {expanded_scoring_section}"""
@@ -215,6 +261,13 @@ BRAND VOICE PROFILE:
 {linkedin_voice_section}
 BRAIN DUMP:
 {brain_dump}
+
+Reading the brain dump: if it contains AUTHORED PASSAGES (2+ coherent first-person sentences in
+finished prose), use their exact wording as the LinkedIn post opening hook -- preserve the
+register and do not professionalize. Distil the sharpest claim or opinion from any authored
+passage as the X post hook. DIRECTIVES (lines beginning "Note:", "Final note:", "PS:") are
+author instructions -- follow them silently, never include them in the posts. Preserve
+personality signals (humor, self-deprecation, bluntness) from authored passages exactly.
 
 BLOG TITLE:
 {blog_title}
@@ -235,6 +288,13 @@ BRAND VOICE PROFILE:
 {bvp_structure_hints}
 BRAIN DUMP:
 {brain_dump}
+
+Reading the brain dump: if it contains AUTHORED PASSAGES (2+ coherent first-person sentences in
+finished prose), use their exact wording as the LinkedIn post opening hook -- preserve the
+register and do not professionalize. Distil the sharpest claim or opinion from any authored
+passage as the X post hook. DIRECTIVES (lines beginning "Note:", "Final note:", "PS:") are
+author instructions -- follow them silently, never include them in the posts. Preserve
+personality signals (humor, self-deprecation, bluntness) from authored passages exactly.
 
 Return ONLY a valid JSON object (no markdown):
 {{

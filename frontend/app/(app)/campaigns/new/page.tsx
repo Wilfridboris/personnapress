@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronDown, ChevronUp, Lightbulb, Link as LinkIcon, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Feather, Lightbulb, Link as LinkIcon, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -90,6 +90,12 @@ export default function NewCampaignPage() {
     () => (brainDump.match(/https?:\/\/[^\s]+/g) ?? []).length,
     [brainDump]
   );
+  const hasProsePassage = useMemo(() => {
+    if (!brainDump || brainDump.length < 30) return false;
+    const sentences = brainDump.split(/[.!?]+/).map((s) => s.trim()).filter((s) => s.length > 10);
+    const firstPersonSentences = sentences.filter((s) => /\bI\s+[a-z]/i.test(s));
+    return firstPersonSentences.length >= 2;
+  }, [brainDump]);
   const hasActiveClient = activeClient !== null;
   const hasBvp = activeClient?.brand_voice_profile_status === "ready";
   const isDisabled = charCount < MIN_CHARS || !hasActiveClient || isSubmitting;
@@ -269,9 +275,15 @@ export default function NewCampaignPage() {
         </p>
         <div aria-live="polite" aria-atomic="true">
           {charCount > 0 && charCount < 150 && (
-            <p className="flex items-center gap-1 text-xs text-[#555555] mt-1">
+            <p className="flex items-center gap-1 text-xs font-mono text-[#555555] mt-1">
               <Lightbulb size={12} aria-hidden="true" />
               Tip: include a specific number, personal outcome, or named tool for best results.
+            </p>
+          )}
+          {charCount >= 150 && !hasProsePassage && (
+            <p className="flex items-center gap-1 text-xs font-mono text-[#555555] mt-1">
+              <Feather size={12} aria-hidden="true" />
+              Tip: write 2-3 sentences in your own voice -- they will be kept as written.
             </p>
           )}
         </div>
@@ -307,6 +319,9 @@ export default function NewCampaignPage() {
           >
             <div className="overflow-hidden">
               <ul role="list" className="mt-2 border border-[#E5E5E5] bg-[#F9F9F6] p-3 rounded-none list-none space-y-2 text-sm text-[#555555]">
+                <li className="text-[#111111]">
+                  Write the sentences you care most about in full -- they will appear in your article nearly word for word
+                </li>
                 <li>Start with a specific number, date, or outcome:{" "}
                   <code className="font-mono text-xs bg-[#F0F0ED] px-1">
                     I increased conversion 28% in 6 weeks

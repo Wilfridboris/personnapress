@@ -176,6 +176,7 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
             blog_html,
             brand_voice_profile,
             _FIDELITY_THINKING_TOKENS,
+            campaign.brain_dump,
         )
         campaign.voice_score = voice_score
 
