@@ -1,6 +1,7 @@
 """Meta Graph API integration (Instagram, Facebook Page, Threads).
 
-All endpoints use Graph API v25.0.
+Instagram and Facebook Page use graph.facebook.com/v25.0.
+Threads uses graph.threads.com/v1.0 (a separate host per the official Threads API).
 """
 import asyncio
 import logging
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 META_API_VERSION = "v25.0"
 META_GRAPH_BASE = f"https://graph.facebook.com/{META_API_VERSION}"
+THREADS_GRAPH_BASE = "https://graph.threads.com/v1.0"
 
 
 def _extract_error(resp: httpx.Response) -> str:
@@ -185,7 +187,7 @@ async def publish_threads_post(
     """Create and publish a Threads text post. Returns Threads post ID."""
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
-            f"{META_GRAPH_BASE}/{threads_user_id}/threads",
+            f"{THREADS_GRAPH_BASE}/{threads_user_id}/threads",
             data={
                 "media_type": "TEXT",
                 "text": (text or ""),
@@ -198,9 +200,12 @@ async def publish_threads_post(
     if not container_id:
         raise PlatformError("threads", 200, "threads container creation returned no id")
 
+    # The Threads API requires ~30s for the server to process the container before publishing.
+    await asyncio.sleep(30)
+
     async with httpx.AsyncClient(timeout=15.0) as client:
         pub_resp = await client.post(
-            f"{META_GRAPH_BASE}/{threads_user_id}/threads_publish",
+            f"{THREADS_GRAPH_BASE}/{threads_user_id}/threads_publish",
             data={"creation_id": container_id, "access_token": user_access_token},
         )
     if pub_resp.status_code == 429:

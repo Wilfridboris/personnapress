@@ -938,7 +938,7 @@ async def test_publish_threads_success():
             return container_resp
         return publish_resp
 
-    with patch("httpx.AsyncClient") as mock_cls:
+    with patch("httpx.AsyncClient") as mock_cls, patch("asyncio.sleep", AsyncMock()):
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -966,7 +966,7 @@ async def test_publish_threads_401():
         call_count += 1
         return container_resp if call_count == 1 else auth_error
 
-    with patch("httpx.AsyncClient") as mock_cls:
+    with patch("httpx.AsyncClient") as mock_cls, patch("asyncio.sleep", AsyncMock()):
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -995,7 +995,7 @@ async def test_publish_threads_429():
         call_count += 1
         return container_resp if call_count == 1 else rate_limit
 
-    with patch("httpx.AsyncClient") as mock_cls:
+    with patch("httpx.AsyncClient") as mock_cls, patch("asyncio.sleep", AsyncMock()):
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
