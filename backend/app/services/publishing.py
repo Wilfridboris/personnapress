@@ -553,7 +553,7 @@ async def dispatch_publish_for_platform(
             if not campaign.image_url:
                 logger.debug("dispatch_publish_for_platform: skipping instagram (no image_url) campaign=%s", campaign_id)
                 return {platform: "skipped"}
-            if not campaign.linkedin_post:
+            if not (campaign.linkedin_post or "").strip():
                 logger.debug("dispatch_publish_for_platform: skipping instagram (no linkedin_post for caption) campaign=%s", campaign_id)
                 return {platform: "skipped"}
             await meta_integration.publish_instagram_feed_post(
@@ -563,7 +563,7 @@ async def dispatch_publish_for_platform(
                 campaign.linkedin_post,
             )
         elif platform == "facebook_page":
-            if not campaign.linkedin_post:
+            if not (campaign.linkedin_post or "").strip():
                 logger.debug("dispatch_publish_for_platform: skipping facebook_page (no linkedin_post) campaign=%s", campaign_id)
                 return {platform: "skipped"}
             await meta_integration.publish_facebook_page_post(
@@ -573,7 +573,7 @@ async def dispatch_publish_for_platform(
                 campaign.image_url or None,
             )
         elif platform == "threads":
-            if not campaign.x_post:
+            if not (campaign.x_post or "").strip():
                 logger.debug("dispatch_publish_for_platform: skipping threads (no x_post) campaign=%s", campaign_id)
                 return {platform: "skipped"}
             await meta_integration.publish_threads_post(
@@ -585,7 +585,7 @@ async def dispatch_publish_for_platform(
             await _publish_github(campaign, creds, db)
         return {platform: "success"}
     except PlatformError as pe:
-        error_msg = f"{pe.platform.capitalize()} returned {pe.status_code}: {pe.message}"
+        error_msg = f"{pe.platform} returned {pe.status_code}: {pe.message}"
         logger.error(
             "Retry publish failed platform=%s campaign=%s: %s",
             platform,
@@ -716,7 +716,7 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                     logger.debug("dispatch_publish: skipping instagram (no image_url) campaign=%s", campaign_id)
                     results[platform] = "skipped"
                     continue
-                if not campaign.linkedin_post:
+                if not (campaign.linkedin_post or "").strip():
                     logger.debug("dispatch_publish: skipping instagram (no linkedin_post for caption) campaign=%s", campaign_id)
                     results[platform] = "skipped"
                     continue
@@ -728,7 +728,7 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                 )
 
             elif platform == "facebook_page":
-                if not campaign.linkedin_post:
+                if not (campaign.linkedin_post or "").strip():
                     logger.debug("dispatch_publish: skipping facebook_page (no linkedin_post) campaign=%s", campaign_id)
                     results[platform] = "skipped"
                     continue
@@ -740,7 +740,7 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                 )
 
             elif platform == "threads":
-                if not campaign.x_post:
+                if not (campaign.x_post or "").strip():
                     logger.debug("dispatch_publish: skipping threads (no x_post) campaign=%s", campaign_id)
                     results[platform] = "skipped"
                     continue

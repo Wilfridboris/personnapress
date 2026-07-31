@@ -578,17 +578,6 @@ async def test_publish_instagram_success():
     status_finished = _make_httpx_response(200, {"status_code": "FINISHED"})
     publish_resp = _make_httpx_response(200, {"id": "media_xyz"})
 
-    call_count = 0
-
-    async def fake_request(url, **kwargs):
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
-            return container_resp
-        if call_count == 2:
-            return status_finished
-        return publish_resp
-
     with patch("httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)

@@ -123,13 +123,15 @@ async def publish_instagram_feed_post(
                 f"{META_GRAPH_BASE}/{container_id}",
                 params={"fields": "status_code", "access_token": page_access_token},
             )
+        if status_resp.status_code != 200:
+            raise PlatformError("instagram", status_resp.status_code, _extract_error(status_resp))
         status_code = status_resp.json().get("status_code", "")
         if status_code == "FINISHED":
             break
         if status_code in ("ERROR", "EXPIRED"):
             raise PlatformError("instagram", 422, f"container processing failed: {status_code}")
     else:
-        raise PlatformError("instagram", 408, "instagram container processing timed out after 60s")
+        raise PlatformError("instagram", 408, "instagram container processing timed out after 50s")
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         pub_resp = await client.post(

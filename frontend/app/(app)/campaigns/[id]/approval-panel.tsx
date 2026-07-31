@@ -730,7 +730,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                           return next;
                         })
                       }
-                      disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url) || (p === "threads" && !campaign.x_post)}
+                      disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url) || (p === "threads" && !(campaign.x_post || "").trim()) || (p === "facebook_page" && !(campaign.linkedin_post || "").trim())}
                       label={platformLabels[p]}
                     />
                   ))}
@@ -743,16 +743,21 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
               )}
               {selectedPlatforms.has("instagram") && campaign.image_url && (
                 <p className="font-mono text-xs text-graphite">
-                  {(campaign.linkedin_post ?? "").length}/2200 chars (Instagram caption)
+                  {Math.min((campaign.linkedin_post ?? "").length, 2200)}/2200 chars (Instagram caption)
                 </p>
               )}
-              {availablePlatforms.includes("threads") && !campaign.x_post && (
+              {availablePlatforms.includes("facebook_page") && !(campaign.linkedin_post || "").trim() && (
+                <p className="font-mono text-xs text-graphite">
+                  Facebook Page requires a LinkedIn post to be generated.
+                </p>
+              )}
+              {availablePlatforms.includes("threads") && !(campaign.x_post || "").trim() && (
                 <p className="font-mono text-xs text-graphite">
                   Threads requires an X post to be generated.
                 </p>
               )}
               {selectedPlatforms.has("threads") && selectedPlatforms.has("x") && (
-                <p className="text-xs text-graphite mt-1">Also posts to Threads</p>
+                <p className="font-mono text-xs text-graphite mt-1">Also posts to Threads</p>
               )}
               {nothingSelected && (
                 <p className="font-mono text-xs text-danger" role="alert">
@@ -1142,7 +1147,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                           return next;
                         })
                       }
-                      disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url) || (p === "threads" && !campaign.x_post)}
+                      disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url) || (p === "threads" && !(campaign.x_post || "").trim()) || (p === "facebook_page" && !(campaign.linkedin_post || "").trim())}
                       label={platformLabels[p]}
                     />
                   ))}
@@ -1155,16 +1160,21 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
               )}
               {selectedPlatforms.has("instagram") && campaign.image_url && (
                 <p className="font-mono text-xs text-graphite">
-                  {(campaign.linkedin_post ?? "").length}/2200 chars (Instagram caption)
+                  {Math.min((campaign.linkedin_post ?? "").length, 2200)}/2200 chars (Instagram caption)
                 </p>
               )}
-              {availablePlatforms.includes("threads") && !campaign.x_post && (
+              {availablePlatforms.includes("facebook_page") && !(campaign.linkedin_post || "").trim() && (
+                <p className="font-mono text-xs text-graphite">
+                  Facebook Page requires a LinkedIn post to be generated.
+                </p>
+              )}
+              {availablePlatforms.includes("threads") && !(campaign.x_post || "").trim() && (
                 <p className="font-mono text-xs text-graphite">
                   Threads requires an X post to be generated.
                 </p>
               )}
               {selectedPlatforms.has("threads") && selectedPlatforms.has("x") && (
-                <p className="text-xs text-graphite mt-1">Also posts to Threads</p>
+                <p className="font-mono text-xs text-graphite mt-1">Also posts to Threads</p>
               )}
               {nothingSelected && (
                 <p className="font-mono text-xs text-danger" role="alert">

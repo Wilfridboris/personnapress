@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 21-2/21-3/21-4 Meta publishing stories (2026-07-31)
+
+- Code duplication: all three platform branches (instagram, facebook_page, threads) duplicated identically between `dispatch_publish_for_platform` and `dispatch_publish`. Matches existing pattern for other platforms; extract shared helper in future refactor. [backend/app/services/publishing.py]
+- `platformLabels` state population duplicated verbatim in two data-loading paths in ApprovalPanel. Extract helper function when component is next refactored. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]
+- No explicit 429/401 guard on Instagram container creation POST or Threads container creation POST — these error cases fall through to the generic non-200 handler which produces a less informative error. [backend/app/integrations/meta.py]
+- `Platform` type excludes `"github_pages"` while `PlatformConnectionStatus.platform` includes it — pre-existing divergence not introduced by this diff. [frontend/lib/types.ts]
+
 ## Deferred from: code review of 21-1-meta-platform-connection-oauth (2026-07-31)
 
 - No pagination handling in `discover_accounts`: `/me/accounts` returns paginated results; only first 25 pages processed. Users with more than 25 Facebook Pages will see partial connections. [backend/app/integrations/meta.py]
