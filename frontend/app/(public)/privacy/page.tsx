@@ -213,16 +213,14 @@ export default function PrivacyPage() {
         </li>
         <li>
           Meta may notify us when you remove PersonnaPress from your Facebook
-          app settings. We process this notification and log it; to fully
-          remove all associated data, follow the steps on our{" "}
-          <Link href="/data-deletion">Data Deletion page</Link>.
+          app settings. To fully remove all associated data, delete your
+          PersonnaPress account from{" "}
+          <Link href="/settings">Account Settings</Link>.
         </li>
       </ul>
       <p>
         To delete all data PersonnaPress holds from your Meta platform
-        connections, visit our{" "}
-        <Link href="/data-deletion">Data Deletion page</Link> or delete your
-        PersonnaPress account from{" "}
+        connections, delete your PersonnaPress account from{" "}
         <Link href="/settings">Account Settings</Link>.
       </p>
 
