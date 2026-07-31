@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 21-1-meta-platform-connection-oauth (2026-07-31)
+
+- No pagination handling in `discover_accounts`: `/me/accounts` returns paginated results; only first 25 pages processed. Users with more than 25 Facebook Pages will see partial connections. [backend/app/integrations/meta.py]
+- Alembic revision ID hand-written as `a4b5c6d7e8f9` violating story AC5 "NEVER hand-write the revision ID" -- migration works functionally; regenerate with `alembic revision --autogenerate -m "add_meta_platforms"` next opportunity. [backend/alembic/versions/20260731_0001_a4b5c6d7e8f9_add_meta_platforms.py]
+- Threads discovery silently skipped for users who have Threads but no Instagram Business Account linked to any Facebook Page -- spec provides no fallback path for this scenario. [backend/app/routers/publishing.py]
+- DB partial writes: `upsert_connection` calls are individual with no wrapping transaction; failure mid-loop leaves partial state. Matches existing pattern across all platform connections. [backend/app/routers/publishing.py]
+
 ## Deferred from: code review of 3-15-brain-dump-quality-guidance (2026-07-30)
 
 - Onboarding step numbering mismatch: spec says "Step 3" but code has `// Step 4 state (brain dump)`. Pre-existing label drift; not a runtime bug.

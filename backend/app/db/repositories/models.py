@@ -28,6 +28,9 @@ class Platform(str, Enum):
     x = "x"
     linkedin = "linkedin"
     github_pages = "github_pages"
+    instagram = "instagram"
+    facebook_page = "facebook_page"
+    threads = "threads"
 
 
 class CampaignStatus(str, Enum):

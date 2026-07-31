@@ -59,5 +59,9 @@ class Settings(BaseSettings):
     GITHUB_APP_PRIVATE_KEY: str = ""
     GITHUB_APP_WEBHOOK_SECRET: str = ""
 
+    # Meta Business App (Instagram, Facebook Page, Threads publishing)
+    META_APP_ID: str = ""
+    META_APP_SECRET: str = ""
+
 
 settings = Settings()

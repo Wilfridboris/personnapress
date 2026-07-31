@@ -1,4 +1,4 @@
-import { GitBranch, Globe, LayoutGrid, Share2, Link2 } from "lucide-react";
+import { GitBranch, Globe, LayoutGrid, Share2, Link2, Camera, BookOpen, MessageCircle } from "lucide-react";
 
 interface Props {
   platform: string;
@@ -14,5 +14,11 @@ export function PlatformIcon({ platform, className = "size-3.5" }: Props) {
     return <Share2 className={className} aria-hidden="true" />;
   if (platform === "github_pages")
     return <GitBranch className={className} aria-hidden="true" />;
+  if (platform === "instagram")
+    return <Camera className={className} aria-hidden="true" />;
+  if (platform === "facebook_page")
+    return <BookOpen className={className} aria-hidden="true" />;
+  if (platform === "threads")
+    return <MessageCircle className={className} aria-hidden="true" />;
   return <Link2 className={className} aria-hidden="true" />;
 }

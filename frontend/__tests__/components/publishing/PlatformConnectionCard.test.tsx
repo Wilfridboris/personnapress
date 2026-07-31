@@ -194,6 +194,110 @@ describe("PlatformConnectionCard — OAuth platforms", () => {
   });
 });
 
+describe("PlatformConnectionCard — Meta platforms connected state", () => {
+  it("instagram connected shows Connected status and Disconnect button", () => {
+    renderCard({
+      platform: "instagram",
+      connected: true,
+      account_identifier: "@mybrand",
+    });
+    expect(screen.getByText("Connected")).toBeInTheDocument();
+    expect(screen.getByText("@mybrand")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Disconnect Instagram" })
+    ).toBeInTheDocument();
+  });
+
+  it("facebook_page connected shows Connected status and Disconnect button", () => {
+    renderCard({
+      platform: "facebook_page",
+      connected: true,
+      account_identifier: "My Brand Page",
+    });
+    expect(screen.getByText("Connected")).toBeInTheDocument();
+    expect(screen.getByText("My Brand Page")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Disconnect Facebook Page" })
+    ).toBeInTheDocument();
+  });
+
+  it("threads connected shows Connected status and Disconnect button", () => {
+    renderCard({
+      platform: "threads",
+      connected: true,
+      account_identifier: "@mybrand",
+    });
+    expect(screen.getByText("Connected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Disconnect Threads" })).toBeInTheDocument();
+  });
+
+  it("instagram not connected renders no connect button (handled by MetaPlatformsSection)", () => {
+    renderCard({ platform: "instagram", connected: false });
+    // Meta platforms in disconnected state render no button (MetaPlatformsSection handles it)
+    expect(screen.queryByRole("link", { name: /Connect Instagram/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Connect/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Not connected")).toBeInTheDocument();
+  });
+
+  it("clicking Disconnect on instagram opens confirmation dialog", () => {
+    renderCard({
+      platform: "instagram",
+      connected: true,
+      account_identifier: "@mybrand",
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Disconnect Instagram" })
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("confirming Disconnect on facebook_page calls deleteConnection with facebook_page", async () => {
+    vi.mocked(publishingApi.deleteConnection).mockResolvedValue(undefined);
+
+    renderCard({
+      platform: "facebook_page",
+      connected: true,
+      account_identifier: "My Brand Page",
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Disconnect Facebook Page" })
+    );
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(
+      dialog.querySelector("button[aria-label='Disconnect Facebook Page']")!
+    );
+
+    await waitFor(() => {
+      expect(publishingApi.deleteConnection).toHaveBeenCalledWith(
+        "client-123",
+        "facebook_page"
+      );
+    });
+  });
+
+  it("confirming Disconnect on threads calls deleteConnection with threads", async () => {
+    vi.mocked(publishingApi.deleteConnection).mockResolvedValue(undefined);
+
+    renderCard({
+      platform: "threads",
+      connected: true,
+      account_identifier: "@mybrand",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect Threads" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(
+      dialog.querySelector("button[aria-label='Disconnect Threads']")!
+    );
+
+    await waitFor(() => {
+      expect(publishingApi.deleteConnection).toHaveBeenCalledWith(
+        "client-123",
+        "threads"
+      );
+    });
+  });
+});
+
 describe("PlatformConnectionCard — WordPress.com sub-choice", () => {
   it("test_wordpress_connect_shows_type_picker — clicking Connect shows type picker, not form", () => {
     renderCard(notConnected);

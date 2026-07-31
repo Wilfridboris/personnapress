@@ -30,6 +30,7 @@ from app.db.repositories.platform_connections import (
 )
 from app.integrations import github as github_integration
 from app.integrations import linkedin as linkedin_integration
+from app.integrations import meta as meta_integration
 from app.services import repo_detection
 from app.integrations import twitter as twitter_integration
 from app.integrations import webflow as webflow_integration
@@ -44,7 +45,7 @@ from app.services.articles import create_or_update_article_from_campaign
 
 router = APIRouter(prefix="", tags=["publishing"])
 
-ALL_PLATFORMS = ["wordpress", "webflow", "x", "linkedin", "github_pages"]
+ALL_PLATFORMS = ["wordpress", "webflow", "x", "linkedin", "github_pages", "instagram", "facebook_page", "threads"]
 
 
 def _extract_identifier(platform: str, encrypted_credentials: str) -> Optional[str]:
@@ -58,6 +59,12 @@ def _extract_identifier(platform: str, encrypted_credentials: str) -> Optional[s
             return data.get("collection_id") or None
         if platform == "github_pages":
             return data.get("repo_full_name") or None
+        if platform == "instagram":
+            return data.get("username") or None
+        if platform == "facebook_page":
+            return data.get("page_name") or None
+        if platform == "threads":
+            return data.get("username") or None
         return data.get("handle") or data.get("name") or None
     except Exception:
         return None
@@ -363,6 +370,111 @@ async def wordpress_com_oauth_callback(
     if tokens.get("blog_url"):
         result["account_identifier"] = tokens["blog_url"]
     return result
+
+
+@router.post("/clients/{client_id}/connections/meta/callback", status_code=201)
+async def meta_oauth_callback(
+    client_id: uuid.UUID,
+    body: OAuthCallbackRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+    client = await get_client(db, client_id)
+    _check_ownership(client, user_id)
+
+    redirect_uri = f"{settings.APP_URL}/api/auth/meta/callback"
+
+    # Step a: Exchange code for short-lived user token
+    try:
+        short_lived_token = await meta_integration.exchange_code_for_short_lived_token(body.code, redirect_uri)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": _platform_error_msg(e), "detail": {}}},
+        )
+
+    # Step b: Exchange short-lived for 60-day long-lived token
+    try:
+        long_lived_token = await meta_integration.exchange_short_lived_for_long_lived_token(short_lived_token)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": _platform_error_msg(e), "detail": {}}},
+        )
+
+    # Step c: Discover linked Pages and Instagram accounts
+    try:
+        pages = await meta_integration.discover_accounts(long_lived_token)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "ACCOUNT_DISCOVERY_FAILED", "message": _platform_error_msg(e), "detail": {}}},
+        )
+
+    connected_platforms: list[str] = []
+    first_instagram_user_id: Optional[str] = None
+    first_instagram_username: Optional[str] = None
+
+    for page in pages:
+        page_id = page.get("id", "")
+        page_name = page.get("name", "")
+        page_access_token = page.get("access_token", "")
+        ig_account = page.get("instagram_business_account")
+
+        # Step d: Upsert Instagram connection for the first page that has a linked Instagram
+        # Business Account. Only the first account is stored (one instagram row per client);
+        # subsequent pages would overwrite credentials while Threads discovery uses the first ID.
+        if ig_account and not first_instagram_user_id:
+            ig_user_id = ig_account.get("id", "")
+            ig_username = ig_account.get("username", "")
+            if ig_user_id:
+                first_instagram_user_id = ig_user_id
+                first_instagram_username = ig_username
+                ig_cred = json.dumps({
+                    "instagram_user_id": ig_user_id,
+                    "username": ig_username,
+                    "page_access_token": page_access_token,
+                    "facebook_page_id": page_id,
+                    "facebook_page_name": page_name,
+                })
+                encrypted_ig = encrypt_credential(ig_cred)
+                await upsert_connection(db, client_id, "instagram", encrypted_ig)
+                connected_platforms.append("instagram")
+
+        # Step e: Upsert Facebook Page connection for the first page found
+        if page_id and "facebook_page" not in connected_platforms:
+            fb_cred = json.dumps({
+                "page_id": page_id,
+                "page_name": page_name,
+                "page_access_token": page_access_token,
+            })
+            encrypted_fb = encrypt_credential(fb_cred)
+            await upsert_connection(db, client_id, "facebook_page", encrypted_fb)
+            connected_platforms.append("facebook_page")
+
+    # Step f: Attempt Threads user discovery (optional, non-fatal)
+    if first_instagram_user_id:
+        threads_user_id = await meta_integration.discover_threads_user_id(
+            first_instagram_user_id, long_lived_token
+        )
+        if threads_user_id:
+            threads_cred = json.dumps({
+                "threads_user_id": threads_user_id,
+                "username": first_instagram_username or "",
+                "user_access_token": long_lived_token,
+            })
+            encrypted_threads = encrypt_credential(threads_cred)
+            await upsert_connection(db, client_id, "threads", encrypted_threads)
+            connected_platforms.append("threads")
+
+    if not connected_platforms:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": "NO_ACCOUNTS_FOUND", "message": "No Facebook Pages or Instagram Business Accounts were found for this Meta account.", "detail": {}}},
+        )
+
+    return {"connected_platforms": connected_platforms}
 
 
 class GitHubConnectRequest(BaseModel):

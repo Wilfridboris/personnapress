@@ -20,6 +20,9 @@ const PLATFORM_LABELS: Record<string, string> = {
   x: "X (Twitter)",
   linkedin: "LinkedIn",
   github_pages: "GitHub Pages",
+  instagram: "Instagram",
+  facebook_page: "Facebook Page",
+  threads: "Threads",
 };
 
 
@@ -49,6 +52,10 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
   const label = PLATFORM_LABELS[connection.platform] ?? connection.platform;
   const isOAuth = connection.platform === "x" || connection.platform === "linkedin";
   const isGitHub = connection.platform === "github_pages";
+  const isMetaPlatform =
+    connection.platform === "instagram" ||
+    connection.platform === "facebook_page" ||
+    connection.platform === "threads";
 
   if (isGitHub) {
     return <GitHubConnect clientId={clientId} connection={connection} />;
@@ -163,7 +170,7 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
               >
                 Disconnect
               </button>
-            ) : isOAuth ? (
+            ) : isMetaPlatform ? null : isOAuth ? (
               <a
                 href={`/api/auth/${connection.platform}?client_id=${clientId}`}
                 onClick={() => setLoading(true)}

@@ -51,7 +51,7 @@ async def test_list_connections_empty():
         )
 
     assert "items" in result
-    assert len(result["items"]) == 5
+    assert len(result["items"]) == 8
     assert all(not item["connected"] for item in result["items"])
     platforms = [i["platform"] for i in result["items"]]
     assert "wordpress" in platforms
@@ -59,6 +59,9 @@ async def test_list_connections_empty():
     assert "x" in platforms
     assert "linkedin" in platforms
     assert "github_pages" in platforms
+    assert "instagram" in platforms
+    assert "facebook_page" in platforms
+    assert "threads" in platforms
 
 
 # ── GET /clients/{id}/connections — with wordpress ────────────────────────────
@@ -516,7 +519,7 @@ async def test_list_connections_with_wpcom():
             db=db,
         )
 
-    assert len(result["items"]) == 5
+    assert len(result["items"]) == 8
     wp_item = next(i for i in result["items"] if i["platform"] == "wordpress")
     assert wp_item["connected"] is True
     assert wp_item.get("connected_via") == "wordpress-com"

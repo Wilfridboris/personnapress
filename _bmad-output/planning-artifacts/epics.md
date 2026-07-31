@@ -2162,3 +2162,215 @@ so that I can compare plans, understand what I get on each tier, and start a fre
 6. **Given** the PublicHeader renders on any public page, **When** the "Pricing" nav link is inspected, **Then** it links to `/pricing` (not the homepage anchor `#pricing`).
 
 **Note:** Story 7.4 (Stripe Checkout Flow + In-App Plan Picker) is filed under Epic 7 but is the functional companion to this story — it adds the backend checkout endpoint and in-app plan picker that allows trial users to actually subscribe.
+
+
+---
+
+## Epic 21: Meta Platform Publishing (Phase 2)
+
+**Goal:** Add Instagram, Facebook Page, and Threads as first-class publishing destinations, completing the social platform coverage deferred in v1 (PRD section 6.2). Built behind `META_PUBLISHING_ENABLED` feature flag -- activates when Meta's Business App review is approved with zero code changes.
+
+**Phase 2 Gate (PRD A-26):** (1) Meta screencast audit complete and API access approved; (2) Phase 1 platform publish failure rate below 1% sustained over 30 days; (3) at least 100 active paying users. Development proceeds in Meta sandbox mode using test users while the audit is in progress.
+
+**Stories:**
+
+### Story 21.1: Meta Platform Connection and OAuth
+
+As a PersonnaPress user with a Meta Business account,
+I want to connect my Instagram Business Account, Facebook Page, and Threads account via a single Meta OAuth flow,
+So that PersonnaPress can publish to all three Meta platforms on my behalf.
+
+**Acceptance Criteria:**
+
+1. **Given** `NEXT_PUBLIC_META_PUBLISHING_ENABLED` is `false` (default), **When** the Platform Connections page renders, **Then** a "Meta Platforms" section appears with a disabled connect button (`opacity-50 cursor-not-allowed`), a Lucide `Lock` icon (size-3.5), and tooltip: "Meta Business API approval in progress. Available soon." No OAuth calls are initiated.
+
+2. **Given** `NEXT_PUBLIC_META_PUBLISHING_ENABLED` is `true`, **When** the user clicks "Connect Meta Platforms", **Then** the browser calls `GET /api/auth/meta?client_id={clientId}` (Next.js route handler) which sets an `oauth_state_meta` httpOnly cookie (`{state: randomHex32, clientId, returnTo?}`, maxAge: 600s, sameSite: lax) and redirects to `https://www.facebook.com/v21.0/dialog/oauth` with `client_id={NEXT_PUBLIC_META_APP_ID}`, `redirect_uri={APP_URL}/api/auth/meta/callback`, `response_type=code`, `state={state}`, and `scope=instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,pages_manage_posts,threads_basic,threads_content_publish`.
+
+3. **Given** the user completes Meta OAuth, **When** `/api/auth/meta/callback?code=...&state=...` is called, **Then** state is validated against `oauth_state_meta` cookie (CSRF -- same pattern as `frontend/app/api/auth/linkedin/callback/route.ts`); on CSRF failure or provider error, redirect to connections page with error and clear cookie; on success, POST `{code}` to `{BACKEND_URL}/api/v1/clients/{clientId}/connections/meta/callback` forwarding the session cookie; redirect to connections page with `?success=meta` on backend success; clear `oauth_state_meta` cookie in all cases.
+
+4. **Given** `POST /api/v1/clients/{client_id}/connections/meta/callback` receives `{code: str}`, **When** it executes, **Then**: (a) exchanges code for short-lived user token via `POST https://graph.facebook.com/v21.0/oauth/access_token`; (b) exchanges for 60-day long-lived token via `GET https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=...&client_secret=...&fb_exchange_token={short_token}`; (c) calls `GET /v21.0/me/accounts?fields=instagram_business_account{id,username},name,id,access_token` to discover linked pages and Instagram accounts; (d) for each page with an Instagram business account, upserts an `instagram` `platform_connection` with encrypted credentials `{instagram_user_id, username, page_access_token, facebook_page_id, facebook_page_name}`; (e) upserts a `facebook_page` connection for the first page found with credentials `{page_id, page_name, page_access_token}`; (f) calls `GET /v21.0/{instagram_user_id}?fields=threads_user_id`; if present, upserts a `threads` connection with credentials `{threads_user_id, username, user_access_token}` (long-lived USER token, not page token); (g) returns `{connected_platforms: [...list of what was stored...]}`.
+
+5. **Given** the Postgres `platform_enum` currently has `wordpress`, `wordpress-com`, `webflow`, `x`, `linkedin`, `github_pages`, **When** the Alembic migration runs, **Then** it adds `instagram`, `facebook_page`, `threads` using `autocommit_block()` with `ALTER TYPE platform_enum ADD VALUE IF NOT EXISTS` for each value (same pattern as `f1a2b3c4d5e6_add_github_pages_to_platform.py`); migration is generated via `cd backend && alembic revision -m "add_meta_platform_types"` (NEVER hand-write revision IDs per project-context.md); `Platform` StrEnum in `models.py` gains `instagram = "instagram"`, `facebook_page = "facebook_page"`, `threads = "threads"`; downgrade omits enum revert.
+
+6. **Given** the new platform types are registered, **When** `list_platform_connections` executes, **Then** `ALL_PLATFORMS` in `publishing.py` and `PlatformConnectionsClient.tsx` includes `"instagram"`, `"facebook_page"`, `"threads"`; `_extract_identifier` returns `@{username}` for instagram, `{page_name}` for facebook_page, `@{username}` for threads.
+
+7. **Given** a client has Meta platforms connected, **When** the Platform Connections page renders, **Then** each connected Meta platform shows its own card with handle/page name and a "Disconnect" link that disconnects only that platform; unconnected Meta platforms show a single "Connect Meta Platforms" button or locked state per AC 1.
+
+8. **Given** Meta OAuth completes, **When** the callback redirects with `?success=meta`, **Then** `PlatformConnectionsClient.tsx` shows toast "Meta platforms connected." following the existing `useEffect` success toast pattern.
+
+9. **Given** new env vars are required, **When** the story is complete, **Then** backend `.env.local.example` has `META_APP_ID=` and `META_APP_SECRET=` with comment `# Meta Business App credentials from developers.facebook.com`; frontend `.env.local.example` has `NEXT_PUBLIC_META_APP_ID=` and `NEXT_PUBLIC_META_PUBLISHING_ENABLED=false`; `backend/app/core/config.py` `Settings` adds `META_APP_ID: str = ""` and `META_APP_SECRET: str = ""`.
+
+10. **Given** Paper Style constraints, **When** any Meta connection UI renders, **Then** all surfaces are `rounded-none`; Lucide icons only (no emojis, no external SVGs); min touch targets `min-h-[44px]`; no em-dashes in user-visible text; error/success patterns match existing `PlatformConnectionCard.tsx`.
+
+---
+
+### Story 21.2: Instagram Feed Post Publishing
+
+As a PersonnaPress user with Instagram connected,
+I want to publish my campaign to Instagram as a captioned image post,
+So that my Instagram audience receives visually compelling content without me writing a separate caption.
+
+**Acceptance Criteria:**
+
+1. **Given** a campaign with `featured_image_url` set and Instagram connected for the client, **When** the user selects Instagram as a publish destination and approves, **Then** the publishing worker calls `backend/app/integrations/meta.py` `publish_instagram_feed_post(instagram_user_id, page_access_token, image_url, caption)` which: (a) creates a media container via `POST /v21.0/{instagram_user_id}/media` with `image_url={featured_image_url}` and `caption={linkedin_post}` truncated to 2,200 chars; (b) polls container status at `GET /v21.0/{container_id}?fields=status_code` until `FINISHED` (max 10 polls, 3s interval); (c) publishes via `POST /v21.0/{instagram_user_id}/media_publish` with `creation_id`; (d) returns the published media ID.
+
+2. **Given** a campaign has no `featured_image_url`, **When** the user views the platform destination picker, **Then** Instagram appears disabled with note: "Instagram requires a featured image -- generate or upload one first." Instagram cannot be selected until `featured_image_url` is populated.
+
+3. **Given** the Instagram publish call fails (rate limit 429, expired token 401, invalid image format), **When** the failure occurs, **Then** `PlatformError("instagram", status_code, message)` is raised; `run_publish()` marks the Instagram result as `failed` with the error detail; other platform publish results in the same campaign are unaffected (per-platform independence per FR-24).
+
+4. **Given** a publish job completes for Instagram, **When** the job status is queried, **Then** `publish_results` contains `instagram: {status: "published", media_id: "..."}` on success or `instagram: {status: "failed", error: "..."}` on failure.
+
+5. **Given** the approval gate destination picker (Story 14.1), **When** Instagram is connected and `featured_image_url` is present, **Then** Instagram appears as a selectable destination chip showing the `Camera` Lucide icon and `@{username}`; its selection behaviour matches the existing X and LinkedIn chip pattern.
+
+6. **Given** Paper Style constraints, **When** Instagram-related UI renders, **Then** `rounded-none` surfaces; Lucide icons only; no em-dashes; caption length shown as `{length}/2200 chars` below the LinkedIn post editor when Instagram is selected as a destination.
+
+---
+
+### Story 21.3: Facebook Page Post Publishing
+
+As a PersonnaPress user with a Facebook Page connected,
+I want to publish my campaign's social content to my Facebook Page,
+So that my Facebook audience receives the same quality content as other platforms without extra work.
+
+**Acceptance Criteria:**
+
+1. **Given** a Facebook Page connected for the client, **When** the user selects Facebook Page as a publish destination and approves, **Then** the publishing worker calls `meta.py` `publish_facebook_page_post(page_id, page_access_token, message, image_url=None)` which posts to `POST /v21.0/{page_id}/feed` with `message={linkedin_post}` and, if `featured_image_url` is set, `link={featured_image_url}`; returns the created post ID on success.
+
+2. **Given** the Facebook Page publish call fails, **When** the failure occurs, **Then** `PlatformError("facebook_page", status_code, message)` is raised; the Facebook Page result is marked `failed`; other platform publish results in the same campaign are unaffected.
+
+3. **Given** a publish job completes for Facebook Page, **When** the job status is queried, **Then** `publish_results` contains `facebook_page: {status: "published", post_id: "..."}` on success or `facebook_page: {status: "failed", error: "..."}` on failure.
+
+4. **Given** the approval gate destination picker, **When** Facebook Page is connected, **Then** it appears as a selectable destination chip showing the `Users` Lucide icon and the page name; its selection behaviour matches the existing platform chip pattern.
+
+5. **Given** Paper Style constraints, **When** any Facebook Page UI renders, **Then** `rounded-none` surfaces; Lucide icons only; no em-dashes in any user-visible text.
+
+---
+
+### Story 21.4: Threads Text Post Publishing
+
+As a PersonnaPress user with Threads connected,
+I want to publish my campaign's X post content to Threads,
+So that my Threads audience receives concise, brand-voice content without me writing a separate post.
+
+**Acceptance Criteria:**
+
+1. **Given** Threads connected for the client, **When** the user selects Threads as a publish destination and approves, **Then** the publishing worker calls `meta.py` `publish_threads_post(threads_user_id, user_access_token, text)` which: (a) creates a text container via `POST /v21.0/{threads_user_id}/threads` with `media_type=TEXT` and `text={x_post}` (x_post is always <=280 chars, well within the 500-char Threads limit); (b) publishes via `POST /v21.0/{threads_user_id}/threads_publish` with `creation_id`; (c) returns the Threads post ID.
+
+2. **Given** the Threads publish call fails, **When** the failure occurs, **Then** `PlatformError("threads", status_code, message)` is raised; the Threads result is marked `failed`; other platform publish results in the same campaign are unaffected.
+
+3. **Given** a publish job completes for Threads, **When** the job status is queried, **Then** `publish_results` contains `threads: {status: "published", threads_id: "..."}` on success or `threads: {status: "failed", error: "..."}` on failure.
+
+4. **Given** the approval gate destination picker, **When** Threads is connected, **Then** it appears as a selectable destination chip showing the `MessageSquare` Lucide icon and `@{username}`; the X post preview card shows a note "Also posts to Threads" when both X and Threads are selected; Threads cannot be selected if no x_post content is generated.
+
+5. **Given** Paper Style constraints, **When** any Threads UI renders, **Then** `rounded-none` surfaces; Lucide icons only; no em-dashes in any visible text.
+
+---
+
+## Epic 22: Mobile Responsive Web
+
+**Goal:** Make PersonnaPress genuinely usable on phones and tablets through a focused mobile responsiveness pass on the existing Next.js + Tailwind CSS v4 app. No native app, no visual redesign. Paper Style monochrome palette and `rounded-none` surfaces are preserved throughout. All changes use existing Tailwind `md:` / `lg:` breakpoints with no new CSS files.
+
+**Stories:**
+
+### Story 22.1: Mobile Navigation and Global Touch Targets
+
+As a PersonnaPress user on a phone,
+I want the app navigation to collapse into a touch-friendly drawer and all buttons to be large enough to tap accurately,
+So that I can navigate and interact with the app without pinching, zooming, or mis-tapping.
+
+**Acceptance Criteria:**
+
+1. **Given** a viewport below 768px (`< md`), **When** any authenticated app page loads, **Then** the primary navigation (sidebar or top nav) collapses; a hamburger button (`Menu` Lucide icon, `min-h-[44px] min-w-[44px]`) appears in the top-left of the app shell; clicking it opens a full-height overlay drawer (`fixed inset-0 z-50 bg-[#FFFFFF]`) containing all nav links with `min-h-[44px]` per link.
+
+2. **Given** the mobile nav drawer is open, **When** the user taps the `X` close button or the semi-transparent backdrop (`bg-[#111111]/40 fixed inset-0 z-40`), **Then** the drawer closes; enter/exit uses CSS `transition-transform duration-300` on `translateX` (no Framer Motion).
+
+3. **Given** any nav link inside the mobile drawer is tapped, **When** the route changes, **Then** the drawer closes automatically.
+
+4. **Given** any interactive element across the app (buttons, links, disconnect links, tab triggers, accordion toggles, chip selectors), **When** it renders on a mobile viewport, **Then** its tappable area is at minimum 44x44px achieved via `min-h-[44px]` or padding expansion; applies to: `PlatformConnectionCard` action links, approval gate chips, client tab triggers, onboarding step buttons.
+
+5. **Given** desktop viewport (>= `md`), **When** any page renders, **Then** the hamburger button is hidden (`hidden md:hidden` or `md:block` nav restored), existing desktop layout is pixel-unchanged, and no regressions occur.
+
+6. **Given** Paper Style constraints, **When** the mobile nav drawer renders, **Then** `rounded-none`; `font-serif` for section headings; `font-mono` for nav item labels; `border-r-0` (drawer is overlay, not sidebar); no emojis; no em-dashes.
+
+---
+
+### Story 22.2: Campaign Dashboard and Brain Dump Mobile UX
+
+As a PersonnaPress user on a phone,
+I want to browse my campaigns and submit a Brain Dump without the layout overflowing or the keyboard hiding my input,
+So that my core content workflow is doable from a mobile device.
+
+**Acceptance Criteria:**
+
+1. **Given** the Campaign List page on mobile (`< md`), **When** it renders, **Then** campaigns reflow to single-column full-width card stack; the status badge and primary action button appear as a bottom strip on each card (`border-t border-[#E5E5E5] pt-2 mt-2 flex justify-between items-center`); no horizontal overflow at 375px viewport.
+
+2. **Given** the Campaign List page on mobile with no campaigns, **When** the empty state renders, **Then** it is centred and fully visible without horizontal scroll; a "New Campaign" floating button pins to `fixed bottom-6 right-4 z-40` (44x44px ink button, `Plus` Lucide icon, `sr-only` label "New Campaign").
+
+3. **Given** the Brain Dump input page on mobile, **When** the user taps the textarea and the virtual keyboard opens, **Then** the textarea and submit button remain visible above the keyboard; the outer container uses `min-h-[100dvh]` with flexbox so the submit button stays in view; the textarea `font-size` is `16px` minimum (prevents iOS auto-zoom on focus).
+
+4. **Given** the Brain Dump textarea on mobile, **When** the user types, **Then** the textarea grows naturally with no fixed height; the character count indicator remains visible; the submit button is reachable by scrolling if content grows long.
+
+5. **Given** desktop viewport (>= `md`), **When** these pages render, **Then** no visual or layout regressions on the campaign list grid, empty state, or Brain Dump input.
+
+---
+
+### Story 22.3: Approval Gate Mobile Layout
+
+As a PersonnaPress user reviewing a campaign on a phone,
+I want to review and approve content in a tabbed layout with an always-visible action bar,
+So that I can complete my approval workflow from mobile without excessive scrolling.
+
+**Acceptance Criteria:**
+
+1. **Given** the Approval Gate page on mobile (`< md`), **When** it renders, **Then** the multi-column desktop layout is replaced by a four-tab strip: `Blog`, `X`, `LinkedIn`, `Image`; rendered as a `grid grid-cols-4` full-width tab bar with `border-b border-[#111111]`; one content pane visible at a time below the tab bar.
+
+2. **Given** the Blog tab is active on mobile, **When** it renders, **Then** the TipTap editor renders in a `max-h-[60dvh] overflow-y-auto` scroll container; the toolbar is `overflow-x-auto` horizontally scrollable if it overflows; the editing area has `min-h-[200px]`.
+
+3. **Given** the X or LinkedIn tab is active on mobile, **When** it renders, **Then** the social post textarea is full-width; the character count indicator is visible below the textarea; no horizontal overflow at 375px.
+
+4. **Given** the Image tab is active on mobile, **When** it renders, **Then** the featured image is `w-full aspect-video object-cover`; the Regenerate button and alt text input stack vertically below the image; every button is `min-h-[44px]`.
+
+5. **Given** any Approval Gate tab is active on mobile, **When** it renders, **Then** a fixed bottom action bar (`fixed bottom-0 inset-x-0 bg-[#FFFFFF] border-t border-[#111111] p-4 z-40 flex gap-3`) contains the Approve and Reject buttons, each `flex-1 min-h-[44px]`; the scrollable content area has `pb-[80px]` to prevent the bar from obscuring the last element.
+
+6. **Given** desktop viewport (>= `md`), **When** the Approval Gate renders, **Then** the existing multi-column layout is unchanged; the mobile tab strip is hidden; approve/reject buttons remain in their original desktop positions.
+
+---
+
+### Story 22.4: Connections, Client Switcher, and Modals Mobile
+
+As a PersonnaPress user on a phone,
+I want to connect platforms, switch clients, and interact with dialogs without elements being cut off or impossible to tap,
+So that account management flows work on mobile as well as on desktop.
+
+**Acceptance Criteria:**
+
+1. **Given** the Platform Connections page on mobile, **When** it renders, **Then** all connection cards stack full-width; every "Connect" and "Disconnect" action has `min-h-[44px]`; WordPress and Webflow credential form fields use stacked label-above-input layout; OAuth connect buttons are `w-full`.
+
+2. **Given** the client switcher control on mobile, **When** the user opens it, **Then** it renders as a bottom sheet (`fixed bottom-0 inset-x-0 z-50 max-h-[60dvh] overflow-y-auto border-t border-[#111111] bg-[#FFFFFF]`); it slides up via CSS `translateY` transition; a semi-transparent backdrop (`bg-[#111111]/40 fixed inset-0 z-40`) closes the sheet on tap; each client row has `min-h-[44px]`; no border-radius.
+
+3. **Given** any modal dialog (disconnect confirm, regenerate image, voice-profile modals) on mobile, **When** it renders, **Then** it occupies the full screen (`fixed inset-0 z-50 bg-[#FFFFFF] overflow-y-auto`); a close `X` button (`min-h-[44px] min-w-[44px]`) appears top-right; confirm/cancel buttons are full-width in a fixed bottom bar (`fixed bottom-0 inset-x-0 border-t border-[#111111] p-4 flex gap-3`); no border-radius.
+
+4. **Given** the Platform Connections onboarding step on mobile, **When** it renders, **Then** all connection options stack single-column; "Skip for now" and "Continue" are full-width stacked buttons with `min-h-[44px]`; the step indicator is visible at the top without overflow.
+
+5. **Given** desktop viewport (>= `md`), **When** these pages render, **Then** no regressions in client switcher dropdown, existing modal sizing, or platform connection card layout.
+
+---
+
+### Story 22.5: Calendar, Roadmap Mobile Reflow and Overflow Audit
+
+As a PersonnaPress user on a phone,
+I want to browse my content calendar and weekly roadmap on mobile, and have zero horizontal overflow on every page,
+So that the entire app is usable on a 375px screen without sideways scrolling.
+
+**Acceptance Criteria:**
+
+1. **Given** the Content Calendar page on mobile (`< md`), **When** it renders, **Then** the monthly grid switches to a horizontally-scrollable 7-day week strip; each column is `min-w-[56px] scroll-snap-align-start`; the strip container is `overflow-x-auto scroll-snap-type-x mandatory`; the month/year header and prev/next chevrons remain fixed above the strip; tapping a day column shows that day's posts in a panel below.
+
+2. **Given** the Roadmap / WeekGrid page on mobile, **When** it renders, **Then** the multi-column week grid reflows to a single-column accordion list; each day is a collapsible row (`border-b border-[#E5E5E5]`); the `PostEditPanel` opens as a full-screen takeover (`fixed inset-0 z-50 bg-[#FFFFFF] overflow-y-auto`) with a fixed close button top-right and save/cancel bottom bar.
+
+3. **Given** any page in the app at 375px viewport width, **When** it renders, **Then** `document.documentElement.scrollWidth <= document.documentElement.clientWidth` (zero horizontal overflow); verified across: Campaign List, Brain Dump, Approval Gate (all tabs), Platform Connections, Client list, Calendar, Roadmap, Account, Settings, and all public pages.
+
+4. **Given** any table or wide data structure on mobile, **When** it renders, **Then** it either reflows to a stacked list or clips via `overflow-x-auto` with `min-w-max` inner content; no structure causes full-page horizontal scroll.
+
+5. **Given** desktop viewport (>= `md`), **When** Calendar and Roadmap render, **Then** the existing monthly calendar grid and WeekGrid multi-column views are pixel-unchanged with no regressions.
+
