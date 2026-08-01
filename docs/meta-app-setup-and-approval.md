@@ -158,7 +158,9 @@ Threads has its own tester management, independent of app Facebook Roles. Under 
 | `instagram_basic` | Instagram profile info and the user's posted media/text | Read account ID and username only |
 | `instagram_content_publish` | Publish media to Instagram as feed posts | Publish campaign images via the media container flow |
 
-**Threads OAuth flow (separate consent):**
+**Threads OAuth flow (separate — `https://threads.net/oauth/authorize`):**
+
+`threads_basic` and `threads_content_publish` are only valid through the Threads-specific OAuth, not through Facebook Login. They must NOT be included in the Facebook Login scope string or the OAuth dialog will reject them for developer accounts.
 
 | Scope | What it grants | PersonnaPress usage |
 |-------|---------------|---------------------|

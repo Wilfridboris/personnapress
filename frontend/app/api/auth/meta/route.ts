@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   authUrl.searchParams.set("state", state);
   authUrl.searchParams.set(
     "scope",
-    "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,pages_manage_posts,threads_basic,threads_content_publish"
+    "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,pages_manage_posts"
   );
 
   const response = NextResponse.redirect(authUrl.toString());
