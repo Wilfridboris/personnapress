@@ -19,6 +19,7 @@ import { FaqAccordion } from "./_components/FaqAccordion";
 import { PublicHeader } from "@/components/marketing/PublicHeader";
 import { PublicFooter } from "@/components/marketing/PublicFooter";
 import { EmailCaptureWidget } from "@/components/marketing/EmailCaptureWidget";
+import { PlatformIcon } from "@/components/ui/PlatformIcon";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.personnapress.com";
 
@@ -167,7 +168,12 @@ const WORKFLOW_STEPS = [
   },
 ];
 
-const PLATFORMS = ["WordPress", "Webflow", "X (Twitter)", "LinkedIn"];
+const PLATFORMS = [
+  { label: "WordPress",   platform: "wordpress" },
+  { label: "Webflow",     platform: "webflow" },
+  { label: "X (Twitter)", platform: "x" },
+  { label: "LinkedIn",    platform: "linkedin" },
+];
 
 const PERSONAS = [
   {
@@ -595,12 +601,13 @@ export default function LandingPage() {
             </h2>
           </header>
           <div className="flex flex-wrap gap-4">
-            {PLATFORMS.map((platform) => (
+            {PLATFORMS.map(({ label, platform }) => (
               <span
-                key={platform}
-                className="font-mono text-sm border border-ink px-5 py-3 hover:bg-ink hover:text-paper transition-colors cursor-default"
+                key={label}
+                className="inline-flex items-center gap-2 font-mono text-sm border border-ink px-5 py-3 hover:bg-ink hover:text-paper transition-colors cursor-default"
               >
-                {platform}
+                <PlatformIcon platform={platform} className="size-4" color="mono" aria-hidden="true" />
+                {label}
               </span>
             ))}
           </div>

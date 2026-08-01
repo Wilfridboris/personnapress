@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { campaignsApi, jobsApi, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
+import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import type { Campaign } from "@/lib/types";
 
 interface RetryPanelProps {
@@ -15,6 +16,18 @@ interface RetryPanelProps {
 
 const MAX_RETRIES = 3;
 const SYNTHETIC_KEYS = new Set(["general", "error"]);
+
+const PLATFORM_LABELS: Record<string, string> = {
+  wordpress: "WordPress",
+  "wordpress-com": "WordPress.com",
+  webflow: "Webflow",
+  x: "X",
+  linkedin: "LinkedIn",
+  github_pages: "GitHub Pages",
+  instagram: "Instagram",
+  facebook_page: "Facebook Page",
+  threads: "Threads",
+};
 
 export function RetryPanel({
   campaign,
@@ -72,9 +85,14 @@ export function RetryPanel({
           className="flex items-center justify-between py-2 border-b border-border last:border-0"
         >
           <div>
-            <p className="text-sm font-medium text-ink capitalize">
-              {SYNTHETIC_KEYS.has(platform) ? "Publishing error" : platform}
-            </p>
+            {SYNTHETIC_KEYS.has(platform) ? (
+              <p className="text-sm font-medium text-ink">Publishing error</p>
+            ) : (
+              <div className="flex items-center gap-2">
+                <PlatformIcon platform={platform} className="size-3.5 text-graphite shrink-0" color="mono" />
+                <p className="text-sm font-medium text-ink">{PLATFORM_LABELS[platform] ?? platform}</p>
+              </div>
+            )}
             {isSuccess ? (
               <p className="text-xs text-[#2E4F2E]">Published</p>
             ) : (
@@ -95,7 +113,7 @@ export function RetryPanel({
                   type="button"
                   onClick={() => handleRetry(platform)}
                   disabled={isRetrying[platform]}
-                  aria-label={`Retry publishing to ${platform}`}
+                  aria-label={`Retry publishing to ${PLATFORM_LABELS[platform] ?? platform}`}
                   className="px-3 py-1.5 border border-ink text-ink text-xs font-medium hover:bg-ink hover:text-white transition-colors rounded-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
                 >
                   {isRetrying[platform] ? (

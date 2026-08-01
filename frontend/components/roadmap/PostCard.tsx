@@ -2,24 +2,25 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { AtSign, BookOpen, ExternalLink, Share2, UploadCloud } from "lucide-react";
+import { ExternalLink, UploadCloud } from "lucide-react";
+import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import type { RoadmapCampaignSummary } from "@/lib/types";
 
 export function getPlatformInfo(campaign: RoadmapCampaignSummary): {
-  icon: React.ElementType;
   label: string;
   charLimit: number;
   postText: string | null;
+  platformKey: string;
 } {
   if (campaign.platform_hint === "blog_full") {
-    return { icon: BookOpen, label: "Blog", charLimit: 0, postText: campaign.blog_title };
+    return { label: "Blog", charLimit: 0, postText: campaign.blog_title, platformKey: "wordpress" };
   }
   if (campaign.platform_hint === "linkedin") {
-    return { icon: AtSign, label: "LinkedIn", charLimit: 1300, postText: campaign.linkedin_post };
+    return { label: "LinkedIn", charLimit: 1300, postText: campaign.linkedin_post, platformKey: "linkedin" };
   }
-  return { icon: Share2, label: "X", charLimit: 280, postText: campaign.x_post };
+  return { label: "X", charLimit: 280, postText: campaign.x_post, platformKey: "x" };
 }
 
 function formatScheduledTime(scheduledFor: string | null): string {
@@ -52,7 +53,7 @@ export function PostCard({
   onEdit,
   onUpdate,
 }: PostCardProps) {
-  const { icon: PlatformIcon, label: platformLabel, postText } = getPlatformInfo(campaign);
+  const { label: platformLabel, postText, platformKey } = getPlatformInfo(campaign);
   const timeLabel = formatScheduledTime(scheduledFor);
 
   return (
@@ -66,7 +67,7 @@ export function PostCard({
         {/* Platform chip + status badge — inline row, no absolute positioning */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
-            <PlatformIcon className="w-3.5 h-3.5 text-graphite shrink-0" aria-hidden="true" />
+            <PlatformIcon platform={platformKey} className="size-3.5 text-graphite shrink-0" color="mono" aria-hidden="true" />
             <span className="font-body text-xs text-graphite uppercase tracking-[0.08em] truncate">
               {platformLabel}
             </span>

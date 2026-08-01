@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { CopyrightYear } from "./CopyrightYear";
+import { PlatformIcon } from "@/components/ui/PlatformIcon";
 
 export function PublicFooter() {
   return (
@@ -61,10 +62,32 @@ export function PublicFooter() {
         </div>
 
         {/* Bottom bar */}
-        <div className="border-t border-border mt-8 pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="border-t border-border mt-8 pt-6 flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-3">
           <p className="font-mono text-xs text-graphite">
             &copy; <CopyrightYear /> PersonnaPress. All rights reserved.
           </p>
+          <nav aria-label="PersonnaPress social links" className="flex items-center gap-4">
+            <a href="https://www.facebook.com/personnapress/" target="_blank" rel="noopener noreferrer"
+               aria-label="PersonnaPress on Facebook"
+               className="text-graphite hover:opacity-70 transition-opacity duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2">
+              <PlatformIcon platform="facebook_page" className="size-5" color="brand" aria-hidden="true" />
+            </a>
+            <a href="#"
+               aria-label="PersonnaPress on X"
+               className="text-graphite hover:opacity-70 transition-opacity duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2">
+              <PlatformIcon platform="x" className="size-5" color="brand" aria-hidden="true" />
+            </a>
+            <a href="#"
+               aria-label="PersonnaPress on LinkedIn"
+               className="text-graphite hover:opacity-70 transition-opacity duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2">
+              <PlatformIcon platform="linkedin" className="size-5" color="brand" aria-hidden="true" />
+            </a>
+            <a href="#"
+               aria-label="PersonnaPress on Instagram"
+               className="text-graphite hover:opacity-70 transition-opacity duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2">
+              <PlatformIcon platform="instagram" className="size-5" color="brand" aria-hidden="true" />
+            </a>
+          </nav>
           <nav className="flex items-center gap-4" aria-label="Legal">
             <Link href="/terms" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Terms of Service</Link>
             <span className="font-mono text-xs text-graphite/40" aria-hidden="true">&middot;</span>

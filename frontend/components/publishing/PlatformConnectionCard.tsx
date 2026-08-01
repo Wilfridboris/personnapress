@@ -136,7 +136,7 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
       >
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <PlatformIcon platform={connection.platform} className="size-5 shrink-0" />
+            <PlatformIcon platform={connection.platform} className="size-5 shrink-0" color={connection.connected ? "brand" : "mono"} />
             <div>
               <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#111111]">{label}</p>
               <span aria-live="polite">

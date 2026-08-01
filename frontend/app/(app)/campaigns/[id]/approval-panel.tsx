@@ -3,7 +3,8 @@
 import { useState, useRef, useCallback, useEffect, RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { GitBranch, Database, Loader2, CheckCircle2, XCircle, RefreshCw, Check, Globe, Layout, AtSign, Share2, Camera, Users, MessageSquare } from "lucide-react";
+import { GitBranch, Database, Loader2, CheckCircle2, XCircle, RefreshCw, Check } from "lucide-react";
+import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { useQuery } from "@tanstack/react-query";
 import { campaignsApi, clientsApi, jobsApi, publishingApi, fetchAPI, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
@@ -106,20 +107,6 @@ function buildFrontMatterPreview(
   return `---\ntitle: "${safe}"\ndate: ${isoDate}\ndescription: "${safeDesc}"${tagsLine}\n---`;
 }
 
-type LucideIcon = typeof Globe;
-
-const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
-  wordpress: Globe,
-  "wordpress-com": Globe,
-  webflow: Layout,
-  x: AtSign,
-  linkedin: Share2,
-  instagram: Camera,
-  facebook_page: Users,
-  threads: MessageSquare,
-  headless: Database,
-};
-
 const PLATFORM_LABEL_MAP: Record<string, string> = {
   wordpress: "WordPress",
   "wordpress-com": "WordPress.com",
@@ -145,7 +132,6 @@ function DestinationChip({
   disabled?: boolean;
   label?: string;
 }) {
-  const Icon = PLATFORM_ICON_MAP[platform] ?? Globe;
   const label = labelOverride ?? PLATFORM_LABEL_MAP[platform] ?? platform;
   return (
     <button
@@ -163,7 +149,7 @@ function DestinationChip({
       )}
     >
       {selected && <Check className="size-3" aria-hidden="true" />}
-      <Icon className="size-3.5" aria-hidden="true" />
+      <PlatformIcon platform={platform} className="size-3.5" color={selected ? "brand" : "mono"} aria-hidden="true" />
       {label}
     </button>
   );

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Lock } from "lucide-react";
 import { publishingApi, clientsApi } from "@/lib/api";
+import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { PlatformConnectionCard, PlatformConnectionCardSkeleton } from "./PlatformConnectionCard";
 import { DeliveryTokensCard } from "./DeliveryTokensCard";
@@ -144,6 +145,11 @@ function MetaPlatformsSection({ clientId, enabled }: MetaPlatformsSectionProps) 
     <div className="bg-white border border-[#E5E5E5] rounded-none p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
+          <div className="flex items-center gap-1.5 mb-1">
+            <PlatformIcon platform="instagram" className="size-4 text-graphite" color="mono" aria-hidden="true" />
+            <PlatformIcon platform="facebook_page" className="size-4 text-graphite" color="mono" aria-hidden="true" />
+            <PlatformIcon platform="threads" className="size-4 text-graphite" color="mono" aria-hidden="true" />
+          </div>
           <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#111111]">
             Meta Platforms
           </p>

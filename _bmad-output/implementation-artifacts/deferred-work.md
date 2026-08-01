@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 11-10-true-brand-platform-icons (2026-08-01)
+
+- PLATFORM_LABELS / PLATFORM_LABEL_MAP duplicated across approval-panel.tsx, RetryPanel.tsx, and PostCard.tsx — extract to a shared constants file. [frontend/components/publishing/RetryPanel.tsx, frontend/app/(app)/campaigns/[id]/approval-panel.tsx, frontend/components/roadmap/PostCard.tsx]
+- Webflow SVG uses viewBox="0 0 24 24" while all other brand SVGs use viewBox="0 0 32 32" — minor optical weight difference at small sizes; constrained by SimpleIcons source format. [frontend/components/ui/PlatformIcon.tsx:62]
+- SYNTHETIC_KEYS set in RetryPanel.tsx should be kept exhaustive; any unknown synthetic error key will fall into the icon+label branch instead of showing "Publishing error". [frontend/components/publishing/RetryPanel.tsx:17]
+- rounded-full on loading spinner in RetryPanel.tsx violates the project rounded-none rule — pre-existing, intentionally circular for a spinner. [frontend/components/publishing/RetryPanel.tsx:121]
+
 ## Deferred from: code review of 21-2/21-3/21-4 Meta publishing stories (2026-07-31)
 
 - Code duplication: all three platform branches (instagram, facebook_page, threads) duplicated identically between `dispatch_publish_for_platform` and `dispatch_publish`. Matches existing pattern for other platforms; extract shared helper in future refactor. [backend/app/services/publishing.py]
