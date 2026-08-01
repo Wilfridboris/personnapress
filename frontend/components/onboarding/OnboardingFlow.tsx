@@ -570,7 +570,7 @@ export function OnboardingFlow() {
               }
             }}
             onKeyDown={handleBrainDumpKeyDown}
-            placeholder={`e.g. "I ran a 90-day test comparing 3 LinkedIn posting strategies -- daily tips vs. 3x storytelling vs. 2x case studies. Case studies drove 4x more DMs. Most people post daily tips because it feels safe. Here's what I found and why I switched..."`}
+            placeholder={`e.g. "I ran a 90-day test comparing 3 LinkedIn posting strategies, daily tips vs. 3x storytelling vs. 2x case studies. Case studies drove 4x more DMs. Most people post daily tips because it feels safe. Here's what I found and why I switched..."`}
             className="min-h-[200px] border-b border-[#E5E5E5] focus:border-b-2 focus:border-[#111111]"
             aria-describedby="brain-dump-count"
             maxLength={MAX_BRAIN_DUMP}

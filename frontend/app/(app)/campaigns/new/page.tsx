@@ -305,7 +305,7 @@ export default function NewCampaignPage() {
             <span className="flex flex-col gap-0.5">
               <span className="font-mono text-sm text-ink">Social post only</span>
               <span id="ct-social-desc" className="font-mono text-xs text-graphite">
-                X and LinkedIn posts only -- no blog or featured image
+                X and LinkedIn posts only, no blog or featured image
               </span>
             </span>
           </label>
@@ -327,7 +327,7 @@ export default function NewCampaignPage() {
           value={brainDump}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder={`e.g. "I ran a 90-day test comparing 3 LinkedIn posting strategies -- daily tips vs. 3x storytelling vs. 2x case studies. Case studies drove 4x more DMs. Most people post daily tips because it feels safe. Here's what I found and why I switched..."`}
+          placeholder={`e.g. "I ran a 90-day test comparing 3 LinkedIn posting strategies, daily tips vs. 3x storytelling vs. 2x case studies. Case studies drove 4x more DMs. Most people post daily tips because it feels safe. Here's what I found and why I switched..."`}
           className={cn(
             "w-full bg-transparent resize-none font-mono text-sm text-ink leading-[1.7]",
             "border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink",
