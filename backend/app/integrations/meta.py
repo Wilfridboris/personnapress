@@ -73,6 +73,36 @@ async def exchange_short_lived_for_long_lived_token(short_lived_token: str) -> s
     return token
 
 
+async def renew_long_lived_user_token(token: str) -> str:
+    """Renew an expiring Facebook long-lived user token (valid 60 days).
+
+    Page-level tokens derived from long-lived user tokens do NOT expire,
+    so this function is not used in the current publish flow. It is provided
+    for future use if user-level token storage is added.
+    """
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            f"{META_GRAPH_BASE}/oauth/access_token",
+            params={
+                "grant_type": "fb_exchange_token",
+                "client_id": settings.META_APP_ID,
+                "client_secret": settings.META_APP_SECRET,
+                "fb_exchange_token": token,
+            },
+        )
+    if resp.status_code != 200:
+        try:
+            body = resp.json() if resp.content else {}
+            detail = body.get("error", {}).get("message") or "Facebook token renewal failed"
+        except Exception:
+            detail = resp.text[:200] or "Facebook token renewal failed"
+        raise PlatformError("Meta", resp.status_code, detail)
+    new_token = resp.json().get("access_token")
+    if not new_token:
+        raise PlatformError("Meta", 200, "Facebook token renewal returned no access_token")
+    return new_token
+
+
 async def discover_accounts(long_lived_user_token: str) -> list[dict]:
     """Discover Facebook Pages and linked Instagram Business Accounts.
 

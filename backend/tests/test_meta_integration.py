@@ -1294,3 +1294,240 @@ async def test_threads_callback_empty_user_id_raises_422():
 
     assert exc_info.value.status_code == 422
     assert exc_info.value.detail["error"]["code"] == "USER_FETCH_FAILED"
+
+
+# ── threads_auth.py: renew_long_lived_token ───────────────────────────────────
+
+async def test_renew_long_lived_token_success():
+    """renew_long_lived_token returns new token string on 200."""
+    from app.integrations.threads_auth import renew_long_lived_token
+
+    resp = _make_httpx_response(200, {"access_token": "renewed_tok_xyz", "token_type": "bearer"})
+
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=resp)
+        mock_cls.return_value = mock_client
+
+        result = await renew_long_lived_token("existing_long_lived_tok")
+
+    assert result == "renewed_tok_xyz"
+
+
+async def test_renew_long_lived_token_non_200():
+    """renew_long_lived_token raises PlatformError("threads", 400, ...) on non-200."""
+    from app.integrations.threads_auth import renew_long_lived_token
+    from app.core.exceptions import PlatformError
+
+    resp = _make_httpx_response(400, {"error": {"message": "Invalid OAuth access token"}})
+
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=resp)
+        mock_cls.return_value = mock_client
+
+        with pytest.raises(PlatformError) as exc_info:
+            await renew_long_lived_token("bad_tok")
+
+    assert exc_info.value.platform == "threads"
+    assert exc_info.value.status_code == 400
+    assert "Invalid OAuth access token" in exc_info.value.message
+
+
+async def test_renew_long_lived_token_no_access_token():
+    """renew_long_lived_token raises PlatformError("threads", 200, ...) when body has no access_token."""
+    from app.integrations.threads_auth import renew_long_lived_token
+    from app.core.exceptions import PlatformError
+
+    resp = _make_httpx_response(200, {})
+
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=resp)
+        mock_cls.return_value = mock_client
+
+        with pytest.raises(PlatformError) as exc_info:
+            await renew_long_lived_token("some_tok")
+
+    assert exc_info.value.platform == "threads"
+    assert exc_info.value.status_code == 200
+    assert "no access_token" in exc_info.value.message
+
+
+# ── publishing.py: _refresh_threads_token_if_needed ──────────────────────────
+
+async def test_refresh_threads_token_fresh():
+    """_refresh_threads_token_if_needed returns cred unchanged when token is 10 days old."""
+    from app.services.publishing import _refresh_threads_token_if_needed
+    from datetime import datetime, timezone, timedelta
+
+    acquired = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+    cred = {"user_access_token": "tok", "token_acquired_at": acquired}
+    db = AsyncMock()
+    client_id = uuid.uuid4()
+
+    with patch("app.services.publishing.threads_auth_integration.renew_long_lived_token") as mock_renew:
+        result = await _refresh_threads_token_if_needed(cred, db, client_id)
+
+    assert result is cred
+    mock_renew.assert_not_called()
+
+
+async def test_refresh_threads_token_stale():
+    """_refresh_threads_token_if_needed renews, updates cred, and calls upsert_connection when 55 days old."""
+    from app.services.publishing import _refresh_threads_token_if_needed
+    from datetime import datetime, timezone, timedelta
+
+    acquired = (datetime.now(timezone.utc) - timedelta(days=55)).isoformat()
+    cred = {
+        "threads_user_id": "th_111",
+        "username": "mybrand",
+        "user_access_token": "old_tok",
+        "token_acquired_at": acquired,
+    }
+    db = AsyncMock()
+    client_id = uuid.uuid4()
+
+    with (
+        patch("app.services.publishing.threads_auth_integration.renew_long_lived_token",
+              AsyncMock(return_value="new_tok")) as mock_renew,
+        patch("app.services.publishing.upsert_connection", AsyncMock()) as mock_upsert,
+    ):
+        result = await _refresh_threads_token_if_needed(cred, db, client_id)
+
+    mock_renew.assert_called_once_with("old_tok")
+    mock_upsert.assert_called_once()
+    assert result["user_access_token"] == "new_tok"
+    assert result["token_acquired_at"] != acquired
+
+
+async def test_refresh_threads_token_no_timestamp():
+    """_refresh_threads_token_if_needed returns cred unchanged when token_acquired_at is absent."""
+    from app.services.publishing import _refresh_threads_token_if_needed
+
+    cred = {"threads_user_id": "th_111", "user_access_token": "old_tok"}
+    db = AsyncMock()
+    client_id = uuid.uuid4()
+
+    with patch("app.services.publishing.threads_auth_integration.renew_long_lived_token") as mock_renew:
+        result = await _refresh_threads_token_if_needed(cred, db, client_id)
+
+    assert result is cred
+    mock_renew.assert_not_called()
+
+
+async def test_refresh_threads_token_renewal_failure():
+    """_refresh_threads_token_if_needed is non-fatal: returns original cred on PlatformError, logs warning."""
+    from app.services.publishing import _refresh_threads_token_if_needed
+    from app.core.exceptions import PlatformError
+    from datetime import datetime, timezone, timedelta
+
+    acquired = (datetime.now(timezone.utc) - timedelta(days=55)).isoformat()
+    cred = {"user_access_token": "old_tok", "token_acquired_at": acquired}
+    db = AsyncMock()
+    client_id = uuid.uuid4()
+
+    with (
+        patch("app.services.publishing.threads_auth_integration.renew_long_lived_token",
+              AsyncMock(side_effect=PlatformError("threads", 400, "Token expired"))),
+        patch("app.services.publishing.upsert_connection", AsyncMock()) as mock_upsert,
+        patch("app.services.publishing.logger") as mock_logger,
+    ):
+        result = await _refresh_threads_token_if_needed(cred, db, client_id)
+
+    assert result is cred
+    mock_upsert.assert_not_called()
+    mock_logger.warning.assert_called_once()
+
+
+async def test_refresh_threads_token_timeout():
+    """_refresh_threads_token_if_needed is non-fatal: returns original cred on TimeoutException."""
+    from app.services.publishing import _refresh_threads_token_if_needed
+    from datetime import datetime, timezone, timedelta
+    import httpx
+
+    acquired = (datetime.now(timezone.utc) - timedelta(days=55)).isoformat()
+    cred = {"user_access_token": "old_tok", "token_acquired_at": acquired}
+    db = AsyncMock()
+    client_id = uuid.uuid4()
+
+    with (
+        patch("app.services.publishing.threads_auth_integration.renew_long_lived_token",
+              AsyncMock(side_effect=httpx.TimeoutException("Request timed out"))),
+        patch("app.services.publishing.upsert_connection", AsyncMock()) as mock_upsert,
+        patch("app.services.publishing.logger") as mock_logger,
+    ):
+        result = await _refresh_threads_token_if_needed(cred, db, client_id)
+
+    assert result is cred
+    mock_upsert.assert_not_called()
+    mock_logger.warning.assert_called_once()
+
+
+# ── meta.py: renew_long_lived_user_token ─────────────────────────────────────
+
+async def test_renew_long_lived_user_token_success():
+    """renew_long_lived_user_token returns new Facebook user token on 200."""
+    from app.integrations.meta import renew_long_lived_user_token
+
+    resp = _make_httpx_response(200, {"access_token": "renewed_fb_tok", "token_type": "bearer"})
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=resp)
+        mock_cls.return_value = mock_client
+
+        result = await renew_long_lived_user_token("existing_fb_long_lived_tok")
+
+    assert result == "renewed_fb_tok"
+
+
+async def test_renew_long_lived_user_token_failure():
+    """renew_long_lived_user_token raises PlatformError("Meta", 401, ...) on 401."""
+    from app.integrations.meta import renew_long_lived_user_token
+    from app.core.exceptions import PlatformError
+
+    resp = _make_httpx_response(401, {"error": {"message": "Invalid OAuth access token"}})
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=resp)
+        mock_cls.return_value = mock_client
+
+        with pytest.raises(PlatformError) as exc_info:
+            await renew_long_lived_user_token("expired_fb_tok")
+
+    assert exc_info.value.platform == "Meta"
+    assert exc_info.value.status_code == 401
+
+
+async def test_renew_long_lived_user_token_no_access_token():
+    """renew_long_lived_user_token raises PlatformError("Meta", 200, ...) when body has no access_token."""
+    from app.integrations.meta import renew_long_lived_user_token
+    from app.core.exceptions import PlatformError
+
+    resp = _make_httpx_response(200, {})
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=resp)
+        mock_cls.return_value = mock_client
+
+        with pytest.raises(PlatformError) as exc_info:
+            await renew_long_lived_user_token("some_fb_tok")
+
+    assert exc_info.value.platform == "Meta"
+    assert exc_info.value.status_code == 200
+    assert "no access_token" in exc_info.value.message

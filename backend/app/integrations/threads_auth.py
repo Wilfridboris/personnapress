@@ -60,6 +60,31 @@ async def exchange_short_lived_for_long_lived_token(short_lived_token: str) -> s
     return token
 
 
+async def renew_long_lived_token(token: str) -> str:
+    """Renew an expiring Threads long-lived token. Returns new token string."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            f"{THREADS_AUTH_BASE}/access_token",
+            params={
+                "grant_type": "th_exchange_token",
+                "client_id": settings.THREADS_APP_ID,
+                "client_secret": settings.THREADS_APP_SECRET,
+                "access_token": token,
+            },
+        )
+    if resp.status_code != 200:
+        try:
+            body = resp.json() if resp.content else {}
+            detail = body.get("error", {}).get("message") or "Threads token renewal failed"
+        except Exception:
+            detail = resp.text[:200] or "Threads token renewal failed"
+        raise PlatformError("threads", resp.status_code, detail)
+    new_token = resp.json().get("access_token")
+    if not new_token:
+        raise PlatformError("threads", 200, "Threads token renewal returned no access_token")
+    return new_token
+
+
 async def get_threads_user(long_lived_token: str) -> dict:
     """Fetch Threads user info. Returns dict with 'id' and 'username' keys."""
     async with httpx.AsyncClient(timeout=10.0) as client:

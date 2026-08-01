@@ -23,6 +23,7 @@ from bs4 import BeautifulSoup
 from app.integrations import github as github_integration
 from app.integrations import linkedin as linkedin_integration
 from app.integrations import meta as meta_integration
+from app.integrations import threads_auth as threads_auth_integration
 from app.integrations import twitter as twitter_integration
 from app.integrations import webflow as webflow_integration
 from app.integrations import wordpress as wordpress_integration
@@ -61,6 +62,41 @@ async def _refresh_x_token_if_needed(cred: dict, db: AsyncSession, client_id: UU
     encrypted = encrypt_credential(json.dumps(updated))
     await upsert_connection(db, client_id, "x", encrypted)
     return updated
+
+
+async def _refresh_threads_token_if_needed(cred: dict, db: AsyncSession, client_id: UUID) -> dict:
+    """Renew Threads long-lived token if within 7 days of 60-day expiry.
+
+    Token is renewed proactively when >= 53 days old (60 - 7 buffer).
+    Non-fatal on failure -- returns original cred so publish attempt still proceeds.
+    """
+    token_acquired_at = cred.get("token_acquired_at")
+    if not token_acquired_at:
+        return cred
+    try:
+        acquired = datetime.fromisoformat(token_acquired_at)
+        days_old = (datetime.now(timezone.utc) - acquired).days
+        if days_old < 53:
+            return cred
+    except (ValueError, TypeError):
+        return cred
+
+    user_access_token = cred.get("user_access_token")
+    if not user_access_token:
+        return cred
+
+    try:
+        new_token = await threads_auth_integration.renew_long_lived_token(user_access_token)
+        updated = dict(cred)
+        updated["user_access_token"] = new_token
+        updated["token_acquired_at"] = datetime.now(timezone.utc).isoformat()
+        encrypted = encrypt_credential(json.dumps(updated))
+        await upsert_connection(db, client_id, "threads", encrypted)
+        logger.info("Threads token renewed for client %s", client_id)
+        return updated
+    except Exception as exc:
+        logger.warning("Threads token renewal failed for client %s: %s", client_id, exc)
+        return cred
 
 
 async def _refresh_token_if_needed(cred: dict, db: AsyncSession, client_id: UUID) -> dict:
@@ -573,6 +609,7 @@ async def dispatch_publish_for_platform(
                 campaign.image_url or None,
             )
         elif platform == "threads":
+            creds = await _refresh_threads_token_if_needed(creds, db, campaign.client_id)
             if not (campaign.x_post or "").strip():
                 logger.debug("dispatch_publish_for_platform: skipping threads (no x_post) campaign=%s", campaign_id)
                 return {platform: "skipped"}
@@ -740,6 +777,7 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                 )
 
             elif platform == "threads":
+                creds = await _refresh_threads_token_if_needed(creds, db, campaign.client_id)
                 if not (campaign.x_post or "").strip():
                     logger.debug("dispatch_publish: skipping threads (no x_post) campaign=%s", campaign_id)
                     results[platform] = "skipped"
