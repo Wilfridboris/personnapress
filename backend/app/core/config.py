@@ -63,5 +63,9 @@ class Settings(BaseSettings):
     META_APP_ID: str = ""
     META_APP_SECRET: str = ""
 
+    # Threads App (separate credentials from Meta Business App — threads.net developer portal)
+    THREADS_APP_ID: str = ""
+    THREADS_APP_SECRET: str = ""
+
 
 settings = Settings()

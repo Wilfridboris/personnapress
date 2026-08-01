@@ -49,6 +49,7 @@ export function PlatformConnectionsClient({ clientId }: Props) {
         success === "wordpress-com" ? "WordPress.com connected." :
         success === "github" ? "GitHub connected. Select a repository to publish to." :
         success === "meta" ? "Meta platforms connected." :
+        success === "threads" ? "Threads connected." :
         `Connected to ${success}.`;
       addToast(message, "success");
     }
@@ -123,7 +124,11 @@ export function PlatformConnectionsClient({ clientId }: Props) {
 
           {/* Meta connect / locked section -- shown when not all Meta platforms are connected */}
           {!hasAllMetaConnected && (
-            <MetaPlatformsSection clientId={clientId} enabled={META_PUBLISHING_ENABLED} />
+            <MetaPlatformsSection
+              clientId={clientId}
+              enabled={META_PUBLISHING_ENABLED}
+              connectedItems={connectedItems}
+            />
           )}
 
           <DeliveryTokensCard clientId={clientId} />
@@ -138,35 +143,60 @@ export function PlatformConnectionsClient({ clientId }: Props) {
 interface MetaPlatformsSectionProps {
   clientId: string;
   enabled: boolean;
+  connectedItems: Array<{ platform: string; connected: boolean }>;
 }
 
-function MetaPlatformsSection({ clientId, enabled }: MetaPlatformsSectionProps) {
+function MetaPlatformsSection({ clientId, enabled, connectedItems }: MetaPlatformsSectionProps) {
+  const hasFBIG = connectedItems.some(
+    (c) => (c.platform === "instagram" || c.platform === "facebook_page") && c.connected
+  );
+  const hasThreads = connectedItems.some(
+    (c) => c.platform === "threads" && c.connected
+  );
+
   return (
     <div className="bg-white border border-[#E5E5E5] rounded-none p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-1.5 mb-1">
-            <PlatformIcon platform="instagram" className="size-4 text-graphite" color="mono" aria-hidden="true" />
-            <PlatformIcon platform="facebook_page" className="size-4 text-graphite" color="mono" aria-hidden="true" />
+            {!hasFBIG && (
+              <>
+                <PlatformIcon platform="instagram" className="size-4 text-graphite" color="mono" aria-hidden="true" />
+                <PlatformIcon platform="facebook_page" className="size-4 text-graphite" color="mono" aria-hidden="true" />
+              </>
+            )}
             <PlatformIcon platform="threads" className="size-4 text-graphite" color="mono" aria-hidden="true" />
           </div>
           <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#111111]">
-            Meta Platforms
+            {hasFBIG ? "Threads" : "Meta Platforms"}
           </p>
           <p className="text-xs text-[#555555] mt-0.5">
-            Instagram, Facebook Page, and Threads
+            {hasFBIG ? "Connect your Threads account" : "Instagram, Facebook Page, and Threads"}
           </p>
         </div>
 
         <div className="shrink-0">
           {enabled ? (
-            <a
-              href={`/api/auth/meta?client_id=${clientId}`}
-              className="inline-flex items-center justify-center px-5 min-h-[44px] border border-[#111111] text-[#111111] text-xs font-medium rounded-none hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
-              aria-label="Connect Meta Platforms"
-            >
-              Connect Meta Platforms
-            </a>
+            <div className="flex flex-col gap-2">
+              {!hasFBIG && (
+                <a
+                  href={`/api/auth/meta?client_id=${clientId}`}
+                  className="inline-flex items-center justify-center px-5 min-h-[44px] border border-[#111111] text-[#111111] text-xs font-medium rounded-none hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
+                  aria-label="Connect Facebook and Instagram"
+                >
+                  Connect Facebook &amp; Instagram
+                </a>
+              )}
+              {!hasThreads && (
+                <a
+                  href={`/api/auth/threads?client_id=${clientId}`}
+                  className="inline-flex items-center justify-center px-5 min-h-[44px] border border-[#111111] text-[#111111] text-xs font-medium rounded-none hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
+                  aria-label="Connect Threads"
+                >
+                  Connect Threads
+                </a>
+              )}
+            </div>
           ) : (
             <div className="relative group">
               <button

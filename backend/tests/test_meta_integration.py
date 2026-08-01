@@ -308,7 +308,7 @@ async def test_meta_callback_no_instagram_only_facebook():
 
 
 async def test_meta_threads_discovery_present_upserted():
-    """meta_oauth_callback upserts threads when threads_user_id is found."""
+    """meta_oauth_callback no longer upserts threads -- Threads has its own OAuth flow."""
     from app.routers.publishing import meta_oauth_callback, OAuthCallbackRequest
 
     user_id = uuid.uuid4()
@@ -332,8 +332,6 @@ async def test_meta_threads_discovery_present_upserted():
               AsyncMock(return_value="long_token")),
         patch("app.routers.publishing.meta_integration.discover_accounts",
               AsyncMock(return_value=pages_data)),
-        patch("app.routers.publishing.meta_integration.discover_threads_user_id",
-              AsyncMock(return_value="threads_444")),
         patch("app.routers.publishing.upsert_connection", AsyncMock()) as mock_upsert,
     ):
         result = await meta_oauth_callback(
@@ -343,9 +341,11 @@ async def test_meta_threads_discovery_present_upserted():
             db=db,
         )
 
-    assert "threads" in result["connected_platforms"]
+    assert "threads" not in result["connected_platforms"]
+    assert "instagram" in result["connected_platforms"]
+    assert "facebook_page" in result["connected_platforms"]
     platforms_upserted = [call.args[2] for call in mock_upsert.call_args_list]
-    assert "threads" in platforms_upserted
+    assert "threads" not in platforms_upserted
 
 
 async def test_meta_callback_csrf_ownership_wrong_user():
@@ -490,8 +490,8 @@ async def test_meta_callback_empty_pages_raises_422():
     mock_upsert.assert_not_called()
 
 
-async def test_meta_callback_multiple_pages_threads_discovery_uses_first_instagram():
-    """meta_oauth_callback with multiple pages calls Threads discovery with first instagram user ID."""
+async def test_meta_callback_multiple_pages_stores_first_instagram_only():
+    """meta_oauth_callback with multiple pages stores only the first Instagram account."""
     from app.routers.publishing import meta_oauth_callback, OAuthCallbackRequest
 
     user_id = uuid.uuid4()
@@ -513,8 +513,6 @@ async def test_meta_callback_multiple_pages_threads_discovery_uses_first_instagr
         },
     ]
 
-    threads_discovery_mock = AsyncMock(return_value="threads_555")
-
     with (
         patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
         patch("app.routers.publishing.meta_integration.exchange_code_for_short_lived_token",
@@ -523,9 +521,7 @@ async def test_meta_callback_multiple_pages_threads_discovery_uses_first_instagr
               AsyncMock(return_value="long_token")),
         patch("app.routers.publishing.meta_integration.discover_accounts",
               AsyncMock(return_value=pages_data)),
-        patch("app.routers.publishing.meta_integration.discover_threads_user_id",
-              threads_discovery_mock),
-        patch("app.routers.publishing.upsert_connection", AsyncMock()),
+        patch("app.routers.publishing.upsert_connection", AsyncMock()) as mock_upsert,
     ):
         result = await meta_oauth_callback(
             client_id=client.id,
@@ -534,9 +530,13 @@ async def test_meta_callback_multiple_pages_threads_discovery_uses_first_instagr
             db=db,
         )
 
-    # Threads discovery must be called only with the FIRST instagram user's ID
-    threads_discovery_mock.assert_called_once_with("ig_222", "long_token")
-    assert "threads" in result["connected_platforms"]
+    # Only instagram (first) and facebook_page platforms are returned; threads has its own OAuth
+    assert "instagram" in result["connected_platforms"]
+    assert "facebook_page" in result["connected_platforms"]
+    assert "threads" not in result["connected_platforms"]
+    # instagram upserted exactly once (only first page's IG account)
+    platforms_upserted = [call.args[2] for call in mock_upsert.call_args_list]
+    assert platforms_upserted.count("instagram") == 1
 
 
 # ── _extract_identifier: Meta platforms ──────────────────────────────────────
@@ -578,7 +578,7 @@ async def test_publish_instagram_success():
     status_finished = _make_httpx_response(200, {"status_code": "FINISHED"})
     publish_resp = _make_httpx_response(200, {"id": "media_xyz"})
 
-    with patch("httpx.AsyncClient") as mock_cls:
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -604,7 +604,7 @@ async def test_publish_instagram_container_error():
     container_resp = _make_httpx_response(200, {"id": "container_abc"})
     status_error = _make_httpx_response(200, {"status_code": "ERROR"})
 
-    with patch("httpx.AsyncClient") as mock_cls:
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -651,7 +651,7 @@ async def test_publish_instagram_rate_limit():
     status_finished = _make_httpx_response(200, {"status_code": "FINISHED"})
     rate_limit_resp = _make_httpx_response(429, {"error": {"message": "Application request limit reached"}})
 
-    with patch("httpx.AsyncClient") as mock_cls:
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -683,7 +683,7 @@ async def test_publish_instagram_caption_truncated_at_2200():
             return publish_resp
         return container_resp
 
-    with patch("httpx.AsyncClient") as mock_cls:
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -758,7 +758,7 @@ async def test_publish_facebook_page_success():
         captured["data"] = data
         return post_resp
 
-    with patch("httpx.AsyncClient") as mock_cls:
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -784,7 +784,7 @@ async def test_publish_facebook_page_with_image():
         captured["data"] = data
         return post_resp
 
-    with patch("httpx.AsyncClient") as mock_cls:
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -807,7 +807,7 @@ async def test_publish_facebook_page_no_image():
         captured["data"] = data
         return post_resp
 
-    with patch("httpx.AsyncClient") as mock_cls:
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -826,7 +826,7 @@ async def test_publish_facebook_page_401():
 
     error_resp = _make_httpx_response(401, {"error": {"message": "Invalid OAuth access token"}})
 
-    with patch("httpx.AsyncClient") as mock_cls:
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -1095,7 +1095,7 @@ async def test_publish_threads_container_no_id():
 
     no_id_resp = _make_httpx_response(200, {})
 
-    with patch("httpx.AsyncClient") as mock_cls:
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -1107,3 +1107,190 @@ async def test_publish_threads_container_no_id():
 
     assert exc_info.value.status_code == 200
     assert "no id" in exc_info.value.message
+
+
+# ── threads_auth.py ───────────────────────────────────────────────────────────
+
+async def test_threads_auth_exchange_code_success():
+    """exchange_code_for_short_lived_token returns access_token on 200."""
+    from app.integrations.threads_auth import exchange_code_for_short_lived_token
+
+    resp = _make_httpx_response(200, {"access_token": "short_tok_abc"})
+
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=resp)
+        mock_cls.return_value = mock_client
+
+        result = await exchange_code_for_short_lived_token("auth_code", "https://example.com/callback")
+
+    assert result == "short_tok_abc"
+
+
+async def test_threads_auth_exchange_code_non_200_raises():
+    """exchange_code_for_short_lived_token raises PlatformError on non-200."""
+    from app.integrations.threads_auth import exchange_code_for_short_lived_token
+    from app.core.exceptions import PlatformError
+
+    resp = _make_httpx_response(400, {"error_message": "Invalid code"})
+
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=resp)
+        mock_cls.return_value = mock_client
+
+        with pytest.raises(PlatformError) as exc_info:
+            await exchange_code_for_short_lived_token("bad_code", "https://example.com/callback")
+
+    assert exc_info.value.status_code == 400
+
+
+async def test_threads_auth_exchange_long_lived_success():
+    """exchange_short_lived_for_long_lived_token returns access_token on 200."""
+    from app.integrations.threads_auth import exchange_short_lived_for_long_lived_token
+
+    resp = _make_httpx_response(200, {"access_token": "long_tok_xyz"})
+
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=resp)
+        mock_cls.return_value = mock_client
+
+        result = await exchange_short_lived_for_long_lived_token("short_tok")
+
+    assert result == "long_tok_xyz"
+
+
+async def test_threads_auth_get_user_success():
+    """get_threads_user returns id and username on 200."""
+    from app.integrations.threads_auth import get_threads_user
+
+    resp = _make_httpx_response(200, {"id": "12345", "username": "mybrand"})
+
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=resp)
+        mock_cls.return_value = mock_client
+
+        result = await get_threads_user("long_tok")
+
+    assert result.get("id") == "12345"
+    assert result.get("username") == "mybrand"
+
+
+async def test_threads_auth_get_user_non_200_raises():
+    """get_threads_user raises PlatformError on non-200."""
+    from app.integrations.threads_auth import get_threads_user
+    from app.core.exceptions import PlatformError
+
+    resp = _make_httpx_response(401, {"error": {"message": "Invalid token"}})
+
+    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=resp)
+        mock_cls.return_value = mock_client
+
+        with pytest.raises(PlatformError) as exc_info:
+            await get_threads_user("bad_tok")
+
+    assert exc_info.value.status_code == 401
+
+
+# ── threads_oauth_callback endpoint ──────────────────────────────────────────
+
+async def test_threads_callback_success():
+    """threads_oauth_callback stores credentials and returns connected_platforms=['threads']."""
+    from app.routers.publishing import threads_oauth_callback, OAuthCallbackRequest
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.threads_auth.exchange_code_for_short_lived_token",
+              AsyncMock(return_value="short_tok")),
+        patch("app.routers.publishing.threads_auth.exchange_short_lived_for_long_lived_token",
+              AsyncMock(return_value="long_tok")),
+        patch("app.routers.publishing.threads_auth.get_threads_user",
+              AsyncMock(return_value={"id": "th_111", "username": "mybrand"})),
+        patch("app.routers.publishing.upsert_connection", AsyncMock()) as mock_upsert,
+    ):
+        result = await threads_oauth_callback(
+            client_id=client.id,
+            body=OAuthCallbackRequest(code="auth_code"),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result == {"connected_platforms": ["threads"]}
+    mock_upsert.assert_called_once()
+    assert mock_upsert.call_args.args[2] == "threads"
+    # 4th arg is encrypted credential bytes -- verify it's non-empty
+    assert mock_upsert.call_args.args[3]
+
+
+async def test_threads_callback_token_exchange_failure_raises_400():
+    """threads_oauth_callback raises 400 when short-lived token exchange fails."""
+    from app.routers.publishing import threads_oauth_callback, OAuthCallbackRequest
+    from app.core.exceptions import PlatformError
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.threads_auth.exchange_code_for_short_lived_token",
+              AsyncMock(side_effect=PlatformError("threads", 400, "Invalid code"))),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await threads_oauth_callback(
+                client_id=client.id,
+                body=OAuthCallbackRequest(code="bad_code"),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["error"]["code"] == "TOKEN_EXCHANGE_FAILED"
+
+
+async def test_threads_callback_empty_user_id_raises_422():
+    """threads_oauth_callback raises 422 when Threads user ID is empty."""
+    from app.routers.publishing import threads_oauth_callback, OAuthCallbackRequest
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.threads_auth.exchange_code_for_short_lived_token",
+              AsyncMock(return_value="short_tok")),
+        patch("app.routers.publishing.threads_auth.exchange_short_lived_for_long_lived_token",
+              AsyncMock(return_value="long_tok")),
+        patch("app.routers.publishing.threads_auth.get_threads_user",
+              AsyncMock(return_value={"id": "", "username": ""})),
+        patch("app.routers.publishing.upsert_connection", AsyncMock()),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await threads_oauth_callback(
+                client_id=client.id,
+                body=OAuthCallbackRequest(code="auth_code"),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["error"]["code"] == "USER_FETCH_FAILED"
