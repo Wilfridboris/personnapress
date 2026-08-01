@@ -4,7 +4,7 @@ baseline_commit: 3a6310c
 
 # Story 21.5: Facebook Page Picker for Multi-Page Meta Accounts
 
-Status: review
+Status: done
 
 ## Story
 
@@ -863,6 +863,13 @@ All 8 required tests pass (64 total in test_meta_integration.py). No regressions
 
 - 2026-08-01: Implemented Story 21.5 -- Facebook Page Picker for multi-page Meta accounts. Added meta_pending platform enum value (migration + models.py), two-phase OAuth flow in publishing.py (multi-page branch + select-page endpoint), Next.js callback route.ts handling for both response shapes, selectMetaPage API method, Page Picker Modal in PlatformConnectionsClient.tsx with Paper Style design.
 - 2026-08-01: Code review patches applied: timedelta moved to top-level import in publishing.py, meta_oauth_callback response_model=None added (correct return type for dict/JSONResponse union), error extraction in handlePickerConfirm corrected to err instanceof Error.
+- 2026-08-01: Second code review pass (3-layer: Blind Hunter + Edge Case Hunter + Acceptance Auditor). 1 patch applied, 14 findings dismissed as false positives or already handled.
+
+---
+
+### Review Findings
+
+- [x] [Review][Patch] Instagram row 2 uses gap-1 on wrapper div instead of ml-1 on text span [frontend/components/publishing/PlatformConnectionsClient.tsx:253] — AC 7 specifies ml-1 on the span; fixed.
 
 ---
 

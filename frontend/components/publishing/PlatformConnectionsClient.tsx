@@ -241,7 +241,7 @@ export function PlatformConnectionsClient({ clientId }: Props) {
                 />
                 <span className="text-sm font-medium text-[#111111]">{page.name}</span>
               </div>
-              <div className="flex items-center gap-1 mt-1">
+              <div className="flex items-center mt-1">
                 {page.has_instagram ? (
                   <>
                     <PlatformIcon
@@ -250,7 +250,7 @@ export function PlatformConnectionsClient({ clientId }: Props) {
                       color="mono"
                       aria-hidden="true"
                     />
-                    <span className="text-xs text-[#555555]">
+                    <span className="text-xs text-[#555555] ml-1">
                       Linked Instagram: @{page.instagram_username}
                     </span>
                   </>
