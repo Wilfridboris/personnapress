@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, RefObject } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { GitBranch, Database, Loader2, CheckCircle2, XCircle, RefreshCw, Check } from "lucide-react";
@@ -16,6 +16,7 @@ import type { BlogEditorHandle } from "@/components/campaigns/BlogEditor";
 import type { SocialPostEditorsHandle } from "@/components/campaigns/SocialPostEditors";
 
 const GITHUB_SUPPORTED_FRAMEWORKS = ["jekyll", "plain_static", "astro", "nextjs", "hugo", "eleventy"];
+const BLOG_ONLY_PLATFORMS = new Set(["wordpress", "wordpress-com", "webflow", "headless"]);
 
 function platformLabel(platform: string): string {
   const MAP: Record<string, string> = {
@@ -238,14 +239,19 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
 
   const effectiveStatus = campaign.status;
 
-  // Extract H1 title from blog HTML for previews
-  const blogTitle = (() => {
-    if (!campaign.blog_html) return "Untitled";
-    if (typeof document === "undefined") return "Untitled";
-    const tmp = document.createElement("div");
-    tmp.innerHTML = campaign.blog_html;
-    return tmp.querySelector("h1")?.textContent?.trim() || "Untitled";
-  })();
+  const blogTitle = useMemo(() => {
+    if (campaign.blog_html) {
+      if (typeof document === "undefined") return "Untitled";
+      const tmp = document.createElement("div");
+      tmp.innerHTML = campaign.blog_html;
+      return tmp.querySelector("h1")?.textContent?.trim() || "Untitled";
+    }
+    if (campaign.x_post) {
+      const first = campaign.x_post.trim().split(/[\n.!?]/)[0].trim();
+      return first.length > 60 ? first.slice(0, 57) + "..." : first;
+    }
+    return "Social post";
+  }, [campaign.blog_html, campaign.x_post]);
 
   useEffect(() => {
     if (effectiveStatus === "approved" && clientHasPlatforms === null) {
@@ -279,19 +285,23 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           }
           const connectedPlatforms = items
             .filter((c) => c.connected && c.platform !== "github_pages")
-            .map((c) => c.platform);
-          const allDestinations = [...connectedPlatforms, "headless"];
+            .map((c) => c.platform)
+            .filter((p) => campaign.campaign_type === "social_only" ? !BLOG_ONLY_PLATFORMS.has(p) : true);
+          const allDestinations = campaign.campaign_type === "social_only"
+            ? connectedPlatforms
+            : [...connectedPlatforms, "headless"];
           setAvailablePlatforms(allDestinations);
           setSelectedPlatforms(new Set(allDestinations));
         })
         .catch(() => {
           setClientHasPlatforms(false);
           setGithubPublishReady(false);
-          setAvailablePlatforms(["headless"]);
-          setSelectedPlatforms(new Set(["headless"]));
+          const fallback = campaign.campaign_type === "social_only" ? [] : ["headless"];
+          setAvailablePlatforms(fallback);
+          setSelectedPlatforms(new Set(fallback));
         });
     }
-  }, [effectiveStatus, campaign.client_id, clientHasPlatforms]);
+  }, [effectiveStatus, campaign.client_id, campaign.campaign_type, clientHasPlatforms]);
 
   useEffect(() => {
     if (effectiveStatus === "published" && clientHasPlatforms === null) {
@@ -335,18 +345,22 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           }
           const connectedPlatforms = items
             .filter((c) => c.connected && c.platform !== "github_pages")
-            .map((c) => c.platform);
-          const allDestinations = [...connectedPlatforms, "headless"];
+            .map((c) => c.platform)
+            .filter((p) => campaign.campaign_type === "social_only" ? !BLOG_ONLY_PLATFORMS.has(p) : true);
+          const allDestinations = campaign.campaign_type === "social_only"
+            ? connectedPlatforms
+            : [...connectedPlatforms, "headless"];
           setAvailablePlatforms(allDestinations);
           setSelectedPlatforms(new Set(allDestinations));
         })
         .catch(() => {
           setClientHasPlatforms(false);
-          setAvailablePlatforms(["headless"]);
-          setSelectedPlatforms(new Set(["headless"]));
+          const fallback = campaign.campaign_type === "social_only" ? [] : ["headless"];
+          setAvailablePlatforms(fallback);
+          setSelectedPlatforms(new Set(fallback));
         });
     }
-  }, [effectiveStatus, campaign.client_id, clientHasPlatforms]);
+  }, [effectiveStatus, campaign.client_id, campaign.campaign_type, clientHasPlatforms]);
 
   // Reset selectedPlatforms to all-selected when republish panel opens
   useEffect(() => {

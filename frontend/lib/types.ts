@@ -193,6 +193,8 @@ export interface Campaign {
   rejection_reason: string | null;
   scheduled_at: string | null;
   image_regen_count: number;
+  campaign_type: "blog_full" | "social_only";
+  skip_image: boolean;
   github_pr_url: string | null;
   roadmap_id: string | null;
   created_at: string;
@@ -220,6 +222,8 @@ export interface CampaignCreate {
   target_keyword?: string | null;
   secondary_keywords?: string | null;
   target_audience?: string | null;
+  campaign_type?: "blog_full" | "social_only";
+  skip_image?: boolean;
 }
 
 export interface Job {

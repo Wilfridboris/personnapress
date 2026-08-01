@@ -1,5 +1,23 @@
 # Deferred Work
 
+## Deferred from: code review of 3-21-brain-dump-image-skip-toggle (2026-08-01)
+
+- `run_social_only_pipeline` commits job to `in_progress` before `campaign_id` check — same crash window pattern as `run_generation_pipeline`, already deferred from 3-20. [backend/app/services/generation.py]
+- `blogTitle` useMemo SSR issue: `document.createElement` called when `blog_html` is present during server render — pre-existing from 3-20. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]
+- `campaign_type` column stored as `Text` with no DB-level enum constraint; unrecognized values silently fall through to `blog_full` in worker. [backend/app/db/repositories/models.py]
+- `regenerate_campaign` copies `skip_image` verbatim without re-applying social_only override; theoretical since DB always has correct value after router enforcement. [backend/app/routers/campaigns.py]
+- `blogTitle` x_post truncation splits on `/[\n.!?]/` — a URL in the first line produces a nonsensical truncated domain as the title. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx]
+- `getCampaignTitle` in ApprovalGateClient returns "X Post" for all social_only campaigns with both posts populated — cosmetic priority issue. [frontend/app/(app)/campaigns/[id]/ApprovalGateClient.tsx]
+
+## Deferred from: code review of 3-20-social-only-brain-dump-mode (2026-08-01)
+
+- Double DB commit partial-write window in `run_social_only_pipeline`: job committed to `in_progress` before `campaign_id` checked; `_fail_job` handles the recovery correctly but leaves a tiny crash window. Same pattern as existing `run_generation_pipeline`. [backend/app/services/generation.py:290-296]
+- Retry from generation overlay does not forward `target_keyword`/`secondary_keywords` for blog_full campaigns — pre-existing gap; overlay only receives `clientId`, `brainDump`, `campaignType` props and has no access to keyword state. [frontend/components/campaigns/CampaignGenerationOverlay.tsx:handleRetry]
+- `blogTitle` useMemo calls `document.createElement` with SSR guard only inside `blog_html` branch; if blog_html is present during SSR, `createElement` throws in Node — pre-existing bug from before this story. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx:~244]
+- `_make_db_social_only` test helper is call-order-dependent; any reordering of DB queries in `run_social_only_pipeline` silently feeds wrong objects to wrong variables. [backend/tests/test_generation_service.py]
+- No test for `campaign_id=None` early-exit path in `run_social_only_pipeline`. [backend/tests/test_generation_service.py]
+- Worker `get_campaign` returning `None` (campaign not found) silently defaults to `blog_full` and runs the full pipeline — theoretical only; `campaign_id` is always set before worker fires. [backend/app/workers/generate.py:34]
+
 ## Deferred from: code review of 11-10-true-brand-platform-icons (2026-08-01)
 
 - PLATFORM_LABELS / PLATFORM_LABEL_MAP duplicated across approval-panel.tsx, RetryPanel.tsx, and PostCard.tsx — extract to a shared constants file. [frontend/components/publishing/RetryPanel.tsx, frontend/app/(app)/campaigns/[id]/approval-panel.tsx, frontend/components/roadmap/PostCard.tsx]

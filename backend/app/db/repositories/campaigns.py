@@ -15,6 +15,8 @@ async def create_campaign(
     target_keyword: Optional[str] = None,
     target_audience: Optional[str] = None,
     secondary_keywords: Optional[str] = None,
+    campaign_type: str = "blog_full",
+    skip_image: bool = False,
 ) -> Campaign:
     campaign = Campaign(
         client_id=client_id,
@@ -23,6 +25,8 @@ async def create_campaign(
         target_keyword=target_keyword,
         target_audience=target_audience,
         secondary_keywords=secondary_keywords,
+        campaign_type=campaign_type,
+        skip_image=skip_image,
     )
     session.add(campaign)
     await session.flush()

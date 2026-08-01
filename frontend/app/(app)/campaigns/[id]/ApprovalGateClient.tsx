@@ -43,7 +43,7 @@ function parseErrorDetails(raw: string | null | undefined): Record<string, strin
 
 function getCampaignTitle(campaign: Campaign): string {
   if (campaign.blog_html) return "Campaign";
-  if (campaign.roadmap_id) {
+  if (campaign.roadmap_id || campaign.campaign_type === "social_only") {
     if (campaign.x_post) return "X Post";
     if (campaign.linkedin_post) return "LinkedIn Post";
     return "Social Post";
@@ -74,6 +74,8 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
   const isPending = displayStatus === "pending_approval" && campaign.status === "pending_approval";
   const rawBlogHtml = campaign.blog_html ?? null;
   const isRoadmapSocialPost = !!campaign.roadmap_id && campaign.blog_html === null;
+  const isSocialOnly = campaign.campaign_type === "social_only";
+  const hideBlogSection = isRoadmapSocialPost || isSocialOnly;
 
   return (
     <>
@@ -100,7 +102,7 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
             year: "numeric",
           })}
         </p>
-        {(campaign.voice_score || isLowConfidence) && (
+        {!isSocialOnly && (campaign.voice_score || isLowConfidence) && (
           <div className="mt-3">
             {campaign.voice_score && (
               <VoiceFidelityBadge voiceScore={campaign.voice_score} />
@@ -121,11 +123,11 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
 
       {/* Content grid */}
       <div className={
-        isRoadmapSocialPost
+        hideBlogSection
           ? "grid grid-cols-1 lg:grid-cols-2 gap-8 pb-24"
           : "grid grid-cols-1 lg:grid-cols-5 gap-8 pb-24"
       }>
-        {!isRoadmapSocialPost && (
+        {!hideBlogSection && (
           <section className="lg:col-span-3 space-y-6">
             {campaign.article_id && (
               <div className="flex items-center justify-between gap-3 border border-[#111111] bg-[#FFF1B8] px-4 py-3">
@@ -178,16 +180,18 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
           </section>
         )}
 
-        <aside className={isRoadmapSocialPost ? "space-y-8" : "lg:col-span-2 space-y-8"}>
-          <ImagePanel
-            campaignId={campaign.id}
-            clientId={campaign.client_id}
-            imageUrl={campaign.image_url}
-            imageAlt={campaign.image_alt ?? undefined}
-            imageRegenCount={campaign.image_regen_count}
-            jobErrorDetails={jobErrorDetails ?? null}
-            isGenerating={jobIsActive}
-          />
+        <aside className={hideBlogSection ? "space-y-8" : "lg:col-span-2 space-y-8"}>
+          {!isSocialOnly && (
+            <ImagePanel
+              campaignId={campaign.id}
+              clientId={campaign.client_id}
+              imageUrl={campaign.image_url}
+              imageAlt={campaign.image_alt ?? undefined}
+              imageRegenCount={campaign.image_regen_count}
+              jobErrorDetails={jobErrorDetails ?? null}
+              isGenerating={jobIsActive}
+            />
+          )}
           <div className="border border-border">
             <div className="p-6">
               <SocialPostEditors
@@ -196,8 +200,8 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
                 initialXPost={campaign.x_post ?? null}
                 initialLinkedInPost={campaign.linkedin_post ?? null}
                 readOnly={!isPending}
-                showXSection={isRoadmapSocialPost ? !!campaign.x_post : true}
-                showLinkedInSection={isRoadmapSocialPost ? !!campaign.linkedin_post : true}
+                showXSection={hideBlogSection ? !!campaign.x_post : true}
+                showLinkedInSection={hideBlogSection ? !!campaign.linkedin_post : true}
               />
             </div>
           </div>

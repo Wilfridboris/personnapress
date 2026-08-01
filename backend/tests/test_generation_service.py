@@ -417,3 +417,219 @@ async def test_generate_social_only_does_not_call_generate_social(mock_llm):
 
     mock_llm.generate_social.assert_not_called()
     mock_llm.generate_social_standalone.assert_called_once()
+
+
+# ── run_social_only_pipeline (brain-dump social-only mode) ────────────────────
+
+def _make_db_social_only(job, campaign, client):
+    """Mock AsyncSession for run_social_only_pipeline (3-entity lookup sequence)."""
+    db = MagicMock()
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
+    db.refresh = AsyncMock()
+    db.add = MagicMock()
+
+    call_count = {"n": 0}
+
+    async def mock_execute(stmt):
+        result = MagicMock()
+        n = call_count["n"]
+        call_count["n"] += 1
+        if n == 0:
+            result.scalar_one_or_none = MagicMock(return_value=job)
+        elif n == 1:
+            result.scalar_one_or_none = MagicMock(return_value=campaign)
+        else:
+            result.scalar_one_or_none = MagicMock(return_value=client)
+        return result
+
+    db.execute = AsyncMock(side_effect=mock_execute)
+    return db
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation._llm")
+async def test_run_social_only_pipeline_success(mock_llm):
+    """Happy path: both posts written, job marked complete, no image step."""
+    from app.services.generation import run_social_only_pipeline
+
+    job = _make_job()
+    campaign = _make_campaign()
+    client = _make_client(bvp=_BVP)
+    db = _make_db_social_only(job, campaign, client)
+
+    mock_llm.generate_social_standalone = AsyncMock(
+        return_value={"x_post": "Tweet!", "linkedin_post": "LinkedIn post " * 40}
+    )
+
+    await run_social_only_pipeline(job.id, db)
+
+    assert campaign.x_post == "Tweet!"
+    assert campaign.linkedin_post == "LinkedIn post " * 40
+    assert job.status == "complete"
+    mock_llm.generate_social_standalone.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation.sentry_sdk")
+@patch("app.services.generation._llm")
+async def test_run_social_only_pipeline_empty_x_post(mock_llm, mock_sentry):
+    """Empty x_post from LLM fails the job with the social-only error message."""
+    from app.services.generation import run_social_only_pipeline
+
+    job = _make_job()
+    campaign = _make_campaign()
+    client = _make_client(bvp=_BVP)
+    db = _make_db_social_only(job, campaign, client)
+
+    mock_llm.generate_social_standalone = AsyncMock(
+        return_value={"x_post": "", "linkedin_post": "LinkedIn post " * 40}
+    )
+
+    await run_social_only_pipeline(job.id, db)
+
+    assert job.status == "failed"
+    assert "Social post generation failed" in job.error_details
+    mock_sentry.capture_exception.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation.sentry_sdk")
+@patch("app.services.generation._llm")
+async def test_run_social_only_pipeline_empty_linkedin_post(mock_llm, mock_sentry):
+    """Empty linkedin_post from LLM fails the job."""
+    from app.services.generation import run_social_only_pipeline
+
+    job = _make_job()
+    campaign = _make_campaign()
+    client = _make_client(bvp=_BVP)
+    db = _make_db_social_only(job, campaign, client)
+
+    mock_llm.generate_social_standalone = AsyncMock(
+        return_value={"x_post": "Tweet!", "linkedin_post": ""}
+    )
+
+    await run_social_only_pipeline(job.id, db)
+
+    assert job.status == "failed"
+    assert "Social post generation failed" in job.error_details
+    mock_sentry.capture_exception.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation._llm")
+async def test_run_social_only_pipeline_no_image_generated(mock_llm):
+    """run_social_only_pipeline never calls image generation (no generate_image)."""
+    from app.services.generation import run_social_only_pipeline
+
+    job = _make_job()
+    campaign = _make_campaign()
+    client = _make_client(bvp=_BVP)
+    db = _make_db_social_only(job, campaign, client)
+
+    mock_llm.generate_social_standalone = AsyncMock(
+        return_value={"x_post": "Tweet!", "linkedin_post": "LinkedIn post " * 40}
+    )
+    mock_llm.generate_image = AsyncMock(return_value="https://example.com/image.jpg")
+
+    await run_social_only_pipeline(job.id, db)
+
+    mock_llm.generate_image.assert_not_called()
+
+
+# ── run_generation worker skip_image gate (Story 3-21) ───────────────────────
+
+def _make_worker_job(job_id=None, campaign_id=None, status="pending"):
+    j = MagicMock()
+    j.id = job_id or uuid.uuid4()
+    j.campaign_id = campaign_id or uuid.uuid4()
+    j.status = status
+    j.completed_at = None
+    return j
+
+
+def _make_worker_campaign(skip_image=False, campaign_type="blog_full"):
+    c = MagicMock()
+    c.campaign_type = campaign_type
+    c.skip_image = skip_image
+    return c
+
+
+@pytest.mark.asyncio
+async def test_worker_skips_image_when_flag_set():
+    """When skip_image=True, image generation is not called and job is marked complete."""
+    import uuid as _uuid
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.workers.generate import run_generation
+
+    job_id = _uuid.uuid4()
+    campaign_id = _uuid.uuid4()
+
+    pending_job = _make_worker_job(job_id=job_id, campaign_id=campaign_id, status="pending")
+    in_progress_job = _make_worker_job(job_id=job_id, campaign_id=campaign_id, status="in_progress")
+    campaign = _make_worker_campaign(skip_image=True)
+
+    mock_db = AsyncMock()
+    mock_db.commit = AsyncMock()
+    mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+    mock_db.__aexit__ = AsyncMock(return_value=None)
+
+    get_job_calls = {"n": 0}
+
+    async def mock_get_job(db, jid):
+        n = get_job_calls["n"]
+        get_job_calls["n"] += 1
+        return pending_job if n == 0 else in_progress_job
+
+    with (
+        patch("app.workers.generate.AsyncSessionLocal", return_value=mock_db),
+        patch("app.workers.generate.get_job", side_effect=mock_get_job),
+        patch("app.workers.generate.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.workers.generate.generation_service.run_generation_pipeline", AsyncMock()),
+        patch("app.workers.generate.image_service.run_image_generation", AsyncMock()) as mock_image,
+    ):
+        await run_generation(job_id)
+
+    mock_image.assert_not_called()
+    assert in_progress_job.status == "complete"
+    assert in_progress_job.completed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_worker_runs_image_when_flag_false():
+    """When skip_image=False, image generation is called normally."""
+    import uuid as _uuid
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.workers.generate import run_generation
+
+    job_id = _uuid.uuid4()
+    campaign_id = _uuid.uuid4()
+
+    pending_job = _make_worker_job(job_id=job_id, campaign_id=campaign_id, status="pending")
+    in_progress_job = _make_worker_job(job_id=job_id, campaign_id=campaign_id, status="in_progress")
+    campaign = _make_worker_campaign(skip_image=False)
+
+    mock_db = AsyncMock()
+    mock_db.commit = AsyncMock()
+    mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+    mock_db.__aexit__ = AsyncMock(return_value=None)
+
+    get_job_calls = {"n": 0}
+
+    async def mock_get_job(db, jid):
+        n = get_job_calls["n"]
+        get_job_calls["n"] += 1
+        return pending_job if n == 0 else in_progress_job
+
+    with (
+        patch("app.workers.generate.AsyncSessionLocal", return_value=mock_db),
+        patch("app.workers.generate.get_job", side_effect=mock_get_job),
+        patch("app.workers.generate.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.workers.generate.generation_service.run_generation_pipeline", AsyncMock()),
+        patch("app.workers.generate.image_service.run_image_generation", AsyncMock()) as mock_image,
+    ):
+        await run_generation(job_id)
+
+    mock_image.assert_called_once_with(campaign_id, job_id, mock_db)

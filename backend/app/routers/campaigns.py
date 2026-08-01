@@ -126,6 +126,8 @@ async def create_new_campaign(
     await check_trial_not_expired(user_id, db, "create campaigns")
     await check_campaign_limit(db, user_id)
 
+    effective_skip_image = True if body.campaign_type == "social_only" else body.skip_image
+
     campaign = await create_campaign(
         db,
         body.client_id,
@@ -133,6 +135,8 @@ async def create_new_campaign(
         target_keyword=body.target_keyword,
         target_audience=body.target_audience,
         secondary_keywords=body.secondary_keywords,
+        campaign_type=body.campaign_type,
+        skip_image=effective_skip_image,
     )
     job = await create_job(db, job_type="generation", status="pending", campaign_id=campaign.id)
 
@@ -438,7 +442,16 @@ async def regenerate_campaign(
     await check_trial_not_expired(user_id, db, "generate content")
     await check_campaign_limit(db, user_id)
 
-    new_campaign = await create_campaign(db, campaign.client_id, campaign.brain_dump)
+    new_campaign = await create_campaign(
+        db,
+        campaign.client_id,
+        campaign.brain_dump,
+        target_keyword=campaign.target_keyword,
+        target_audience=campaign.target_audience,
+        secondary_keywords=campaign.secondary_keywords,
+        campaign_type=campaign.campaign_type,
+        skip_image=campaign.skip_image,
+    )
     new_job = await create_job(db, job_type="generation", status="pending", campaign_id=new_campaign.id)
 
     await db.commit()

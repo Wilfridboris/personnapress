@@ -3,7 +3,8 @@ from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import Column, Date, Enum as SAEnum, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, Date, Enum as SAEnum, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import false as sa_false
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
@@ -175,6 +176,14 @@ class Campaign(SQLModel, table=True):
     target_keyword: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     target_audience: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     secondary_keywords: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    campaign_type: str = Field(
+        default="blog_full",
+        sa_column=Column(Text, nullable=False, server_default="blog_full"),
+    )
+    skip_image: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, server_default=sa_false()),
+    )
     github_pr_url: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True, index=True))
     roadmap_id: Optional[uuid.UUID] = Field(
         default=None,

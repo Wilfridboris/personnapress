@@ -19,6 +19,8 @@ export function GenerationGate({ campaign, jobId }: GenerationGateProps) {
       jobId={jobId}
       brainDump={campaign.brain_dump}
       clientId={campaign.client_id}
+      campaignType={campaign.campaign_type}
+      skipImage={campaign.skip_image}
     />
   );
 }

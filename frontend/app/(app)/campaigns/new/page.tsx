@@ -46,6 +46,8 @@ export default function NewCampaignPage() {
   const showUpgradePrompt = useUIStore((s) => s.showUpgradePrompt);
   const activeClient = clients.find((c) => c.id === activeClientId) ?? null;
 
+  const [campaignType, setCampaignType] = useState<"blog_full" | "social_only">("blog_full");
+  const [generateImage, setGenerateImage] = useState(true);
   const [brainDump, setBrainDump] = useState("");
   const [targetKeyword, setTargetKeyword] = useState("");
   const [supportingKeywords, setSupportingKeywords] = useState("");
@@ -61,6 +63,10 @@ export default function NewCampaignPage() {
   // switch and on async client-list load (when activeClientId is set before
   // clients arrive in the store).
   const lastAutoFilledClientId = useRef<string | null>(null);
+
+  useEffect(() => {
+    setGenerateImage(true);
+  }, [campaignType]);
 
   useEffect(() => {
     const bvpAudience = activeClient?.brand_voice_profile?.target_audience ?? "";
@@ -130,9 +136,11 @@ export default function NewCampaignPage() {
       const data = await campaignsApi.create({
         client_id: activeClient.id,
         brain_dump: brainDump.trim(),
-        target_keyword: targetKeyword.trim() || null,
-        secondary_keywords: supportingKeywords.trim() || null,
+        target_keyword: campaignType === "blog_full" ? (targetKeyword.trim() || null) : null,
+        secondary_keywords: campaignType === "blog_full" ? (supportingKeywords.trim() || null) : null,
         target_audience: targetAudience.trim() || null,
+        campaign_type: campaignType,
+        skip_image: campaignType === "social_only" ? true : !generateImage,
       });
       setBrainDump("");
       setTargetKeyword("");
@@ -249,6 +257,70 @@ export default function NewCampaignPage() {
         </div>
       )}
 
+      <fieldset className="mb-6">
+        <legend className="font-mono text-xs text-graphite uppercase tracking-widest mb-3">
+          Content type
+        </legend>
+        <div className="flex flex-col border border-ink/10">
+          <label
+            className={cn(
+              "flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors duration-100",
+              "hover:bg-ink/[0.02]",
+              campaignType === "blog_full" ? "bg-ink/[0.03]" : ""
+            )}
+          >
+            <input
+              type="radio"
+              name="campaign_type"
+              value="blog_full"
+              checked={campaignType === "blog_full"}
+              onChange={() => setCampaignType("blog_full")}
+              className="mt-0.5 accent-ink"
+              aria-describedby="ct-blog-desc"
+            />
+            <span className="flex flex-col gap-0.5">
+              <span className="font-mono text-sm text-ink">Blog + Social</span>
+              <span id="ct-blog-desc" className="font-mono text-xs text-graphite">
+                Blog post, X and LinkedIn posts, featured image
+              </span>
+            </span>
+          </label>
+          <div className="border-t border-ink/10" />
+          <label
+            className={cn(
+              "flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors duration-100",
+              "hover:bg-ink/[0.02]",
+              campaignType === "social_only" ? "bg-ink/[0.03]" : ""
+            )}
+          >
+            <input
+              type="radio"
+              name="campaign_type"
+              value="social_only"
+              checked={campaignType === "social_only"}
+              onChange={() => setCampaignType("social_only")}
+              className="mt-0.5 accent-ink"
+              aria-describedby="ct-social-desc"
+            />
+            <span className="flex flex-col gap-0.5">
+              <span className="font-mono text-sm text-ink">Social post only</span>
+              <span id="ct-social-desc" className="font-mono text-xs text-graphite">
+                X and LinkedIn posts only -- no blog or featured image
+              </span>
+            </span>
+          </label>
+        </div>
+        {campaignType === "social_only" && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="mt-2 font-mono text-xs text-graphite border-l-2 border-ink/30 pl-3"
+          >
+            Shorter generation time. You can publish directly to X and LinkedIn after approval.
+          </p>
+        )}
+      </fieldset>
+
       <div className="space-y-2 mb-4">
         <textarea
           ref={textareaRef}
@@ -344,35 +416,43 @@ export default function NewCampaignPage() {
         </div>
       </div>
 
-      <div className="space-y-1 mb-2">
-        <label className="font-mono text-xs text-graphite uppercase tracking-widest">
-          Focus keyword <span className="normal-case">(optional)</span>
-        </label>
-        <input
-          type="text"
-          value={targetKeyword}
-          onChange={(e) => setTargetKeyword(e.target.value)}
-          maxLength={200}
-          placeholder="e.g. how to scale a subscription mobile app"
-          className="w-full bg-transparent font-mono text-sm text-ink border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink py-2 focus:outline-none transition-all placeholder:text-graphite/40"
-        />
-      </div>
+      <div className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
+        campaignType === "blog_full" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+      }`}>
+        <div className="overflow-hidden" aria-hidden={campaignType === "social_only" || undefined}>
+          <div className="space-y-1 mb-2">
+            <label className="font-mono text-xs text-graphite uppercase tracking-widest">
+              Focus keyword <span className="normal-case">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={targetKeyword}
+              onChange={(e) => setTargetKeyword(e.target.value)}
+              maxLength={200}
+              placeholder="e.g. how to scale a subscription mobile app"
+              className="w-full bg-transparent font-mono text-sm text-ink border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink py-2 focus:outline-none transition-all placeholder:text-graphite/40"
+              tabIndex={campaignType === "social_only" ? -1 : undefined}
+            />
+          </div>
 
-      <div className="space-y-1 mb-2">
-        <label className="font-mono text-xs text-graphite/70 uppercase tracking-widest">
-          Supporting keywords <span className="normal-case">(optional)</span>
-        </label>
-        <input
-          type="text"
-          value={supportingKeywords}
-          onChange={(e) => setSupportingKeywords(e.target.value)}
-          maxLength={500}
-          placeholder="e.g. SaaS growth, bootstrapped startup, MRR expansion"
-          className="w-full bg-transparent font-mono text-sm text-ink border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink py-2 focus:outline-none transition-all placeholder:text-graphite/40"
-        />
-        <p className="font-mono text-xs text-graphite/50 normal-case tracking-normal">
-          Comma-separated. Each mentioned once naturally within the first 500 words.
-        </p>
+          <div className="space-y-1 mb-2">
+            <label className="font-mono text-xs text-graphite/70 uppercase tracking-widest">
+              Supporting keywords <span className="normal-case">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={supportingKeywords}
+              onChange={(e) => setSupportingKeywords(e.target.value)}
+              maxLength={500}
+              placeholder="e.g. SaaS growth, bootstrapped startup, MRR expansion"
+              className="w-full bg-transparent font-mono text-sm text-ink border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink py-2 focus:outline-none transition-all placeholder:text-graphite/40"
+              tabIndex={campaignType === "social_only" ? -1 : undefined}
+            />
+            <p className="font-mono text-xs text-graphite/50 normal-case tracking-normal">
+              Comma-separated. Each mentioned once naturally within the first 500 words.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-1 mb-6">
@@ -388,6 +468,35 @@ export default function NewCampaignPage() {
           className="w-full bg-transparent font-mono text-sm text-ink border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink py-2 focus:outline-none transition-all placeholder:text-graphite/40"
         />
       </div>
+
+      {campaignType === "blog_full" && (
+        <div className="mb-6">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={generateImage}
+              onChange={(e) => setGenerateImage(e.target.checked)}
+              className="mt-0.5 accent-ink focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1"
+              aria-describedby={generateImage ? undefined : "image-skip-hint"}
+            />
+            <span className="flex flex-col gap-0.5">
+              <span className="font-mono text-xs text-graphite uppercase tracking-widest">
+                AI featured image
+              </span>
+              {!generateImage && (
+                <span
+                  id="image-skip-hint"
+                  role="status"
+                  aria-live="polite"
+                  className="font-mono text-xs text-graphite"
+                >
+                  Upload your own image from the approval page.
+                </span>
+              )}
+            </span>
+          </label>
+        </div>
+      )}
 
       <Button
         variant="primary"

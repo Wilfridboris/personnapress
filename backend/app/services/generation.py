@@ -273,6 +273,73 @@ async def generate_social_only(
     logger.info("generate_social_only: campaign %s platform=%s done", campaign_id, platform)
 
 
+async def run_social_only_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
+    """Social-only generation pipeline for campaign_type='social_only' brain dump campaigns.
+
+    Steps:
+      1. Load job + campaign + client BVP; mark job in_progress.
+      2. Call generate_social_standalone (0 thinking tokens) for both X + LinkedIn.
+      3. Write x_post + linkedin_post to campaign; mark job complete.
+    """
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        logger.error("run_social_only_pipeline: job %s not found", job_id)
+        return
+
+    job.status = "in_progress"
+    job.started_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.commit()
+    await db.refresh(job)
+
+    if not job.campaign_id:
+        await _fail_job(db, job, "Generation job has no campaign_id")
+        return
+
+    campaign_result = await db.execute(select(Campaign).where(Campaign.id == job.campaign_id))
+    campaign = campaign_result.scalar_one_or_none()
+    if not campaign:
+        await _fail_job(db, job, f"Campaign {job.campaign_id} not found")
+        return
+
+    client_result = await db.execute(select(Client).where(Client.id == campaign.client_id))
+    client = client_result.scalar_one_or_none()
+    if not client:
+        logger.warning("run_social_only_pipeline: client %s not found for campaign %s, proceeding without BVP", campaign.client_id, campaign.id)
+    brand_voice_profile: dict | None = client.brand_voice_profile if client else None
+
+    try:
+        social: dict = await _llm_with_retry(
+            _llm.generate_social_standalone,
+            campaign.brain_dump,
+            brand_voice_profile,
+            _SOCIAL_THINKING_TOKENS,
+        )
+
+        x_post = social.get("x_post")
+        linkedin_post = social.get("linkedin_post")
+
+        if not x_post:
+            raise ValueError("run_social_only_pipeline: LLM returned empty x_post")
+        if not linkedin_post:
+            raise ValueError("run_social_only_pipeline: LLM returned empty linkedin_post")
+
+        campaign.x_post = x_post
+        campaign.linkedin_post = linkedin_post
+        campaign.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        job.status = "complete"
+        job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        await db.commit()
+
+        logger.info("run_social_only_pipeline: campaign %s complete", campaign.id)
+
+    except Exception as exc:
+        logger.exception("run_social_only_pipeline: error for job %s: %s", job_id, exc)
+        sentry_sdk.capture_exception(exc)
+        await _fail_job(db, job, "Social post generation failed. Please retry.")
+
+
 async def _fail_job(db: AsyncSession, job: Job, error_details: str) -> None:
     """Mark a job as failed with the given error details and commit."""
     try:

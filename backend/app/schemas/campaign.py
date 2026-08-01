@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -30,6 +30,8 @@ class CampaignCreate(BaseModel):
     target_keyword: Optional[str] = Field(default=None, max_length=200)
     target_audience: Optional[str] = Field(default=None, max_length=500)
     secondary_keywords: Optional[str] = Field(default=None, max_length=500)
+    campaign_type: Literal["blog_full", "social_only"] = "blog_full"
+    skip_image: bool = False
 
     @field_validator("brain_dump", mode="before")
     @classmethod
@@ -62,6 +64,8 @@ class CampaignResponse(BaseModel):
     rejection_reason: Optional[str]
     scheduled_at: Optional[datetime]
     image_regen_count: int
+    campaign_type: Literal["blog_full", "social_only"] = "blog_full"
+    skip_image: bool = False
     github_pr_url: Optional[str] = None
     roadmap_id: Optional[uuid.UUID] = None
     created_at: datetime

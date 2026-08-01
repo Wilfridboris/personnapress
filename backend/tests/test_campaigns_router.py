@@ -18,7 +18,7 @@ def _make_client(user_id=None, client_id=None):
     return c
 
 
-def _make_campaign(campaign_id=None, client_id=None):
+def _make_campaign(campaign_id=None, client_id=None, campaign_type="blog_full", skip_image=False):
     c = MagicMock()
     c.id = campaign_id or uuid.uuid4()
     c.client_id = client_id or uuid.uuid4()
@@ -32,6 +32,8 @@ def _make_campaign(campaign_id=None, client_id=None):
     c.rejection_reason = None
     c.scheduled_at = None
     c.image_regen_count = 0
+    c.campaign_type = campaign_type
+    c.skip_image = skip_image
     c.github_pr_url = None
     c.created_at = datetime(2026, 7, 2, 10, 0, 0, tzinfo=timezone.utc)
     c.updated_at = datetime(2026, 7, 2, 10, 0, 0, tzinfo=timezone.utc)
@@ -1196,3 +1198,242 @@ async def test_patch_campaign_image_raises_401_on_bad_session():
         )
 
     assert exc_info.value.status_code == 401
+
+
+# ── campaign_type field: create + regenerate (Story 3-20) ────────────────────
+
+async def test_create_campaign_social_only_passes_type_to_repo():
+    """CampaignCreate with campaign_type='social_only' passes that type to create_campaign."""
+    from app.routers.campaigns import create_new_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id, campaign_type="social_only")
+    job = _make_job(campaign_id=campaign.id)
+
+    db = AsyncMock()
+    body = CampaignCreate(client_id=client.id, brain_dump="A" * 25, campaign_type="social_only")
+    background_tasks = MagicMock()
+    mock_create = AsyncMock(return_value=campaign)
+
+    with (
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.check_trial_not_expired", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.check_campaign_limit", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.create_campaign", mock_create),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=job)),
+    ):
+        result = await create_new_campaign(
+            body=body,
+            background_tasks=background_tasks,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.campaign_id == campaign.id
+    call_kwargs = mock_create.call_args[1]
+    assert call_kwargs.get("campaign_type") == "social_only"
+
+
+async def test_create_campaign_default_blog_full():
+    """CampaignCreate without campaign_type defaults to 'blog_full'."""
+    from app.routers.campaigns import create_new_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id, campaign_type="blog_full")
+    job = _make_job(campaign_id=campaign.id)
+
+    db = AsyncMock()
+    body = CampaignCreate(client_id=client.id, brain_dump="A" * 25)
+    background_tasks = MagicMock()
+    mock_create = AsyncMock(return_value=campaign)
+
+    with (
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.check_trial_not_expired", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.check_campaign_limit", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.create_campaign", mock_create),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=job)),
+    ):
+        await create_new_campaign(
+            body=body,
+            background_tasks=background_tasks,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    call_kwargs = mock_create.call_args[1]
+    assert call_kwargs.get("campaign_type") == "blog_full"
+
+
+async def test_regenerate_preserves_campaign_type():
+    """regenerate_campaign passes the source campaign's campaign_type to create_campaign."""
+    from app.routers.campaigns import regenerate_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    source = _make_campaign(client_id=client.id, campaign_type="social_only")
+    source.status = "rejected"
+    source.target_keyword = None
+    source.target_audience = None
+    source.secondary_keywords = None
+    new_campaign = _make_campaign(client_id=client.id, campaign_type="social_only")
+    new_job = _make_job(campaign_id=new_campaign.id)
+    db = AsyncMock()
+    mock_create = AsyncMock(return_value=new_campaign)
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=source)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.check_trial_not_expired", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.check_campaign_limit", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.create_campaign", mock_create),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=new_job)),
+    ):
+        result = await regenerate_campaign(
+            campaign_id=source.id,
+            background_tasks=MagicMock(),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.campaign_id == new_campaign.id
+    call_kwargs = mock_create.call_args[1]
+    assert call_kwargs.get("campaign_type") == "social_only"
+
+
+# ── skip_image field: create + regenerate (Story 3-21) ───────────────────────
+
+async def test_create_campaign_skip_image_true():
+    """POST with skip_image=True passes skip_image=True to create_campaign."""
+    from app.routers.campaigns import create_new_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id, skip_image=True)
+    job = _make_job(campaign_id=campaign.id)
+
+    db = AsyncMock()
+    body = CampaignCreate(client_id=client.id, brain_dump="A" * 25, skip_image=True)
+    background_tasks = MagicMock()
+    mock_create = AsyncMock(return_value=campaign)
+
+    with (
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.check_trial_not_expired", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.check_campaign_limit", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.create_campaign", mock_create),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=job)),
+    ):
+        result = await create_new_campaign(
+            body=body,
+            background_tasks=background_tasks,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.campaign_id == campaign.id
+    call_kwargs = mock_create.call_args[1]
+    assert call_kwargs.get("skip_image") is True
+
+
+async def test_create_campaign_skip_image_default_false():
+    """POST without skip_image defaults to skip_image=False."""
+    from app.routers.campaigns import create_new_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id, skip_image=False)
+    job = _make_job(campaign_id=campaign.id)
+
+    db = AsyncMock()
+    body = CampaignCreate(client_id=client.id, brain_dump="A" * 25)
+    background_tasks = MagicMock()
+    mock_create = AsyncMock(return_value=campaign)
+
+    with (
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.check_trial_not_expired", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.check_campaign_limit", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.create_campaign", mock_create),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=job)),
+    ):
+        await create_new_campaign(
+            body=body,
+            background_tasks=background_tasks,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    call_kwargs = mock_create.call_args[1]
+    assert call_kwargs.get("skip_image") is False
+
+
+async def test_social_only_forces_skip_image():
+    """POST with campaign_type=social_only forces skip_image=True regardless of request value."""
+    from app.routers.campaigns import create_new_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id, campaign_type="social_only", skip_image=True)
+    job = _make_job(campaign_id=campaign.id)
+
+    db = AsyncMock()
+    # Request sends skip_image=False but campaign_type=social_only
+    body = CampaignCreate(client_id=client.id, brain_dump="A" * 25, campaign_type="social_only", skip_image=False)
+    background_tasks = MagicMock()
+    mock_create = AsyncMock(return_value=campaign)
+
+    with (
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.check_trial_not_expired", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.check_campaign_limit", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.create_campaign", mock_create),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=job)),
+    ):
+        await create_new_campaign(
+            body=body,
+            background_tasks=background_tasks,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    call_kwargs = mock_create.call_args[1]
+    assert call_kwargs.get("skip_image") is True
+
+
+async def test_regenerate_preserves_skip_image():
+    """regenerate_campaign passes the source campaign's skip_image to create_campaign."""
+    from app.routers.campaigns import regenerate_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    source = _make_campaign(client_id=client.id, skip_image=True)
+    source.status = "rejected"
+    source.target_keyword = None
+    source.target_audience = None
+    source.secondary_keywords = None
+    new_campaign = _make_campaign(client_id=client.id, skip_image=True)
+    new_job = _make_job(campaign_id=new_campaign.id)
+    db = AsyncMock()
+    mock_create = AsyncMock(return_value=new_campaign)
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=source)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.check_trial_not_expired", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.check_campaign_limit", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.create_campaign", mock_create),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=new_job)),
+    ):
+        result = await regenerate_campaign(
+            campaign_id=source.id,
+            background_tasks=MagicMock(),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.campaign_id == new_campaign.id
+    call_kwargs = mock_create.call_args[1]
+    assert call_kwargs.get("skip_image") is True

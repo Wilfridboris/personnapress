@@ -72,8 +72,12 @@ export default async function CampaignDetailPage({ params, searchParams }: Props
   const isFailed = campaign.status === "failed" && !campaign.publish_job;
   const isPublished = campaign.status === "published";
 
-  // Show overlay only while content hasn't been generated yet (blog_html is the canonical signal)
-  const effectiveJobId = jobId && !campaign.blog_html ? jobId : null;
+  // Show overlay while content hasn't been generated yet.
+  // For blog_full: blog_html is the signal. For social_only: x_post is the signal.
+  const contentReady = campaign.campaign_type === "social_only"
+    ? !!campaign.x_post
+    : !!campaign.blog_html;
+  const effectiveJobId = jobId && !contentReady ? jobId : null;
 
   return (
     <>
