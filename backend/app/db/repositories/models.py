@@ -32,6 +32,7 @@ class Platform(str, Enum):
     instagram = "instagram"
     facebook_page = "facebook_page"
     threads = "threads"
+    meta_pending = "meta_pending"
 
 
 class CampaignStatus(str, Enum):

@@ -1,13 +1,26 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Lock } from "lucide-react";
 import { publishingApi, clientsApi } from "@/lib/api";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { PlatformConnectionCard, PlatformConnectionCardSkeleton } from "./PlatformConnectionCard";
 import { DeliveryTokensCard } from "./DeliveryTokensCard";
+import { Modal } from "@/components/ui/Modal";
+
+type MetaPageOption = {
+  id: string;
+  name: string;
+  has_instagram: boolean;
+  instagram_username: string | null;
+};
+
+type MetaPageOptions = {
+  clientId: string;
+  pages: MetaPageOption[];
+};
 
 interface Props {
   clientId: string;
@@ -32,12 +45,42 @@ const META_PUBLISHING_ENABLED =
 export function PlatformConnectionsClient({ clientId }: Props) {
   const addToast = useUIStore((s) => s.addToast);
   const handledRef = useRef(false);
+  const queryClient = useQueryClient();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerPages, setPickerPages] = useState<MetaPageOption[]>([]);
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+  const [pickerError, setPickerError] = useState<string | null>(null);
+  const [pickerLoading, setPickerLoading] = useState(false);
 
   useEffect(() => {
     if (handledRef.current) return;
     // Read params imperatively -- avoids creating a reactive useSearchParams subscription
     // that would cause the page to re-subscribe to URL changes and trigger RSC re-renders.
     const params = new URLSearchParams(window.location.search);
+    const picker = params.get("meta_picker");
+    if (picker === "1") {
+      handledRef.current = true;
+      const raw = document.cookie
+        .split("; ")
+        .find((c) => c.startsWith("meta_page_options="))
+        ?.split("=")
+        .slice(1)
+        .join("=");
+      if (raw) {
+        try {
+          const opts = JSON.parse(decodeURIComponent(raw)) as MetaPageOptions;
+          if (opts.pages && opts.pages.length > 0) {
+            setPickerPages(opts.pages);
+            setPickerOpen(true);
+            return;
+          }
+        } catch {
+          // fall through to error
+        }
+      }
+      addToast("Meta connection failed. Please try connecting again.", "error");
+      return;
+    }
     const success = params.get("success");
     const error = params.get("error");
     if (!success && !error) return;
@@ -59,6 +102,33 @@ export function PlatformConnectionsClient({ clientId }: Props) {
     // Do NOT call replaceState or router.replace here.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handlePickerConfirm() {
+    if (!selectedPageId) return;
+    setPickerLoading(true);
+    setPickerError(null);
+    try {
+      await publishingApi.selectMetaPage(clientId, selectedPageId);
+      document.cookie = "meta_page_options=; max-age=0; path=/";
+      await queryClient.invalidateQueries({ queryKey: ["platform-connections", clientId] });
+      setPickerOpen(false);
+      addToast("Meta platforms connected.", "success");
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to connect. Please try again.";
+      setPickerError(msg);
+    } finally {
+      setPickerLoading(false);
+    }
+  }
+
+  function handlePickerCancel() {
+    document.cookie = "meta_page_options=; max-age=0; path=/";
+    setPickerOpen(false);
+    setPickerPages([]);
+    setSelectedPageId(null);
+    setPickerError(null);
+  }
 
   const { data: client } = useQuery({
     queryKey: ["client", clientId],
@@ -134,6 +204,86 @@ export function PlatformConnectionsClient({ clientId }: Props) {
           <DeliveryTokensCard clientId={clientId} />
         </div>
       )}
+
+      <Modal
+        isOpen={pickerOpen}
+        onClose={handlePickerCancel}
+        title="Select Facebook Page"
+        titleId="meta-page-picker-title"
+        descriptionId="meta-page-picker-desc"
+      >
+        <p
+          id="meta-page-picker-desc"
+          className="text-sm text-[#555555] mb-4"
+        >
+          Choose which page PersonnaPress should publish to.
+        </p>
+
+        <div role="radiogroup" aria-labelledby="meta-page-picker-title">
+          {pickerPages.map((page) => (
+            <button
+              key={page.id}
+              role="radio"
+              aria-checked={selectedPageId === page.id}
+              onClick={() => setSelectedPageId(page.id)}
+              className={
+                selectedPageId === page.id
+                  ? "w-full text-left border border-[#111111] bg-[#FFF1B8] p-3 mb-2 rounded-none"
+                  : "w-full text-left border border-[#E5E5E5] p-3 mb-2 rounded-none hover:border-[#999999]"
+              }
+            >
+              <div className="flex items-center gap-1.5">
+                <PlatformIcon
+                  platform="facebook_page"
+                  className="size-4 text-graphite"
+                  color="mono"
+                  aria-hidden="true"
+                />
+                <span className="text-sm font-medium text-[#111111]">{page.name}</span>
+              </div>
+              <div className="flex items-center gap-1 mt-1">
+                {page.has_instagram ? (
+                  <>
+                    <PlatformIcon
+                      platform="instagram"
+                      className="size-3 text-graphite"
+                      color="mono"
+                      aria-hidden="true"
+                    />
+                    <span className="text-xs text-[#555555]">
+                      Linked Instagram: @{page.instagram_username}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs text-[#555555]">
+                    No linked Instagram Business Account
+                  </span>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {pickerError && (
+          <p className="text-xs text-red-600 mt-2">{pickerError}</p>
+        )}
+
+        <div className="flex gap-3 mt-4">
+          <button
+            onClick={handlePickerCancel}
+            className="border border-[#111111] text-[#111111] text-xs font-medium px-4 min-h-[44px] rounded-none hover:bg-[#F5F5F5]"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handlePickerConfirm}
+            disabled={!selectedPageId || pickerLoading}
+            className="bg-[#111111] text-white text-xs font-medium px-4 min-h-[44px] rounded-none disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {pickerLoading ? "Connecting..." : "Confirm"}
+          </button>
+        </div>
+      </Modal>
     </>
   );
 }

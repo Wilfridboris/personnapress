@@ -490,9 +490,51 @@ async def test_meta_callback_empty_pages_raises_422():
     mock_upsert.assert_not_called()
 
 
-async def test_meta_callback_multiple_pages_stores_first_instagram_only():
-    """meta_oauth_callback with multiple pages stores only the first Instagram account."""
+async def test_meta_callback_single_page_unchanged():
+    """meta_oauth_callback with 1 page: upsert called, returns dict with connected_platforms (HTTP 201)."""
     from app.routers.publishing import meta_oauth_callback, OAuthCallbackRequest
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    db = AsyncMock()
+
+    pages_data = [
+        {
+            "id": "page_111",
+            "name": "My Brand Page",
+            "access_token": "page_access_token_aaa",
+            "instagram_business_account": {"id": "ig_222", "username": "mybrand"},
+        }
+    ]
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.meta_integration.exchange_code_for_short_lived_token",
+              AsyncMock(return_value="short_token")),
+        patch("app.routers.publishing.meta_integration.exchange_short_lived_for_long_lived_token",
+              AsyncMock(return_value="long_token")),
+        patch("app.routers.publishing.meta_integration.discover_accounts",
+              AsyncMock(return_value=pages_data)),
+        patch("app.routers.publishing.upsert_connection", AsyncMock()) as mock_upsert,
+    ):
+        result = await meta_oauth_callback(
+            client_id=client.id,
+            body=OAuthCallbackRequest(code="auth_code"),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert "connected_platforms" in result
+    assert "instagram" in result["connected_platforms"]
+    assert "facebook_page" in result["connected_platforms"]
+    platforms_upserted = [call.args[2] for call in mock_upsert.call_args_list]
+    assert "meta_pending" not in platforms_upserted
+
+
+async def test_meta_callback_multi_page_stores_pending():
+    """meta_oauth_callback with 2+ pages stores meta_pending row, returns 200 with page_selection_required."""
+    from app.routers.publishing import meta_oauth_callback, OAuthCallbackRequest
+    from fastapi.responses import JSONResponse
 
     user_id = uuid.uuid4()
     client = _make_client(user_id=user_id)
@@ -530,13 +572,64 @@ async def test_meta_callback_multiple_pages_stores_first_instagram_only():
             db=db,
         )
 
-    # Only instagram (first) and facebook_page platforms are returned; threads has its own OAuth
-    assert "instagram" in result["connected_platforms"]
-    assert "facebook_page" in result["connected_platforms"]
-    assert "threads" not in result["connected_platforms"]
-    # instagram upserted exactly once (only first page's IG account)
+    assert isinstance(result, JSONResponse)
+    assert result.status_code == 200
+    body = json.loads(result.body)
+    assert body["status"] == "page_selection_required"
+    assert len(body["pages"]) == 2
+    assert body["pages"][0]["has_instagram"] is True
+    assert body["pages"][0]["instagram_username"] == "brand1"
+
     platforms_upserted = [call.args[2] for call in mock_upsert.call_args_list]
-    assert platforms_upserted.count("instagram") == 1
+    assert "meta_pending" in platforms_upserted
+    assert "instagram" not in platforms_upserted
+    assert "facebook_page" not in platforms_upserted
+
+
+async def test_meta_callback_multi_page_has_instagram_false():
+    """meta_oauth_callback multi-page: page without instagram has has_instagram=False and instagram_username=None."""
+    from app.routers.publishing import meta_oauth_callback, OAuthCallbackRequest
+    from fastapi.responses import JSONResponse
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    db = AsyncMock()
+
+    pages_data = [
+        {
+            "id": "page_111",
+            "name": "Brand Page 1",
+            "access_token": "page_token_aaa",
+            # no instagram_business_account
+        },
+        {
+            "id": "page_333",
+            "name": "Brand Page 2",
+            "access_token": "page_token_bbb",
+        },
+    ]
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.meta_integration.exchange_code_for_short_lived_token",
+              AsyncMock(return_value="short_token")),
+        patch("app.routers.publishing.meta_integration.exchange_short_lived_for_long_lived_token",
+              AsyncMock(return_value="long_token")),
+        patch("app.routers.publishing.meta_integration.discover_accounts",
+              AsyncMock(return_value=pages_data)),
+        patch("app.routers.publishing.upsert_connection", AsyncMock()),
+    ):
+        result = await meta_oauth_callback(
+            client_id=client.id,
+            body=OAuthCallbackRequest(code="auth_code"),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert isinstance(result, JSONResponse)
+    body = json.loads(result.body)
+    assert body["pages"][0]["has_instagram"] is False
+    assert body["pages"][0]["instagram_username"] is None
 
 
 # ── _extract_identifier: Meta platforms ──────────────────────────────────────
@@ -1531,3 +1624,202 @@ async def test_renew_long_lived_user_token_no_access_token():
     assert exc_info.value.platform == "Meta"
     assert exc_info.value.status_code == 200
     assert "no access_token" in exc_info.value.message
+
+
+# ── publishing.py: meta_select_page ──────────────────────────────────────────
+
+def _make_pending_row(pages, long_lived_token="long_tok", age_seconds=0):
+    """Build a mock meta_pending connection row with encrypted credentials."""
+    from app.core.security import encrypt_credential
+    from datetime import datetime, timezone, timedelta
+
+    created_at = (datetime.now(timezone.utc) - timedelta(seconds=age_seconds)).isoformat()
+    cred = json.dumps({
+        "long_lived_token": long_lived_token,
+        "pages": pages,
+        "created_at": created_at,
+    })
+    conn = MagicMock()
+    conn.platform = "meta_pending"
+    conn.encrypted_credentials = encrypt_credential(cred)
+    return conn
+
+
+async def test_meta_select_page_success():
+    """meta_select_page: upserts instagram+facebook_page+threads, deletes meta_pending, returns 201."""
+    from app.routers.publishing import meta_select_page, MetaSelectPageRequest
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    db = AsyncMock()
+
+    pages = [
+        {
+            "id": "page_111",
+            "name": "Brand Page 1",
+            "access_token": "page_tok_aaa",
+            "instagram_user_id": "ig_222",
+            "instagram_username": "brand1",
+        },
+        {
+            "id": "page_333",
+            "name": "Brand Page 2",
+            "access_token": "page_tok_bbb",
+            "instagram_user_id": "ig_444",
+            "instagram_username": "brand2",
+        },
+    ]
+    pending_conn = _make_pending_row(pages, long_lived_token="long_tok")
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connections_for_client",
+              AsyncMock(return_value=[pending_conn])),
+        patch("app.routers.publishing.meta_integration.discover_threads_user_id",
+              AsyncMock(return_value="th_555")),
+        patch("app.routers.publishing.upsert_connection", AsyncMock()) as mock_upsert,
+        patch("app.routers.publishing.delete_connection", AsyncMock()) as mock_delete,
+    ):
+        result = await meta_select_page(
+            client_id=client.id,
+            body=MetaSelectPageRequest(page_id="page_111"),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert "instagram" in result["connected_platforms"]
+    assert "facebook_page" in result["connected_platforms"]
+    assert "threads" in result["connected_platforms"]
+
+    platforms_upserted = [call.args[2] for call in mock_upsert.call_args_list]
+    assert "instagram" in platforms_upserted
+    assert "facebook_page" in platforms_upserted
+    assert "threads" in platforms_upserted
+
+    mock_delete.assert_called_once()
+    assert mock_delete.call_args.args[2] == "meta_pending"
+
+
+async def test_meta_select_page_no_pending_returns_404():
+    """meta_select_page: raises 404 NO_PENDING_CONNECTION when no meta_pending row exists."""
+    from app.routers.publishing import meta_select_page, MetaSelectPageRequest
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connections_for_client",
+              AsyncMock(return_value=[])),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await meta_select_page(
+                client_id=client.id,
+                body=MetaSelectPageRequest(page_id="page_111"),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail["error"]["code"] == "NO_PENDING_CONNECTION"
+
+
+async def test_meta_select_page_expired_returns_410():
+    """meta_select_page: raises 410 PENDING_CONNECTION_EXPIRED when created_at > 10 minutes ago."""
+    from app.routers.publishing import meta_select_page, MetaSelectPageRequest
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    db = AsyncMock()
+
+    pages = [{"id": "page_111", "name": "Page", "access_token": "tok",
+               "instagram_user_id": None, "instagram_username": None}]
+    pending_conn = _make_pending_row(pages, age_seconds=700)
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connections_for_client",
+              AsyncMock(return_value=[pending_conn])),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await meta_select_page(
+                client_id=client.id,
+                body=MetaSelectPageRequest(page_id="page_111"),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 410
+    assert exc_info.value.detail["error"]["code"] == "PENDING_CONNECTION_EXPIRED"
+
+
+async def test_meta_select_page_invalid_page_id_returns_400():
+    """meta_select_page: raises 400 INVALID_PAGE_SELECTION when page_id not in stored pages."""
+    from app.routers.publishing import meta_select_page, MetaSelectPageRequest
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    db = AsyncMock()
+
+    pages = [{"id": "page_111", "name": "Page", "access_token": "tok",
+               "instagram_user_id": None, "instagram_username": None}]
+    pending_conn = _make_pending_row(pages)
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connections_for_client",
+              AsyncMock(return_value=[pending_conn])),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await meta_select_page(
+                client_id=client.id,
+                body=MetaSelectPageRequest(page_id="page_WRONG"),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["error"]["code"] == "INVALID_PAGE_SELECTION"
+
+
+async def test_meta_select_page_no_instagram_page():
+    """meta_select_page: page with no instagram_user_id upserts only facebook_page, deletes meta_pending."""
+    from app.routers.publishing import meta_select_page, MetaSelectPageRequest
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    db = AsyncMock()
+
+    pages = [
+        {"id": "page_111", "name": "Page Only", "access_token": "tok",
+         "instagram_user_id": None, "instagram_username": None},
+        {"id": "page_222", "name": "Page 2", "access_token": "tok2",
+         "instagram_user_id": None, "instagram_username": None},
+    ]
+    pending_conn = _make_pending_row(pages)
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connections_for_client",
+              AsyncMock(return_value=[pending_conn])),
+        patch("app.routers.publishing.upsert_connection", AsyncMock()) as mock_upsert,
+        patch("app.routers.publishing.delete_connection", AsyncMock()) as mock_delete,
+    ):
+        result = await meta_select_page(
+            client_id=client.id,
+            body=MetaSelectPageRequest(page_id="page_111"),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert "facebook_page" in result["connected_platforms"]
+    assert "instagram" not in result["connected_platforms"]
+    assert "threads" not in result["connected_platforms"]
+
+    platforms_upserted = [call.args[2] for call in mock_upsert.call_args_list]
+    assert "facebook_page" in platforms_upserted
+    assert "instagram" not in platforms_upserted
+
+    mock_delete.assert_called_once()
+    assert mock_delete.call_args.args[2] == "meta_pending"

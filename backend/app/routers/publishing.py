@@ -1,7 +1,7 @@
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -10,6 +10,7 @@ from apscheduler.jobstores.base import JobLookupError
 from apscheduler.triggers.date import DateTrigger
 from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -255,6 +256,10 @@ class OAuthCallbackRequest(BaseModel):
     code_verifier: Optional[str] = None
 
 
+class MetaSelectPageRequest(BaseModel):
+    page_id: str
+
+
 def _platform_error_msg(e: Exception) -> str:
     """Extract a safe, serializable message from a platform exception."""
     msg = getattr(e, "message", None)
@@ -373,13 +378,13 @@ async def wordpress_com_oauth_callback(
     return result
 
 
-@router.post("/clients/{client_id}/connections/meta/callback", status_code=201)
+@router.post("/clients/{client_id}/connections/meta/callback", status_code=201, response_model=None)
 async def meta_oauth_callback(
     client_id: uuid.UUID,
     body: OAuthCallbackRequest,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
-) -> dict:
+) -> dict | JSONResponse:
     user_id = _parse_user_id(current_user)
     client = await get_client(db, client_id)
     _check_ownership(client, user_id)
@@ -413,6 +418,49 @@ async def meta_oauth_callback(
             detail={"error": {"code": "ACCOUNT_DISCOVERY_FAILED", "message": _platform_error_msg(e), "detail": {}}},
         )
 
+    # Multi-page path: require user selection
+    if len(pages) > 1:
+        pages_for_storage = []
+        pages_for_picker = []
+        for page in pages:
+            page_id = page.get("id", "")
+            page_name = page.get("name", "")
+            page_access_token = page.get("access_token", "")
+            ig_account = page.get("instagram_business_account")
+            ig_user_id = ig_account.get("id", "") if ig_account else None
+            ig_username = ig_account.get("username", "") if ig_account else None
+
+            pages_for_storage.append({
+                "id": page_id,
+                "name": page_name,
+                "access_token": page_access_token,
+                "instagram_user_id": ig_user_id,
+                "instagram_username": ig_username,
+            })
+            pages_for_picker.append({
+                "id": page_id,
+                "name": page_name,
+                "has_instagram": bool(ig_user_id),
+                "instagram_username": ig_username,
+            })
+
+        pending_cred = json.dumps({
+            "long_lived_token": long_lived_token,
+            "pages": pages_for_storage,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        encrypted_pending = encrypt_credential(pending_cred)
+        await upsert_connection(db, client_id, "meta_pending", encrypted_pending)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "page_selection_required",
+                "pages": pages_for_picker,
+            },
+        )
+
+    # Single-page path: auto-select (existing logic)
     connected_platforms: list[str] = []
 
     for page in pages:
@@ -454,6 +502,103 @@ async def meta_oauth_callback(
             status_code=422,
             detail={"error": {"code": "NO_ACCOUNTS_FOUND", "message": "No Facebook Pages or Instagram Business Accounts were found for this Meta account.", "detail": {}}},
         )
+
+    return {"connected_platforms": connected_platforms}
+
+
+@router.post("/clients/{client_id}/connections/meta/select-page", status_code=201)
+async def meta_select_page(
+    client_id: uuid.UUID,
+    body: MetaSelectPageRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+    client = await get_client(db, client_id)
+    _check_ownership(client, user_id)
+
+    connections = await get_connections_for_client(db, client_id)
+    pending_conn = next(
+        (c for c in connections if c.platform == "meta_pending"), None
+    )
+    if not pending_conn:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NO_PENDING_CONNECTION", "message": "No pending Meta connection found. Please reconnect.", "detail": {}}},
+        )
+
+    try:
+        pending_data = json.loads(decrypt_credential(pending_conn.encrypted_credentials))
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": "INVALID_PENDING_DATA", "message": "Pending Meta connection is corrupt. Please reconnect.", "detail": {}}},
+        )
+
+    created_at_str = pending_data.get("created_at", "")
+    try:
+        created_at = datetime.fromisoformat(created_at_str)
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) - created_at > timedelta(seconds=600):
+            raise ValueError("expired")
+    except ValueError:
+        raise HTTPException(
+            status_code=410,
+            detail={"error": {"code": "PENDING_CONNECTION_EXPIRED", "message": "The Meta connection session has expired. Please reconnect.", "detail": {}}},
+        )
+
+    long_lived_token = pending_data.get("long_lived_token", "")
+    pages = pending_data.get("pages", [])
+
+    selected = next((p for p in pages if p.get("id") == body.page_id), None)
+    if not selected:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "INVALID_PAGE_SELECTION", "message": "Selected page not found. Please reconnect.", "detail": {}}},
+        )
+
+    page_id = selected["id"]
+    page_name = selected["name"]
+    page_access_token = selected["access_token"]
+    ig_user_id = selected.get("instagram_user_id")
+    ig_username = selected.get("instagram_username")
+
+    connected_platforms: list[str] = []
+
+    if ig_user_id:
+        ig_cred = json.dumps({
+            "instagram_user_id": ig_user_id,
+            "username": ig_username or "",
+            "page_access_token": page_access_token,
+            "facebook_page_id": page_id,
+            "facebook_page_name": page_name,
+        })
+        await upsert_connection(db, client_id, "instagram", encrypt_credential(ig_cred))
+        connected_platforms.append("instagram")
+
+    fb_cred = json.dumps({
+        "page_id": page_id,
+        "page_name": page_name,
+        "page_access_token": page_access_token,
+    })
+    await upsert_connection(db, client_id, "facebook_page", encrypt_credential(fb_cred))
+    connected_platforms.append("facebook_page")
+
+    if ig_user_id:
+        threads_user_id = await meta_integration.discover_threads_user_id(
+            ig_user_id, long_lived_token
+        )
+        if threads_user_id:
+            threads_cred = json.dumps({
+                "threads_user_id": threads_user_id,
+                "username": ig_username or "",
+                "user_access_token": long_lived_token,
+            })
+            await upsert_connection(db, client_id, "threads", encrypt_credential(threads_cred))
+            connected_platforms.append("threads")
+
+    await delete_connection(db, client_id, "meta_pending")
 
     return {"connected_platforms": connected_platforms}
 

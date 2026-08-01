@@ -250,6 +250,14 @@ export const publishingApi = {
       `/clients/${clientId}/connections/github`,
       { method: "POST", body: JSON.stringify({ installation_id: installationId }) }
     ),
+  selectMetaPage: (clientId: string, pageId: string) =>
+    apiFetch<{ connected_platforms: string[] }>(
+      `/clients/${clientId}/connections/meta/select-page`,
+      {
+        method: "POST",
+        body: JSON.stringify({ page_id: pageId }),
+      }
+    ),
 };
 
 export const imagesApi = {

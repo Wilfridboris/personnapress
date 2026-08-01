@@ -11,6 +11,18 @@ function clearCookieRedirect(url: string): NextResponse {
 
 type MetaOAuthState = { state: string; clientId: string };
 
+type MetaPageOption = {
+  id: string;
+  name: string;
+  has_instagram: boolean;
+  instagram_username: string | null;
+};
+
+type MetaPageOptions = {
+  clientId: string;
+  pages: MetaPageOption[];
+};
+
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const code = searchParams.get("code");
@@ -67,6 +79,29 @@ export async function GET(request: NextRequest) {
       return clearCookieRedirect(
         `${errorBase}?error=${encodeURIComponent(err?.detail?.error?.message ?? "Meta connection failed. Please try again.")}`
       );
+    }
+
+    const respData = await backendResp.json().catch(() => ({})) as {
+      status?: string;
+      pages?: MetaPageOption[];
+      connected_platforms?: string[];
+    };
+
+    if (respData.status === "page_selection_required" && respData.pages?.length) {
+      const metaPageOptions: MetaPageOptions = {
+        clientId: oauthState.clientId,
+        pages: respData.pages,
+      };
+      const res = NextResponse.redirect(`${connectionsUrl}?meta_picker=1`);
+      res.cookies.delete("oauth_state_meta");
+      res.cookies.set("meta_page_options", JSON.stringify(metaPageOptions), {
+        httpOnly: false,
+        sameSite: "lax",
+        maxAge: 600,
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      });
+      return res;
     }
   } catch {
     return clearCookieRedirect(
