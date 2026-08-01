@@ -125,12 +125,14 @@ function DestinationChip({
   selected,
   onToggle,
   disabled,
+  disabledReason,
   label: labelOverride,
 }: {
   platform: string;
   selected: boolean;
   onToggle: () => void;
   disabled?: boolean;
+  disabledReason?: string;
   label?: string;
 }) {
   const label = labelOverride ?? PLATFORM_LABEL_MAP[platform] ?? platform;
@@ -140,6 +142,8 @@ function DestinationChip({
       onClick={onToggle}
       disabled={disabled}
       aria-pressed={selected}
+      title={disabled && disabledReason ? disabledReason : undefined}
+      aria-label={disabled && disabledReason ? `${label} -- ${disabledReason}` : undefined}
       className={cn(
         "inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border transition-colors duration-150",
         "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none",
@@ -731,6 +735,15 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                         })
                       }
                       disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url) || (p === "threads" && !(campaign.x_post || "").trim()) || (p === "facebook_page" && !(campaign.linkedin_post || "").trim())}
+                      disabledReason={
+                        p === "instagram" && !campaign.image_url
+                          ? "Requires a featured image"
+                          : p === "threads" && !(campaign.x_post || "").trim()
+                          ? "Requires an X post"
+                          : p === "facebook_page" && !(campaign.linkedin_post || "").trim()
+                          ? "Requires a LinkedIn post"
+                          : undefined
+                      }
                       label={platformLabels[p]}
                     />
                   ))}
@@ -1148,6 +1161,15 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                         })
                       }
                       disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url) || (p === "threads" && !(campaign.x_post || "").trim()) || (p === "facebook_page" && !(campaign.linkedin_post || "").trim())}
+                      disabledReason={
+                        p === "instagram" && !campaign.image_url
+                          ? "Requires a featured image"
+                          : p === "threads" && !(campaign.x_post || "").trim()
+                          ? "Requires an X post"
+                          : p === "facebook_page" && !(campaign.linkedin_post || "").trim()
+                          ? "Requires a LinkedIn post"
+                          : undefined
+                      }
                       label={platformLabels[p]}
                     />
                   ))}

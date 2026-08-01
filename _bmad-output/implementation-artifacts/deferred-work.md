@@ -1,5 +1,13 @@
 # Deferred Work
 
+## Deferred from: code review of 21-7-meta-social-content-visibility (2026-08-01)
+
+- No `gcTime` on connections query — pre-existing pattern; all other queries in file omit it; stale window is the TanStack default. [frontend/app/(app)/campaigns/[id]/ApprovalGateClient.tsx:65]
+- `disabledReason` ternary duplicated identically across both chip call sites — intentional per spec; mirrors the symmetric chip row duplication that already exists in the file. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx:738,1164]
+- `MetaContext` interface not exported from `SocialPostEditors.tsx` — spec doesn't require it; TypeScript infers correctly at the prop boundary via structural typing. [frontend/components/campaigns/SocialPostEditors.tsx:15]
+- `isPublishing`/`isGitHubPublishing` disables all chips with no tooltip or `aria-label` explaining why — pre-existing behavior; spec AC 4 only required tooltips for three content-missing cases. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx:737]
+- Future platforms added to the chip list will receive no `disabledReason` automatically — pre-existing extensibility gap; disabledReason ternary must be extended manually per new platform. [frontend/app/(app)/campaigns/[id]/approval-panel.tsx:738]
+
 ## Deferred from: code review of 3-21-brain-dump-image-skip-toggle (2026-08-01)
 
 - `run_social_only_pipeline` commits job to `in_progress` before `campaign_id` check — same crash window pattern as `run_generation_pipeline`, already deferred from 3-20. [backend/app/services/generation.py]

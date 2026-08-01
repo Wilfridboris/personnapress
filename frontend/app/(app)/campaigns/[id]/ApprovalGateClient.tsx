@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { BlogEditor } from "@/components/campaigns/BlogEditor";
 import { BlogHtmlRenderer } from "@/components/ui/BlogHtmlRenderer";
 import { ImagePanel } from "@/components/campaigns/ImagePanel";
@@ -14,6 +15,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { BookOpen, ArrowRight, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientStore } from "@/lib/stores/useClientStore";
+import { publishingApi } from "@/lib/api";
 import type { Campaign, CampaignStatus } from "@/lib/types";
 import type { BlogEditorHandle } from "@/components/campaigns/BlogEditor";
 import type { SocialPostEditorsHandle } from "@/components/campaigns/SocialPostEditors";
@@ -59,6 +61,18 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
   const storeClient = useClientStore((s) => s.clients.find((c) => c.id === campaign.client_id));
   const isLowConfidence = storeClient?.brand_voice_profile?.low_confidence === true;
   const clientName = storeClient?.name ?? campaign.client_name ?? "this client";
+
+  const { data: connections } = useQuery({
+    queryKey: ["platform-connections", campaign.client_id],
+    queryFn: () => publishingApi.listConnections(campaign.client_id),
+    staleTime: 30_000,
+  });
+  const connectedItems = connections?.items ?? [];
+  const metaContext = {
+    threads:       connectedItems.some(c => c.platform === "threads"       && c.connected),
+    instagram:     connectedItems.some(c => c.platform === "instagram"     && c.connected),
+    facebook_page: connectedItems.some(c => c.platform === "facebook_page" && c.connected),
+  };
 
   const [displayStatus, setDisplayStatus] = useState<CampaignStatus>(campaign.status);
 
@@ -202,6 +216,7 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
                 readOnly={!isPending}
                 showXSection={hideBlogSection ? !!campaign.x_post : true}
                 showLinkedInSection={hideBlogSection ? !!campaign.linkedin_post : true}
+                metaContext={isPending ? metaContext : undefined}
               />
             </div>
           </div>

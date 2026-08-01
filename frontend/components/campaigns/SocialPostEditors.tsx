@@ -3,6 +3,7 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { campaignsApi, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
+import { PlatformIcon } from "@/components/ui/PlatformIcon";
 
 const X_LIMIT = 280;
 const LINKEDIN_LIMIT = 1300;
@@ -11,6 +12,12 @@ const X_DANGER_THRESHOLD = 267;
 // AC #3: danger at 1235 chars (95% of 1300 = 1235.0 exactly)
 const LINKEDIN_DANGER_THRESHOLD = 1235;
 
+interface MetaContext {
+  threads?: boolean;
+  instagram?: boolean;
+  facebook_page?: boolean;
+}
+
 interface SocialPostEditorsProps {
   campaignId: string;
   initialXPost: string | null;
@@ -18,6 +25,7 @@ interface SocialPostEditorsProps {
   readOnly?: boolean;
   showXSection?: boolean;
   showLinkedInSection?: boolean;
+  metaContext?: MetaContext;
 }
 
 export interface SocialPostEditorsHandle {
@@ -27,7 +35,7 @@ export interface SocialPostEditorsHandle {
 export const SocialPostEditors = forwardRef<
   SocialPostEditorsHandle,
   SocialPostEditorsProps
->(({ campaignId, initialXPost, initialLinkedInPost, readOnly = false, showXSection = true, showLinkedInSection = true }, ref) => {
+>(({ campaignId, initialXPost, initialLinkedInPost, readOnly = false, showXSection = true, showLinkedInSection = true, metaContext }, ref) => {
   const [xPost, setXPost] = useState(initialXPost ?? "");
   const [linkedinPost, setLinkedInPost] = useState(initialLinkedInPost ?? "");
   const [isSaving, setIsSaving] = useState(false);
@@ -79,12 +87,23 @@ export const SocialPostEditors = forwardRef<
     <div className="space-y-8">
       {showXSection !== false && (
         <div>
-          <label
-            htmlFor="x-post"
-            className="block text-xs font-mono uppercase tracking-widest text-graphite mb-2"
-          >
-            X (Twitter)
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label
+              htmlFor="x-post"
+              className="text-xs font-mono uppercase tracking-widest text-graphite"
+            >
+              X (Twitter)
+            </label>
+            {metaContext?.threads && (
+              <span
+                className="flex items-center gap-0.5 text-[10px] font-mono text-graphite"
+                aria-label="Also posts to Threads"
+              >
+                <PlatformIcon platform="threads" className="size-3" color="mono" aria-hidden="true" />
+                Threads
+              </span>
+            )}
+          </div>
           <textarea
             id="x-post"
             value={xPost}
@@ -114,12 +133,39 @@ export const SocialPostEditors = forwardRef<
 
       {showLinkedInSection !== false && (
         <div>
-          <label
-            htmlFor="linkedin-post"
-            className="block text-xs font-mono uppercase tracking-widest text-graphite mb-2"
-          >
-            LinkedIn
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label
+              htmlFor="linkedin-post"
+              className="text-xs font-mono uppercase tracking-widest text-graphite"
+            >
+              LinkedIn
+            </label>
+            {(metaContext?.instagram || metaContext?.facebook_page) && (
+              <span className="flex items-center gap-1.5 text-[10px] font-mono text-graphite">
+                {metaContext.instagram && (
+                  <span
+                    className="flex items-center gap-0.5"
+                    aria-label="Also used as Instagram caption"
+                  >
+                    <PlatformIcon platform="instagram" className="size-3" color="mono" aria-hidden="true" />
+                    Instagram
+                  </span>
+                )}
+                {metaContext.instagram && metaContext.facebook_page && (
+                  <span aria-hidden="true" className="text-border">·</span>
+                )}
+                {metaContext.facebook_page && (
+                  <span
+                    className="flex items-center gap-0.5"
+                    aria-label="Also used as Facebook Page post"
+                  >
+                    <PlatformIcon platform="facebook_page" className="size-3" color="mono" aria-hidden="true" />
+                    Facebook
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
           <textarea
             id="linkedin-post"
             value={linkedinPost}
