@@ -657,6 +657,9 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
     connections = await get_connections_for_client(db, campaign.client_id)
     if platforms:
         connections = [c for c in connections if (c.platform if isinstance(c.platform, str) else c.platform.value) in platforms]
+    else:
+        # github_pages has its own dedicated publish_github_job worker; never auto-include here
+        connections = [c for c in connections if (c.platform if isinstance(c.platform, str) else c.platform.value) != "github_pages"]
     # If both self-hosted and WordPress.com connections exist, prefer self-hosted (mirrors UI precedence)
     platform_names = {(c.platform if isinstance(c.platform, str) else c.platform.value) for c in connections}
     if "wordpress" in platform_names and "wordpress-com" in platform_names:

@@ -445,18 +445,13 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     setIsPublishing(true);
     const connectedSelected = [...selectedPlatforms].filter((p) => p !== "headless");
     const headlessSelected = selectedPlatforms.has("headless");
-    const connectedPlatformCount = availablePlatforms.filter((p) => p !== "headless").length;
     try {
       if (headlessSelected) {
         const result = await campaignsApi.publishHeadless(campaign.id);
         setHeadlessResult({ articleId: result.article_id, slug: result.slug });
       }
       if (connectedSelected.length > 0) {
-        const filterPlatforms = connectedSelected.length < connectedPlatformCount ? connectedSelected : undefined;
-        const { job_id } = await campaignsApi.publishNow(
-          campaign.id,
-          ...(filterPlatforms !== undefined ? [filterPlatforms] : []),
-        );
+        const { job_id } = await campaignsApi.publishNow(campaign.id, connectedSelected);
         setActiveJobId(job_id);
       } else {
         setIsPublishing(false);

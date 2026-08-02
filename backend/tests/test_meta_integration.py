@@ -1823,3 +1823,103 @@ async def test_meta_select_page_no_instagram_page():
 
     mock_delete.assert_called_once()
     assert mock_delete.call_args.args[2] == "meta_pending"
+
+
+# ── dispatch_publish: github_pages exclusion ──────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_dispatch_publish_excludes_github_pages_when_no_platforms_filter():
+    """dispatch_publish: github_pages connection excluded from 'publish all' path (AC 1, AC 4)."""
+    from app.services.publishing import dispatch_publish
+    from app.core.security import encrypt_credential
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+
+    mock_campaign = MagicMock()
+    mock_campaign.client_id = client_id
+    mock_campaign.x_post = "test tweet"
+    mock_campaign.linkedin_post = "test linkedin caption"
+    mock_campaign.image_url = None
+    mock_campaign.scheduled_at = None
+    mock_campaign.status = "approved"
+
+    fb_creds = json.dumps({"page_id": "pg_111", "page_access_token": "page_tok", "page_name": "Test Page"})
+    gh_creds = json.dumps({})
+
+    def make_connection(platform, creds_json):
+        conn = MagicMock()
+        conn.platform = platform
+        conn.encrypted_credentials = encrypt_credential(creds_json)
+        return conn
+
+    connections = [
+        make_connection("facebook_page", fb_creds),
+        make_connection("github_pages", gh_creds),
+    ]
+
+    mock_fb_publish = AsyncMock(return_value="fb_post_id")
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=mock_campaign)),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=connections)),
+        patch("app.services.publishing.meta_integration.publish_facebook_page_post", mock_fb_publish),
+    ):
+        db = AsyncMock()
+        results = await dispatch_publish(db, campaign_id, job_id, platforms=None)
+
+    assert "github_pages" not in results
+    assert "facebook_page" in results
+    assert results["facebook_page"] == "success"
+    mock_fb_publish.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_publish_includes_github_pages_when_explicitly_requested():
+    """dispatch_publish: github_pages NOT excluded when caller passes it explicitly (AC 2)."""
+    from app.services.publishing import dispatch_publish
+    from app.core.security import encrypt_credential
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+
+    mock_campaign = MagicMock()
+    mock_campaign.client_id = client_id
+    mock_campaign.x_post = "test tweet"
+    mock_campaign.linkedin_post = "test linkedin caption"
+    mock_campaign.image_url = None
+    mock_campaign.scheduled_at = None
+    mock_campaign.status = "approved"
+
+    fb_creds = json.dumps({"page_id": "pg_111", "page_access_token": "page_tok", "page_name": "Test Page"})
+    gh_creds = json.dumps({})
+
+    def make_connection(platform, creds_json):
+        conn = MagicMock()
+        conn.platform = platform
+        conn.encrypted_credentials = encrypt_credential(creds_json)
+        return conn
+
+    connections = [
+        make_connection("facebook_page", fb_creds),
+        make_connection("github_pages", gh_creds),
+    ]
+
+    mock_fb_publish = AsyncMock(return_value="fb_post_id")
+    mock_gh_publish = AsyncMock(side_effect=Exception("No repository selected"))
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=mock_campaign)),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=connections)),
+        patch("app.services.publishing.meta_integration.publish_facebook_page_post", mock_fb_publish),
+        patch("app.services.publishing._publish_github", mock_gh_publish),
+    ):
+        db = AsyncMock()
+        results = await dispatch_publish(db, campaign_id, job_id, platforms=["github_pages"])
+
+    assert "github_pages" in results
+    assert "facebook_page" not in results
