@@ -578,7 +578,7 @@ export default function HeadlessBlogApiPage() {
               href="/headless-blog-api/docs"
               className="underline underline-offset-2 hover:text-ink transition-colors"
             >
-              Full API Reference including all endpoints, error codes, and caching &rarr;
+              Full API Reference including all endpoints, error codes, and caching
             </Link>
           </p>
         </section>
