@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 12-6-headless-blog-api-developer-docs-page (2026-08-07)
+
+- www vs no-www fallback URL mismatch: `docs/page.tsx` falls back to `https://www.personnapress.com` while `sitemap.ts` falls back to `https://personnapress.com` — pre-existing inconsistency across codebase files. [frontend/app/(public)/headless-blog-api/docs/page.tsx:7, frontend/app/sitemap.ts:3]
+- TerminalBlock `<pre>` focus ring uses `ring-ink` against `bg-ink` container, making the focus indicator potentially invisible (WCAG 2.1 AA) — pre-existing pattern copied exactly from `headless-blog-api/page.tsx`. [frontend/app/(public)/headless-blog-api/docs/page.tsx:326]
+- Parent page `headless-blog-api/page.tsx` ASTRO_SAMPLE at line 271 does `res.json()` without a `res.ok` guard — pre-existing code not touched by this story; docs page correctly has the guard. [frontend/app/(public)/headless-blog-api/page.tsx:271]
+- Sitemap `lastModified: new Date()` marks pages as modified on every deployment even when content is unchanged — pre-existing pattern on all sitemap entries, not specific to this story. [frontend/app/sitemap.ts:47]
+
 ## Deferred from: code review of 21-7-meta-social-content-visibility (2026-08-01)
 
 - No `gcTime` on connections query — pre-existing pattern; all other queries in file omit it; stale window is the TanStack default. [frontend/app/(app)/campaigns/[id]/ApprovalGateClient.tsx:65]

@@ -572,6 +572,15 @@ export default function HeadlessBlogApiPage() {
               </div>
             </div>
           </div>
+
+          <p className="font-mono text-xs text-graphite mt-6">
+            <Link
+              href="/headless-blog-api/docs"
+              className="underline underline-offset-2 hover:text-ink transition-colors"
+            >
+              Full API Reference including all endpoints, error codes, and caching &rarr;
+            </Link>
+          </p>
         </section>
 
         <div className="border-t border-border" />
