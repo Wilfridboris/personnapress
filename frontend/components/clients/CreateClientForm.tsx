@@ -24,7 +24,7 @@ function UpgradePrompt({ message }: { message: string }) {
       <p className="text-sm text-[#111111] mb-3">{message}</p>
       <Link
         href="/account#choose-plan"
-        className="text-sm border border-[#111111] text-[#111111] px-4 py-2 hover:bg-[#111111] hover:text-white transition-colors rounded-none inline-block"
+        className="text-sm border border-[#111111] text-[#111111] px-4 py-2 hover:bg-[#111111] hover:text-white transition-colors rounded-none inline-block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
       >
         Upgrade plan
       </Link>

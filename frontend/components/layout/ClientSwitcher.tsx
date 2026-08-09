@@ -103,7 +103,7 @@ export function ClientSwitcher() {
         </span>
         <ChevronDown
           className={cn(
-            "hidden lg:block shrink-0 w-4 h-4 text-[#555555] transition-transform duration-150",
+            "hidden lg:block shrink-0 size-4 text-[#555555] transition-transform duration-150",
             isOpen && "rotate-180"
           )}
           aria-hidden="true"
@@ -146,7 +146,7 @@ export function ClientSwitcher() {
                     )}
                   >
                     <Check
-                      className={cn("w-4 h-4 shrink-0", isActive ? "opacity-100" : "opacity-0")}
+                      className={cn("size-4 shrink-0", isActive ? "opacity-100" : "opacity-0")}
                       aria-hidden="true"
                     />
                     <span className="truncate">{client.name}</span>
@@ -158,9 +158,9 @@ export function ClientSwitcher() {
                   <Link
                     href="/clients/new"
                     onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-2 w-full py-2 px-3 text-[0.9375rem] text-[#555555] hover:bg-[#FFF1B8] hover:text-[#111111] transition-colors"
+                    className="flex items-center gap-2 w-full py-2 px-3 text-[0.9375rem] text-[#555555] hover:bg-[#FFF1B8] hover:text-[#111111] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#111111]"
                   >
-                    <Plus className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <Plus className="size-4 shrink-0" aria-hidden="true" />
                     <span>New client</span>
                   </Link>
                 </div>
@@ -172,7 +172,7 @@ export function ClientSwitcher() {
                     <Link
                       href="/account#choose-plan"
                       onClick={() => setIsOpen(false)}
-                      className="text-[#111111] underline hover:no-underline"
+                      className="text-[#111111] underline hover:no-underline focus-visible:outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-[#111111]"
                     >
                       Upgrade plan
                     </Link>
