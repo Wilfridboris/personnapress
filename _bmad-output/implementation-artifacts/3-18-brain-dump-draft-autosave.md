@@ -4,7 +4,7 @@ baseline_commit: 6f1a9f7
 
 # Story 3.18: Brain Dump Draft Autosave -- localStorage Persistence & Restore Banner
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -376,3 +376,57 @@ import { FileText, ... } from "lucide-react"; // add FileText to existing Lucide
 - Any backend, schema, or API changes
 - Any visual changes to the textarea itself
 - Draft persistence for the rejection + regenerate flow (separate concern)
+
+---
+
+## Dev Agent Record
+
+### Implementation Notes
+
+All changes implemented in a single file (`frontend/app/(app)/campaigns/new/page.tsx`) plus the global CSS file for the animation keyframe.
+
+**What was implemented:**
+- `DRAFT_KEY`, `DRAFT_TTL_MS`, `BrainDumpDraft` interface and `formatDraftAge` helper added at module scope
+- `draftBanner` state and `saveTimerRef` ref added to the component
+- Debounced autosave useEffect (500ms, skips empty forms, per-client key, cleans up timer on unmount/re-run)
+- Draft load useEffect on `activeClientId` change -- checks 7-day TTL and silently discards expired drafts
+- Auto-dismiss useEffect -- clears `draftBanner` when any field becomes non-empty (without touching localStorage)
+- `handleRestoreDraft` -- fills all four fields, dismisses banner; does NOT clear localStorage
+- `handleDiscardDraft` -- removes draft from localStorage, dismisses banner
+- Draft cleared from localStorage on successful form submission (before `router.push`)
+- Restore banner JSX placed between `</header>` and the "Writing for:" paragraph; uses `role="status"` + `aria-live="polite"`, Lucide `FileText` icon, Restore/Discard buttons with 44px touch targets
+- `@keyframes slideDown` added to `frontend/app/globals.css`; referenced via Tailwind arbitrary `animate-[slideDown_150ms_ease-out]`
+- `FileText` added to existing Lucide import
+
+**AC coverage confirmed:** AC 1 (debounce, key format, per-client, skip empty), AC 2 (7-day TTL expiry), AC 3 (banner, restore, discard, auto-dismiss), AC 4 (clear on submit), AC 5 (relative date format), AC 6 (Paper Style design, animation, a11y), AC 7 (no regressions -- existing hooks/logic untouched)
+
+### Completion Notes
+
+Story implemented without regressions. TypeScript clean (zero new errors). No new dependencies. No backend changes.
+
+---
+
+## File List
+
+- `frontend/app/(app)/campaigns/new/page.tsx` -- modified (autosave logic, draft banner JSX)
+- `frontend/app/globals.css` -- modified (added `@keyframes slideDown`)
+
+---
+
+## Review Findings
+
+- [x] [Review][Patch] Banner auto-dismissed by BVP targetAudience auto-fill before user sees it [page.tsx:157] — HIGH: auto-dismiss effect watches targetAudience; BVP fill fires on mount and immediately clears draftBanner. Fixed: gated on userHasTypedRef.
+- [x] [Review][Patch] Autosave writes draft from BVP auto-fill only (no user input) [page.tsx:112] — MEDIUM: anyContent check passes when only targetAudience is BVP-filled. Fixed: gated autosave on userHasTypedRef.
+- [x] [Review][Patch] No validation of draft savedAt or field types loaded from localStorage [page.tsx:145] — MEDIUM: malformed/missing savedAt bypasses TTL check (NaN > TTL is false). Fixed: type guard added.
+- [x] [Review][Patch] rounded-none missing from banner container [page.tsx:284] — LOW: explicit spec requirement (AC 6 cr.13). Fixed: added rounded-none.
+- [x] [Review][Patch] No vertical padding on banner container (py-3 missing) [page.tsx:284] — LOW: Paper Style bar pattern requires py-*. Fixed: added py-3.
+- [x] [Review][Patch] handleDiscardDraft early return prevents banner dismissal when activeClientId is null [page.tsx:219] — LOW: setDraftBanner(null) never called on null-client guard. Fixed: moved setDraftBanner before guard.
+- [x] [Review][Patch] formatDraftAge returns "NaN days ago" for invalid/missing savedAt string [page.tsx:43] — LOW: NaN propagates to template literal. Fixed: isNaN guard added.
+- [x] [Review][Defer] Autosave timer cancelled on unmount — last 500ms of typing before navigation is lost [page.tsx:133] — deferred, design tradeoff; a beforeunload handler or flushSync would address it but spec does not require it
+
+---
+
+## Change Log
+
+- 2026-08-09: Implemented Brain Dump draft autosave with localStorage persistence and restore banner (Story 3.18)
+- 2026-08-09: Code review: 7 patches applied (userHasTypedRef for BVP-dismiss bug + autosave guard, savedAt validation, rounded-none, py-3, discard guard, NaN guard), 1 deferred

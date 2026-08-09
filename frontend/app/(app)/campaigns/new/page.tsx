@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronDown, ChevronUp, Feather, Lightbulb, Link as LinkIcon, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Feather, FileText, Lightbulb, Link as LinkIcon, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,33 @@ function platformLabel(platform: string): string {
 const MAX_CHARS = 10000;
 const MIN_CHARS = 20;
 const MAX_TEXTAREA_HEIGHT = 480;
+
+const DRAFT_KEY = (clientId: string) =>
+  `personnapress:brain-dump-draft:${clientId}`;
+
+const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+interface BrainDumpDraft {
+  brainDump: string;
+  targetKeyword: string;
+  supportingKeywords: string;
+  targetAudience: string;
+  savedAt: string;
+}
+
+function formatDraftAge(savedAt: string): string {
+  const diffMs = Date.now() - new Date(savedAt).getTime();
+  if (isNaN(diffMs) || diffMs < 0) return "just now";
+  const diffMin = Math.floor(diffMs / 60_000);
+  const diffHr = Math.floor(diffMs / 3_600_000);
+  const diffDay = Math.floor(diffMs / 86_400_000);
+
+  if (diffMin < 1) return "just now";
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
+  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? "" : "s"} ago`;
+  if (diffDay === 1) return "yesterday";
+  return `${diffDay} days ago`;
+}
 
 function resizeTextarea(ta: HTMLTextAreaElement, maxH: number) {
   if (ta.scrollHeight >= maxH && parseFloat(ta.style.height || "0") >= maxH) {
@@ -63,6 +90,9 @@ export default function NewCampaignPage() {
   // switch and on async client-list load (when activeClientId is set before
   // clients arrive in the store).
   const lastAutoFilledClientId = useRef<string | null>(null);
+  const [draftBanner, setDraftBanner] = useState<BrainDumpDraft | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userHasTypedRef = useRef(false);
 
   useEffect(() => {
     setGenerateImage(true);
@@ -79,6 +109,69 @@ export default function NewCampaignPage() {
       lastAutoFilledClientId.current = activeClientId ?? null;
     }
   }, [activeClientId, activeClient]);
+
+  // Debounced autosave to localStorage (AC 1)
+  useEffect(() => {
+    if (!activeClientId || !userHasTypedRef.current) return;
+    const anyContent = brainDump || targetKeyword || supportingKeywords || targetAudience;
+    if (!anyContent) return;
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      const draft: BrainDumpDraft = {
+        brainDump,
+        targetKeyword,
+        supportingKeywords,
+        targetAudience,
+        savedAt: new Date().toISOString(),
+      };
+      try {
+        localStorage.setItem(DRAFT_KEY(activeClientId), JSON.stringify(draft));
+      } catch {
+        // localStorage quota exceeded -- silently ignore
+      }
+    }, 500);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [brainDump, targetKeyword, supportingKeywords, targetAudience, activeClientId]);
+
+  // Load draft from localStorage on mount / client change (AC 2, AC 3)
+  useEffect(() => {
+    userHasTypedRef.current = false;
+    if (!activeClientId) return;
+    setDraftBanner(null);
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY(activeClientId));
+      if (!raw) return;
+      const draft: BrainDumpDraft = JSON.parse(raw);
+      if (!draft || typeof draft.savedAt !== "string" || !draft.savedAt) {
+        localStorage.removeItem(DRAFT_KEY(activeClientId));
+        return;
+      }
+      if (Date.now() - new Date(draft.savedAt).getTime() > DRAFT_TTL_MS) {
+        localStorage.removeItem(DRAFT_KEY(activeClientId));
+        return;
+      }
+      setDraftBanner({
+        brainDump: typeof draft.brainDump === "string" ? draft.brainDump : "",
+        targetKeyword: typeof draft.targetKeyword === "string" ? draft.targetKeyword : "",
+        supportingKeywords: typeof draft.supportingKeywords === "string" ? draft.supportingKeywords : "",
+        targetAudience: typeof draft.targetAudience === "string" ? draft.targetAudience : "",
+        savedAt: draft.savedAt,
+      });
+    } catch {
+      // Malformed JSON or localStorage unavailable -- silently ignore
+    }
+  }, [activeClientId]);
+
+  // Auto-dismiss banner when user starts typing (AC 3, criterion 9)
+  useEffect(() => {
+    if (!draftBanner || !userHasTypedRef.current) return;
+    const anyContent = brainDump || targetKeyword || supportingKeywords || targetAudience;
+    if (anyContent) setDraftBanner(null);
+  }, [brainDump, targetKeyword, supportingKeywords, targetAudience]);
 
   const { data: connectionsData } = useQuery({
     queryKey: ["platform-connections", activeClientId],
@@ -113,6 +206,7 @@ export default function NewCampaignPage() {
   }, [brainDump]);
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    userHasTypedRef.current = true;
     setBrainDump(e.target.value.slice(0, MAX_CHARS));
   }
 
@@ -125,6 +219,21 @@ export default function NewCampaignPage() {
       e.preventDefault();
       if (!isDisabled) handleSubmit();
     }
+  }
+
+  function handleRestoreDraft() {
+    if (!draftBanner) return;
+    setBrainDump(draftBanner.brainDump);
+    setTargetKeyword(draftBanner.targetKeyword);
+    setSupportingKeywords(draftBanner.supportingKeywords);
+    setTargetAudience(draftBanner.targetAudience);
+    setDraftBanner(null);
+  }
+
+  function handleDiscardDraft() {
+    setDraftBanner(null);
+    if (!activeClientId) return;
+    localStorage.removeItem(DRAFT_KEY(activeClientId));
   }
 
   async function handleSubmit() {
@@ -147,6 +256,7 @@ export default function NewCampaignPage() {
       setSupportingKeywords("");
       setTargetAudience("");
       setIsSubmitting(false);
+      if (activeClientId) localStorage.removeItem(DRAFT_KEY(activeClientId));
       router.push(`/campaigns/${data.campaign_id}?job_id=${data.job_id}`);
     } catch (err: unknown) {
       if (err instanceof APIError && err.code === "TRIAL_EXPIRED") {
@@ -180,6 +290,33 @@ export default function NewCampaignPage() {
         </p>
         <h1 className="font-display text-3xl font-bold text-ink">Brain Dump</h1>
       </header>
+
+      {draftBanner && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-3 border border-ink/10 bg-[#F9F9F6] rounded-none px-4 py-3 mb-6 animate-[slideDown_150ms_ease-out]"
+        >
+          <FileText size={12} aria-hidden="true" className="shrink-0 text-graphite" />
+          <p className="text-xs font-mono text-graphite flex-1">
+            Unsaved draft from {formatDraftAge(draftBanner.savedAt)}.
+          </p>
+          <button
+            type="button"
+            onClick={handleRestoreDraft}
+            className="text-xs font-mono text-ink underline underline-offset-2 min-h-[44px] px-2 hover:text-graphite transition-colors duration-100"
+          >
+            Restore
+          </button>
+          <button
+            type="button"
+            onClick={handleDiscardDraft}
+            className="text-xs font-mono text-graphite/60 underline underline-offset-2 min-h-[44px] px-2 hover:text-graphite transition-colors duration-100"
+          >
+            Discard
+          </button>
+        </div>
+      )}
 
       {hasActiveClient ? (
         <p className="text-xs font-mono text-graphite mb-4">
@@ -427,7 +564,7 @@ export default function NewCampaignPage() {
             <input
               type="text"
               value={targetKeyword}
-              onChange={(e) => setTargetKeyword(e.target.value)}
+              onChange={(e) => { userHasTypedRef.current = true; setTargetKeyword(e.target.value); }}
               maxLength={200}
               placeholder="e.g. how to scale a subscription mobile app"
               className="w-full bg-transparent font-mono text-sm text-ink border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink py-2 focus:outline-none transition-all placeholder:text-graphite/40"
@@ -442,7 +579,7 @@ export default function NewCampaignPage() {
             <input
               type="text"
               value={supportingKeywords}
-              onChange={(e) => setSupportingKeywords(e.target.value)}
+              onChange={(e) => { userHasTypedRef.current = true; setSupportingKeywords(e.target.value); }}
               maxLength={500}
               placeholder="e.g. SaaS growth, bootstrapped startup, MRR expansion"
               className="w-full bg-transparent font-mono text-sm text-ink border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink py-2 focus:outline-none transition-all placeholder:text-graphite/40"
@@ -462,7 +599,7 @@ export default function NewCampaignPage() {
         <input
           type="text"
           value={targetAudience}
-          onChange={(e) => setTargetAudience(e.target.value)}
+          onChange={(e) => { userHasTypedRef.current = true; setTargetAudience(e.target.value); }}
           maxLength={500}
           placeholder="e.g. indie app developers, solo founders building iOS apps"
           className="w-full bg-transparent font-mono text-sm text-ink border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink py-2 focus:outline-none transition-all placeholder:text-graphite/40"

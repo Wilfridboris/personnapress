@@ -1,5 +1,9 @@
 # Deferred Work
 
+## Deferred from: code review of 3-18-brain-dump-draft-autosave (2026-08-09)
+
+- Autosave timer cancelled on unmount -- last 500ms of typing before browser close/navigation is lost: the cleanup `clearTimeout` kills the pending 500ms write when the component unmounts. A `beforeunload` handler (synchronous `localStorage.setItem`) or `flushSync` would make the final keystroke durable. Spec does not require it; narrow window; deferred as design tradeoff. [frontend/app/(app)/campaigns/new/page.tsx:133]
+
 ## Deferred from: code review of fix-sidebar-client-nav-ux (2026-08-08)
 
 - ARIA listbox contract: `<Link>` elements inside `role="listbox"` (empty-state "Create client", new "New client" footer, at-limit "Upgrade plan" link) lack `role="option"`, violating the ARIA spec — pre-existing pattern; empty-state link pre-existed this story. [frontend/components/layout/ClientSwitcher.tsx:122,158,172]
