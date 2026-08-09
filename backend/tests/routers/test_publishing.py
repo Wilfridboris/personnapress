@@ -787,3 +787,109 @@ async def test_run_publish_headless_missing_article():
         await run_publish_headless(str(campaign_id))
 
     db_mock.commit.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# LinkedIn target endpoints (AC 9, story 5.7)
+# ---------------------------------------------------------------------------
+
+def _make_linkedin_connection(client_id=None, creds=None):
+    from app.core.security import encrypt_credential
+    pc = MagicMock()
+    pc.id = uuid.uuid4()
+    pc.client_id = client_id or uuid.uuid4()
+    pc.platform = "linkedin"
+    if creds is None:
+        creds = {"access_token": "li_tok", "name": "Test User"}
+    pc.encrypted_credentials = encrypt_credential(json.dumps(creds))
+    return pc
+
+
+@pytest.mark.asyncio
+async def test_update_linkedin_target_stores_org():
+    """PATCH /connections/linkedin/target with organization payload persists org fields."""
+    from app.routers.publishing import update_linkedin_target, LinkedInTargetPatchRequest
+    from app.core.security import decrypt_credential
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    li_conn = _make_linkedin_connection(client_id=client.id)
+    stored_creds = []
+
+    async def fake_upsert(db, client_id, platform, encrypted):
+        stored_creds.append(json.loads(decrypt_credential(encrypted)))
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connections_for_client", AsyncMock(return_value=[li_conn])),
+        patch("app.routers.publishing.upsert_connection", fake_upsert),
+    ):
+        result = await update_linkedin_target(
+            client_id=client.id,
+            body=LinkedInTargetPatchRequest(target="organization", org_id="123456", org_name="Acme Corp"),
+            current_user={"user_id": str(user_id)},
+            db=AsyncMock(),
+        )
+
+    assert result["target"] == "organization"
+    assert result["org_id"] == "123456"
+    assert result["org_name"] == "Acme Corp"
+    assert len(stored_creds) == 1
+    assert stored_creds[0]["target"] == "organization"
+    assert stored_creds[0]["org_id"] == "123456"
+    assert stored_creds[0]["org_name"] == "Acme Corp"
+
+
+@pytest.mark.asyncio
+async def test_update_linkedin_target_org_missing_org_id_returns_422():
+    """PATCH /connections/linkedin/target with target=organization and no org_id raises HTTP 422."""
+    from app.routers.publishing import update_linkedin_target, LinkedInTargetPatchRequest
+    from fastapi import HTTPException
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    li_conn = _make_linkedin_connection(client_id=client.id)
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connections_for_client", AsyncMock(return_value=[li_conn])),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await update_linkedin_target(
+                client_id=client.id,
+                body=LinkedInTargetPatchRequest(target="organization"),
+                current_user={"user_id": str(user_id)},
+                db=AsyncMock(),
+            )
+
+    assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_list_linkedin_organizations_disabled_returns_403():
+    """GET /connections/linkedin/organizations returns 403 when LINKEDIN_ORG_POSTING_ENABLED=false."""
+    from app.routers.publishing import list_linkedin_organizations
+    from fastapi import HTTPException
+    from app.core.config import settings
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+
+    original = settings.LINKEDIN_ORG_POSTING_ENABLED
+    try:
+        settings.LINKEDIN_ORG_POSTING_ENABLED = False
+
+        with (
+            patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+            patch("app.routers.publishing.get_connections_for_client", AsyncMock(return_value=[])),
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await list_linkedin_organizations(
+                    client_id=client.id,
+                    current_user={"user_id": str(user_id)},
+                    db=AsyncMock(),
+                )
+
+        assert exc_info.value.status_code == 403
+    finally:
+        settings.LINKEDIN_ORG_POSTING_ENABLED = original

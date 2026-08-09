@@ -23,7 +23,11 @@ export async function GET(request: NextRequest) {
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("client_id", linkedInClientId);
   authUrl.searchParams.set("redirect_uri", `${APP_URL}/api/auth/linkedin/callback`);
-  authUrl.searchParams.set("scope", "openid profile w_member_social");
+  const orgPostingEnabled = process.env.NEXT_PUBLIC_LINKEDIN_ORG_POSTING_ENABLED === "true";
+  const scope = orgPostingEnabled
+    ? "openid profile w_member_social r_organization_admin w_organization_social"
+    : "openid profile w_member_social";
+  authUrl.searchParams.set("scope", scope);
   authUrl.searchParams.set("state", state);
 
   const response = NextResponse.redirect(authUrl.toString());

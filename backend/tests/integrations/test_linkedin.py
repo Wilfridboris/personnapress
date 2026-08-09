@@ -179,3 +179,67 @@ async def test_create_post_with_image_uses_rest_posts_endpoint():
 
     assert called_url[0].endswith("/rest/posts")
     assert "ugcPosts" not in called_url[0]
+
+
+# ---------------------------------------------------------------------------
+# create_ugc_post — org_id parameter (AC 7)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_create_ugc_post_personal_calls_userinfo():
+    """With org_id=None, create_ugc_post fetches /v2/userinfo and uses urn:li:person."""
+    from app.integrations.linkedin import create_ugc_post
+
+    captured_json = {}
+    userinfo_called = []
+
+    async def mock_get(url, **kwargs):
+        userinfo_called.append(url)
+        return _mock_response(200, {"sub": "person123"})
+
+    async def mock_post(url, *, json, **kwargs):
+        captured_json.update(json)
+        return _mock_response(201, {}, headers={"x-restli-id": "urn:li:ugcPost:1"})
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.get = mock_get
+    mock_client.post = mock_post
+
+    with patch("app.integrations.linkedin.httpx.AsyncClient", return_value=mock_client):
+        result = await create_ugc_post("tok", "<p>html</p>", "text", org_id=None)
+
+    assert result == "urn:li:ugcPost:1"
+    assert captured_json["author"] == "urn:li:person:person123"
+    assert any("userinfo" in u for u in userinfo_called), "/v2/userinfo must be called for personal posting"
+
+
+@pytest.mark.asyncio
+async def test_create_ugc_post_org_skips_userinfo():
+    """With org_id provided, create_ugc_post skips /v2/userinfo and uses urn:li:organization."""
+    from app.integrations.linkedin import create_ugc_post
+
+    captured_json = {}
+    called_urls = []
+
+    async def mock_get(url, **kwargs):
+        called_urls.append(url)
+        return _mock_response(200, {"sub": "should_not_be_called"})
+
+    async def mock_post(url, *, json, **kwargs):
+        captured_json.update(json)
+        return _mock_response(201, {}, headers={"x-restli-id": "urn:li:ugcPost:2"})
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.get = mock_get
+    mock_client.post = mock_post
+
+    with patch("app.integrations.linkedin.httpx.AsyncClient", return_value=mock_client):
+        result = await create_ugc_post("tok", "<p>html</p>", "text", org_id="123456")
+
+    assert result == "urn:li:ugcPost:2"
+    assert captured_json["author"] == "urn:li:organization:123456"
+    assert not any("userinfo" in u for u in called_urls), "/v2/userinfo must NOT be called when posting as org"

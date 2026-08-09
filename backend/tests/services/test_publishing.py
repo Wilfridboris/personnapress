@@ -141,6 +141,67 @@ async def test_dispatch_publish_empty_platforms_publishes_all():
 
 
 # ---------------------------------------------------------------------------
+# dispatch_publish — LinkedIn org posting (AC 7, 8)
+# ---------------------------------------------------------------------------
+
+async def test_dispatch_publish_linkedin_org_passes_org_id():
+    """dispatch_publish passes org_id to create_ugc_post when target=organization."""
+    from app.services.publishing import dispatch_publish
+
+    campaign = _make_campaign()
+    campaign.status = "approved"
+    campaign.image_url = None
+    li_creds = {
+        "access_token": "li_token",
+        "name": "Test User",
+        "target": "organization",
+        "org_id": "123456",
+        "org_name": "Acme Corp",
+    }
+    li_conn = _make_connection("linkedin", creds=li_creds)
+    db = AsyncMock()
+
+    mock_ugc = AsyncMock(return_value="urn:li:ugcPost:1")
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=[li_conn])),
+        patch("app.services.publishing.linkedin_integration.create_ugc_post", mock_ugc),
+    ):
+        results = await dispatch_publish(db, campaign.id, uuid.uuid4(), platforms=["linkedin"])
+
+    assert results.get("linkedin") == "success"
+    mock_ugc.assert_called_once()
+    _, kwargs = mock_ugc.call_args
+    assert kwargs.get("org_id") == "123456"
+
+
+async def test_dispatch_publish_linkedin_legacy_no_target_uses_personal():
+    """dispatch_publish uses personal path when cred blob has no 'target' key (legacy)."""
+    from app.services.publishing import dispatch_publish
+
+    campaign = _make_campaign()
+    campaign.status = "approved"
+    campaign.image_url = None
+    # Legacy blob without 'target' key
+    li_creds = {"access_token": "li_token", "name": "Old User"}
+    li_conn = _make_connection("linkedin", creds=li_creds)
+    db = AsyncMock()
+
+    mock_ugc = AsyncMock(return_value="urn:li:ugcPost:2")
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=[li_conn])),
+        patch("app.services.publishing.linkedin_integration.create_ugc_post", mock_ugc),
+    ):
+        results = await dispatch_publish(db, campaign.id, uuid.uuid4(), platforms=["linkedin"])
+
+    assert results.get("linkedin") == "success"
+    mock_ugc.assert_called_once()
+    _, kwargs = mock_ugc.call_args
+    assert kwargs.get("org_id") is None
+
+
+# ---------------------------------------------------------------------------
 # _publish_github — Jekyll path
 # ---------------------------------------------------------------------------
 

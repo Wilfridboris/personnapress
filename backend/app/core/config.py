@@ -67,5 +67,9 @@ class Settings(BaseSettings):
     THREADS_APP_ID: str = ""
     THREADS_APP_SECRET: str = ""
 
+    # LinkedIn Marketing Developer Platform approval gate
+    # Set to true after LinkedIn grants MDP approval for r_organization_admin + w_organization_social scopes.
+    LINKEDIN_ORG_POSTING_ENABLED: bool = False
+
 
 settings = Settings()

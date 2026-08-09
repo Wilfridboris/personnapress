@@ -923,6 +923,26 @@ so that the AI has enough E-E-A-T material to generate content that sounds genui
 
 ---
 
+### Story 3.22: Strip Blog Compliance Report Trailer
+
+As a PersonnaPress user reading a generated blog post,
+I want the blog HTML to contain only article content,
+so that the self-verification compliance block some models append never leaks into the saved article.
+
+**Acceptance Criteria:**
+
+1. **Given** `_BLOG_PROMPT` in `generation_prompts.py`, **When** the story is implemented, **Then** the final line of the prompt body instructs the model: "Output ONLY the HTML above. Do NOT append any word count, compliance summary, keyword checklist, or verification notes after the closing HTML tag."
+
+2. **Given** `generation_prompts.py`, **When** the story is implemented, **Then** a new `_strip_blog_trailer(html: str) -> str` function exists after `_md_to_html`; it clips everything after the last `>` character (`rfind(">")`), returning the input unchanged if no `>` is found.
+
+3. **Given** `gemini.py` `generate_blog`, **When** the story is implemented, **Then** `_strip_blog_trailer` wraps the `_md_to_html(_strip_fences(...))` call: `result = _strip_blog_trailer(_md_to_html(_strip_fences(response.text.strip())))`.
+
+4. **Given** `anthropic_client.py` `generate_blog`, **When** the story is implemented, **Then** the same wrapping is applied: `result = _strip_blog_trailer(_md_to_html(_strip_fences(raw.strip())))`.
+
+5. **Given** `test_generation_prompts.py`, **When** the story is implemented, **Then** a `TestStripBlogTrailer` class with 5 test methods covers: strips compliance report, no trailer unchanged, empty string unchanged, no HTML tags unchanged, whitespace after last tag stripped.
+
+---
+
 ## Epic 4: Approval Gate & Content Review
 
 A user can view a full preview of all Campaign content — rendered blog HTML, social posts, and featured image — edit the blog post via WYSIWYG, edit social posts with live character counters, see an advisory voice fidelity score, and approve or reject the Campaign before publishing. The Approval Gate's state machine UI adapts to each Campaign lifecycle state.

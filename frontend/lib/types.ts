@@ -289,6 +289,18 @@ export interface GitHubDetectionResult {
   candidates: Array<{ framework: string; publish_path: string; signals: string[] }>;
 }
 
+export interface LinkedInOrg {
+  id: string;
+  name: string;
+  follower_count: number;
+}
+
+export interface LinkedInTargetPayload {
+  target: "personal" | "organization";
+  org_id?: string;
+  org_name?: string;
+}
+
 export interface PlatformConnectionStatus {
   platform: "wordpress" | "webflow" | "x" | "linkedin" | "github_pages" | "instagram" | "facebook_page" | "threads";
   connected: boolean;
@@ -296,6 +308,8 @@ export interface PlatformConnectionStatus {
   connected_via?: "wordpress-com";
   github_detection?: GitHubDetectionResult | null;
   direct_commit_default?: boolean;
+  linkedin_target?: "personal" | "organization";
+  linkedin_org_name?: string;
 }
 
 export interface ConnectionCreatePayload {

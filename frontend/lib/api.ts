@@ -1,4 +1,4 @@
-import type { Article, ArticleListResponse, ExpandedBrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, DeliveryToken, DeliveryTokenCreateResponse, DeliveryTokenListResponse, FileListResponse, GitHubDetectionResult, Job, PlatformConnectionStatus, PublishHeadlessResponse, QuestionnairePayload, RevisionDetail, RevisionListResponse, RoadmapConfig, RoadmapCreateResponse, RoadmapListResponse, RoadmapStatusResponse, SubscriptionInfo } from "./types";
+import type { Article, ArticleListResponse, ExpandedBrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, DeliveryToken, DeliveryTokenCreateResponse, DeliveryTokenListResponse, FileListResponse, GitHubDetectionResult, Job, LinkedInOrg, LinkedInTargetPayload, PlatformConnectionStatus, PublishHeadlessResponse, QuestionnairePayload, RevisionDetail, RevisionListResponse, RoadmapConfig, RoadmapCreateResponse, RoadmapListResponse, RoadmapStatusResponse, SubscriptionInfo } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -257,6 +257,15 @@ export const publishingApi = {
         method: "POST",
         body: JSON.stringify({ page_id: pageId }),
       }
+    ),
+  getLinkedInOrganizations: (clientId: string) =>
+    apiFetch<{ organizations: LinkedInOrg[] }>(
+      `/clients/${clientId}/connections/linkedin/organizations`
+    ),
+  updateLinkedInTarget: (clientId: string, payload: LinkedInTargetPayload) =>
+    apiFetch<{ target: string; org_id: string | null; org_name: string | null }>(
+      `/clients/${clientId}/connections/linkedin/target`,
+      { method: "PATCH", body: JSON.stringify(payload) }
     ),
 };
 
