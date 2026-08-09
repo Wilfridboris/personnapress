@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { fetchAPI, APIError } from "@/lib/api";
@@ -19,39 +19,15 @@ const labelClass =
   "block text-xs font-sans text-[#111111] uppercase tracking-widest mb-2";
 
 function UpgradePrompt({ message }: { message: string }) {
-  const [loading, setLoading] = useState(false);
-  const [portalError, setPortalError] = useState(false);
-
-  async function openPortal() {
-    setLoading(true);
-    setPortalError(false);
-    try {
-      const data = await fetchAPI<{ portal_url: string }>("/subscriptions/portal", {
-        method: "POST",
-      });
-      window.location.href = data.portal_url;
-    } catch {
-      setPortalError(true);
-      setLoading(false);
-    }
-  }
-
   return (
     <div role="alert" className="mb-6 border border-[#E5E5E5] p-4">
       <p className="text-sm text-[#111111] mb-3">{message}</p>
-      {portalError && (
-        <p className="text-xs text-[#8B0000] mb-2">
-          Could not open the portal. Please try again or contact support.
-        </p>
-      )}
-      <button
-        type="button"
-        onClick={openPortal}
-        disabled={loading}
-        className="text-sm border border-[#111111] text-[#111111] px-4 py-2 hover:bg-[#111111] hover:text-white transition-colors rounded-none disabled:opacity-50"
+      <Link
+        href="/account#choose-plan"
+        className="text-sm border border-[#111111] text-[#111111] px-4 py-2 hover:bg-[#111111] hover:text-white transition-colors rounded-none inline-block"
       >
-        {loading ? "Opening..." : "Manage subscription"}
-      </button>
+        Upgrade plan
+      </Link>
     </div>
   );
 }

@@ -43,6 +43,7 @@ export function AppShell({ children }: AppShellProps) {
         const { clients } = data;
         const store = useClientStore.getState();
         store.setClients(clients);
+        store.setPlanInfo(data.plan_at_limit, data.plan_tier, data.client_limit);
 
         const currentId = store.activeClientId;
         if (!currentId || !clients.some((c) => c.id === currentId)) {

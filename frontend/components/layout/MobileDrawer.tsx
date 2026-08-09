@@ -14,6 +14,7 @@ export function MobileDrawer() {
   const close = useUIStore((s) => s.closeMobileDrawer);
   const { activeClientId } = useClientStore();
   const calendarIdx = NAV_ITEMS.findIndex((item) => item.label === "Calendar");
+  const clientsHref = activeClientId ? `/clients/${activeClientId}` : "/clients";
 
   useEffect(() => {
     if (isOpen) {
@@ -73,7 +74,7 @@ export function MobileDrawer() {
         <ClientSwitcher />
         <nav aria-label="Navigation" className="flex-1 overflow-y-auto py-2">
           {NAV_ITEMS.slice(0, calendarIdx).map((item) => (
-            <NavItem key={item.href} {...item} onClick={close} forceLabel />
+            <NavItem key={item.href} {...item} href={item.href === "/clients" ? clientsHref : item.href} onClick={close} forceLabel />
           ))}
           {activeClientId && (
             <NavItem
@@ -94,7 +95,7 @@ export function MobileDrawer() {
             />
           )}
           {NAV_ITEMS.slice(calendarIdx).map((item) => (
-            <NavItem key={item.href} {...item} onClick={close} forceLabel />
+            <NavItem key={item.href} {...item} href={item.href === "/clients" ? clientsHref : item.href} onClick={close} forceLabel />
           ))}
         </nav>
         <div className="border-t border-[#E5E5E5] shrink-0">

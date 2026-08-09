@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClientStore } from "@/lib/stores/useClientStore";
 
@@ -43,6 +43,8 @@ export function ClientSwitcher() {
   const clients = useClientStore((s) => s.clients);
   const activeClientId = useClientStore((s) => s.activeClientId);
   const isInitialized = useClientStore((s) => s.isInitialized);
+  const planAtLimit = useClientStore((s) => s.planAtLimit);
+  const clientLimit = useClientStore((s) => s.clientLimit);
   const setActiveClientId = useClientStore((s) => s.setActiveClientId);
 
   const activeClient = clients.find((c) => c.id === activeClientId);
@@ -126,30 +128,58 @@ export function ClientSwitcher() {
               </Link>
             </div>
           ) : (
-            clients.map((client) => {
-              const isActive = client.id === activeClientId;
-              return (
-                <button
-                  key={client.id}
-                  role="option"
-                  aria-selected={isActive}
-                  type="button"
-                  onClick={() => selectClient(client.id)}
-                  className={cn(
-                    "flex items-center gap-2 w-full py-2 px-3 text-[0.9375rem] text-left transition-colors",
-                    isActive
-                      ? "bg-[#FFF1B8] text-[#111111] border-l-2 border-[#111111]"
-                      : "text-[#555555] hover:bg-[#FFF1B8]"
-                  )}
-                >
-                  <Check
-                    className={cn("w-4 h-4 shrink-0", isActive ? "opacity-100" : "opacity-0")}
-                    aria-hidden="true"
-                  />
-                  <span className="truncate">{client.name}</span>
-                </button>
-              );
-            })
+            <>
+              {clients.map((client) => {
+                const isActive = client.id === activeClientId;
+                return (
+                  <button
+                    key={client.id}
+                    role="option"
+                    aria-selected={isActive}
+                    type="button"
+                    onClick={() => selectClient(client.id)}
+                    className={cn(
+                      "flex items-center gap-2 w-full py-2 px-3 text-[0.9375rem] text-left transition-colors",
+                      isActive
+                        ? "bg-[#FFF1B8] text-[#111111] border-l-2 border-[#111111]"
+                        : "text-[#555555] hover:bg-[#FFF1B8]"
+                    )}
+                  >
+                    <Check
+                      className={cn("w-4 h-4 shrink-0", isActive ? "opacity-100" : "opacity-0")}
+                      aria-hidden="true"
+                    />
+                    <span className="truncate">{client.name}</span>
+                  </button>
+                );
+              })}
+              {!planAtLimit && (
+                <div className="border-t border-[#E5E5E5] mt-1">
+                  <Link
+                    href="/clients/new"
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-2 w-full py-2 px-3 text-[0.9375rem] text-[#555555] hover:bg-[#FFF1B8] hover:text-[#111111] transition-colors"
+                  >
+                    <Plus className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span>New client</span>
+                  </Link>
+                </div>
+              )}
+              {planAtLimit && (
+                <div className="border-t border-[#E5E5E5] mt-1 px-3 py-2">
+                  <p className="text-xs text-[#555555]">
+                    {clients.length}/{clientLimit} clients &middot;{" "}
+                    <Link
+                      href="/account#choose-plan"
+                      onClick={() => setIsOpen(false)}
+                      className="text-[#111111] underline hover:no-underline"
+                    >
+                      Upgrade plan
+                    </Link>
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

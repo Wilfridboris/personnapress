@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { ClientDetail } from "@/components/clients/ClientDetail";
 import type { ClientResponse } from "@/lib/types";
 
@@ -56,14 +54,6 @@ export default async function ClientDetailPage({ params }: Props) {
 
   return (
     <>
-      <Link
-        href="/clients"
-        className="inline-flex items-center gap-2 text-sm text-[#555555] hover:text-[#111111] transition-colors mb-10"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        Back to clients
-      </Link>
-
       <header className="mb-10">
         <h1 className="font-serif text-[2.25rem] font-bold tracking-[-0.01em] text-[#111111] mb-1">
           {client.name}

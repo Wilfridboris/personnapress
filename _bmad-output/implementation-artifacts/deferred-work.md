@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of fix-sidebar-client-nav-ux (2026-08-08)
+
+- ARIA listbox contract: `<Link>` elements inside `role="listbox"` (empty-state "Create client", new "New client" footer, at-limit "Upgrade plan" link) lack `role="option"`, violating the ARIA spec — pre-existing pattern; empty-state link pre-existed this story. [frontend/components/layout/ClientSwitcher.tsx:122,158,172]
+- `calendarIdx === -1` sentinel: if "Calendar" is ever removed from NAV_ITEMS, `findIndex` returns -1 and `slice(-1)` returns only the last element, breaking nav layout — pre-existing; Calendar always present. [frontend/components/layout/sidebar.tsx:10, frontend/components/layout/MobileDrawer.tsx:16]
+- `planTier` field is stored in `useClientStore` per AC 4 but no component currently reads it — intentional dead state; retained for future tier-based display logic. [frontend/lib/stores/useClientStore.ts:11]
+- AppShell `initClients()` silently swallows all fetch errors; on failure `planAtLimit` and `clientLimit` stay at defaults with no retry, console warning, or error boundary trigger — pre-existing design decision. [frontend/components/layout/AppShell.tsx:54]
+
 ## Deferred from: code review of 12-6-headless-blog-api-developer-docs-page (2026-08-07)
 
 - www vs no-www fallback URL mismatch: `docs/page.tsx` falls back to `https://www.personnapress.com` while `sitemap.ts` falls back to `https://personnapress.com` — pre-existing inconsistency across codebase files. [frontend/app/(public)/headless-blog-api/docs/page.tsx:7, frontend/app/sitemap.ts:3]

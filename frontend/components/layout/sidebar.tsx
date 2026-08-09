@@ -9,6 +9,7 @@ import { NAV_ITEMS, ACCOUNT_NAV_ITEM } from "./nav-items";
 export function Sidebar() {
   const { activeClientId } = useClientStore();
   const calendarIdx = NAV_ITEMS.findIndex((item) => item.label === "Calendar");
+  const clientsHref = activeClientId ? `/clients/${activeClientId}` : "/clients";
 
   return (
     <aside
@@ -21,7 +22,7 @@ export function Sidebar() {
         className="flex-1 overflow-y-auto py-2"
       >
         {NAV_ITEMS.slice(0, calendarIdx).map((item) => (
-          <NavItem key={item.href} {...item} />
+          <NavItem key={item.href} {...item} href={item.href === "/clients" ? clientsHref : item.href} />
         ))}
         {activeClientId && (
           <NavItem
@@ -38,7 +39,7 @@ export function Sidebar() {
           />
         )}
         {NAV_ITEMS.slice(calendarIdx).map((item) => (
-          <NavItem key={item.href} {...item} />
+          <NavItem key={item.href} {...item} href={item.href === "/clients" ? clientsHref : item.href} />
         ))}
       </nav>
       <div className="border-t border-[#E5E5E5] shrink-0">

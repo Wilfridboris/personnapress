@@ -6,9 +6,13 @@ interface ClientStore {
   clients: ClientListItem[];
   activeClientId: string | null;
   isInitialized: boolean;
+  planAtLimit: boolean;
+  clientLimit: number;
+  planTier: string;
   setClients: (clients: ClientListItem[]) => void;
   setActiveClientId: (id: string) => void;
   setInitialized: () => void;
+  setPlanInfo: (planAtLimit: boolean, planTier: string, clientLimit: number) => void;
   addClient: (client: ClientListItem) => void;
   updateClient: (id: string, data: Partial<ClientListItem>) => void;
   updateClientName: (id: string, name: string) => void;
@@ -21,9 +25,13 @@ export const useClientStore = create<ClientStore>()(
       clients: [],
       activeClientId: null,
       isInitialized: false,
+      planAtLimit: false,
+      clientLimit: 0,
+      planTier: "",
       setClients: (clients) => set({ clients }),
       setActiveClientId: (id) => set({ activeClientId: id }),
       setInitialized: () => set({ isInitialized: true }),
+      setPlanInfo: (planAtLimit, planTier, clientLimit) => set({ planAtLimit, planTier, clientLimit }),
       addClient: (client) =>
         set((state) => ({ clients: [...state.clients, client] })),
       updateClient: (id, data) =>
