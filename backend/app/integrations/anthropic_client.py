@@ -24,6 +24,7 @@ from app.integrations.generation_prompts import (
     _meta_voice_note,
     _strip_fences,
     _md_to_html,
+    _strip_blog_trailer,
 )
 
 logger = logging.getLogger(__name__)
@@ -115,7 +116,7 @@ async def generate_blog(
     else:
         raw = await _call(prompt, max_tokens)
 
-    result = _md_to_html(_strip_fences(raw.strip()))
+    result = _strip_blog_trailer(_md_to_html(_strip_fences(raw.strip())))
     result = result.replace("—", ", ")
 
     if "<h1" not in result.lower():

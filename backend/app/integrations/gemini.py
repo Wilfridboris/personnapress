@@ -24,6 +24,7 @@ from app.integrations.generation_prompts import (
     _meta_voice_note,
     _strip_fences,
     _md_to_html,
+    _strip_blog_trailer,
 )
 
 logger = logging.getLogger(__name__)
@@ -269,7 +270,7 @@ async def generate_blog(
         contents=prompt,
         config=_thinking_config(thinking_tokens),
     )
-    result = _md_to_html(_strip_fences(response.text.strip()))
+    result = _strip_blog_trailer(_md_to_html(_strip_fences(response.text.strip())))
     # Belt-and-suspenders: replace any em-dashes the model emitted despite the ban
     result = result.replace("—", ", ")
 
