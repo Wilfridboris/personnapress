@@ -227,6 +227,8 @@ BANNED CHARACTER: Never use the em-dash character (—) anywhere in the output. 
 BANNED WORDS, do not use anywhere: delve, moreover, testament, comprehensive, furthermore, tapestry, paradigm, bespoke, unlock, supercharge, navigate (as metaphor), it's worth noting, it's important to, plays a crucial role, serves as a reminder, Key Takeaways (as heading), in conclusion, in essence, moving forward, game-changer, leveraging, at the end of the day, the reality is, needless to say
 
 Every sentence must earn its place. If a sentence does not give the reader new information or a specific action, cut it.
+
+Output ONLY the HTML above. Do NOT append any word count, compliance summary, keyword checklist, or verification notes after the closing HTML tag.
 """
 
 _FIDELITY_PROMPT = """Evaluate the following blog post against the Brand Voice Profile AND for SEO quality.
@@ -448,3 +450,10 @@ def _md_to_html(html: str) -> str:
     html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html, flags=re.MULTILINE)
     html = re.sub(r"^# (.+)$", r"<h1>\1</h1>", html, flags=re.MULTILINE)
     return html
+
+
+def _strip_blog_trailer(html: str) -> str:
+    m = re.search(r"(?s).*(?:</[a-zA-Z][a-zA-Z0-9]*>|/>)", html)
+    if not m:
+        return html
+    return m.group(0).rstrip()

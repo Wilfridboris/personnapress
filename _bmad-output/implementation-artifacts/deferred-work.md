@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 3-22-strip-blog-compliance-report-trailer (2026-08-09)
+
+- No debug log when `_strip_blog_trailer` actually strips content — silent truncation with no production observability; add a `logger.debug` at the truncation point if production monitoring becomes a concern. [backend/app/integrations/generation_prompts.py:455-459]
+- `_strip_blog_trailer` lives in wrong module — output post-processing utilities belong outside `generation_prompts.py` (a prompt-construction module); extract to `output_utils.py` during next architectural cleanup pass. [backend/app/integrations/generation_prompts.py]
+- Pre-existing em-dash replacement inconsistency between integration files — not caused by this story; both `gemini.py` and `anthropic_client.py` do `replace("—", ", ")` but the comment is only on the Gemini side; minor documentation gap. [backend/app/integrations/gemini.py:272, backend/app/integrations/anthropic_client.py:119]
+
 ## Deferred from: code review of 3-18-brain-dump-draft-autosave (2026-08-09)
 
 - Autosave timer cancelled on unmount -- last 500ms of typing before browser close/navigation is lost: the cleanup `clearTimeout` kills the pending 500ms write when the component unmounts. A `beforeunload` handler (synchronous `localStorage.setItem`) or `flushSync` would make the final keystroke durable. Spec does not require it; narrow window; deferred as design tradeoff. [frontend/app/(app)/campaigns/new/page.tsx:133]
