@@ -118,6 +118,41 @@ def _thinking_config(thinking_tokens: int) -> types.GenerateContentConfig:
     )
 
 
+def _json_thinking_config(thinking_tokens: int) -> types.GenerateContentConfig:
+    return types.GenerateContentConfig(
+        thinking_config=types.ThinkingConfig(thinking_budget=thinking_tokens),
+        response_mime_type="application/json",
+    )
+
+
+def _sanitize_json_str(raw: str) -> str:
+    """Strip markdown fences, extract outermost JSON object, normalize smart quotes."""
+    if raw.startswith("```"):
+        parts = raw.split("```")
+        inner = parts[1]
+        if inner.startswith("json"):
+            inner = inner[4:]
+        raw = inner.strip()
+
+    # Extract the outermost JSON object in case of surrounding prose
+    match = re.search(r"\{.+\}", raw, re.DOTALL)
+    if match:
+        raw = match.group(0)
+
+    # Replace Unicode smart/curly quotes that commonly break JSON parsing
+    raw = (
+        raw
+        .replace("“", '"')   # left double quotation mark
+        .replace("”", '"')   # right double quotation mark
+        .replace("‘", "'")   # left single quotation mark
+        .replace("’", "'")   # right single quotation mark
+        .replace("—", "--")  # em-dash → plain double dash
+        .replace("–", "-")   # en-dash → plain dash
+    )
+
+    return raw
+
+
 async def synthesize_voice_brief(bvp: dict, thinking_tokens: int = 256) -> str:
     prompt = _VOICE_BRIEF_PROMPT.format(bvp_json=json.dumps(bvp, indent=2))
     try:
@@ -139,23 +174,22 @@ async def extract_brand_voice(text: str, thinking_tokens: int = 1024) -> dict:
     response = await _client.aio.models.generate_content(
         model=_MODEL,
         contents=prompt,
-        config=_thinking_config(thinking_tokens),
+        config=_json_thinking_config(thinking_tokens),
     )
 
     raw = response.text.strip()
 
-    if raw.startswith("```"):
-        parts = raw.split("```")
-        inner = parts[1]
-        if inner.startswith("json"):
-            inner = inner[4:]
-        raw = inner.strip()
-
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        logger.error("Gemini returned invalid JSON: %r", raw[:200])
-        raise ValueError(f"Gemini returned invalid JSON: {exc}") from exc
+    except json.JSONDecodeError:
+        # Fallback: sanitize smart quotes, strip fences, extract outermost object
+        sanitized = _sanitize_json_str(raw)
+        try:
+            data = json.loads(sanitized)
+            logger.warning("BVP JSON required sanitization (smart quotes / fences)")
+        except json.JSONDecodeError as exc:
+            logger.error("Gemini returned invalid JSON: %r", raw[:500])
+            raise ValueError(f"Gemini returned invalid JSON: {exc}") from exc
 
     if not isinstance(data.get("tone"), list):
         raise ValueError("Gemini BVP missing or invalid 'tone' field")
