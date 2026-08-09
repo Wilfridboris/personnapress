@@ -448,16 +448,3 @@ def _md_to_html(html: str) -> str:
     html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html, flags=re.MULTILINE)
     html = re.sub(r"^# (.+)$", r"<h1>\1</h1>", html, flags=re.MULTILINE)
     return html
-
-
-def _strip_blog_trailer(html: str) -> str:
-    """Strip any non-HTML compliance report the model appends after the final tag.
-
-    Some models append a self-verification block (e.g. '--- Word count: 1,147 words ...
-    Primary keyword placement: H1 ✓ | ...') after the closing HTML tag. Clip
-    everything after the last '>' so only valid HTML is returned.
-    """
-    last_tag_end = html.rfind(">")
-    if last_tag_end == -1:
-        return html
-    return html[: last_tag_end + 1].rstrip()

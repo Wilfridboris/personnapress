@@ -8,7 +8,6 @@ from app.integrations.generation_prompts import (
     _SOCIAL_STANDALONE_PROMPT,
     _build_standalone_voice_injection,
     _build_voice_injection,
-    _strip_blog_trailer,
 )
 
 
@@ -272,25 +271,3 @@ class TestPromptStructure:
     def test_social_prompts_contain_authored_passage_instruction(self):
         assert "AUTHORED PASSAGE" in _SOCIAL_PROMPT or "authored passage" in _SOCIAL_PROMPT.lower()
         assert "AUTHORED PASSAGE" in _SOCIAL_STANDALONE_PROMPT or "authored passage" in _SOCIAL_STANDALONE_PROMPT.lower()
-
-
-# ── _strip_blog_trailer tests ─────────────────────────────────────────────────
-
-class TestStripBlogTrailer:
-    def test_strips_compliance_report_after_last_tag(self):
-        html = "<h2>Conclusion</h2>\n<p>Final paragraph.</p>\n\n--- Word count: 1,147 words Primary keyword placement: H1 ✓"
-        assert _strip_blog_trailer(html) == "<h2>Conclusion</h2>\n<p>Final paragraph.</p>"
-
-    def test_no_trailer_unchanged(self):
-        html = "<h1>Title</h1><p>Body.</p>"
-        assert _strip_blog_trailer(html) == html
-
-    def test_empty_string_unchanged(self):
-        assert _strip_blog_trailer("") == ""
-
-    def test_no_html_tags_unchanged(self):
-        assert _strip_blog_trailer("plain text") == "plain text"
-
-    def test_strips_whitespace_after_last_tag(self):
-        html = "<p>Done.</p>   \n"
-        assert _strip_blog_trailer(html) == "<p>Done.</p>"
