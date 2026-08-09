@@ -2,12 +2,13 @@
 
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Building2, Loader2, Lock, User } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { GitHubConnect } from "@/components/publishing/GitHubConnect";
 import { publishingApi } from "@/lib/api";
-import type { PlatformConnectionStatus, ConnectionCreatePayload } from "@/lib/types";
+import type { LinkedInOrg, PlatformConnectionStatus, ConnectionCreatePayload } from "@/lib/types";
 
 interface Props {
   clientId: string;
@@ -45,6 +46,19 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
   const [wfCollectionId, setWfCollectionId] = useState("");
   const [wfCollectionFetchFailed, setWfCollectionFetchFailed] = useState(false);
   const [wfValidating, setWfValidating] = useState(false);
+
+  // LinkedIn target picker state
+  const [showTargetPicker, setShowTargetPicker] = useState(false);
+  const [pickerTarget, setPickerTarget] = useState<"personal" | "organization">("personal");
+  const [orgs, setOrgs] = useState<LinkedInOrg[] | null>(null);
+  const [orgsLoading, setOrgsLoading] = useState(false);
+  const [orgsError, setOrgsError] = useState<string | null>(null);
+  const [selectedOrgId, setSelectedOrgId] = useState<string>("");
+  const [selectedOrgName, setSelectedOrgName] = useState<string>("");
+  const [savingTarget, setSavingTarget] = useState(false);
+  const [targetError, setTargetError] = useState<string | null>(null);
+
+  const orgPostingEnabled = process.env.NEXT_PUBLIC_LINKEDIN_ORG_POSTING_ENABLED === "true";
 
   const disconnectTriggerRef = useRef<HTMLButtonElement>(null);
   const connectTriggerRef = useRef<HTMLButtonElement>(null);
@@ -113,6 +127,71 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
     }
   }
 
+  function handleOpenTargetPicker() {
+    setPickerTarget(connection.linkedin_target === "organization" ? "organization" : "personal");
+    setSelectedOrgId("");
+    setSelectedOrgName("");
+    setOrgs(null);
+    setOrgsError(null);
+    setTargetError(null);
+    setShowTargetPicker(true);
+  }
+
+  function handleCancelPicker() {
+    setShowTargetPicker(false);
+    setOrgs(null);
+    setOrgsError(null);
+    setTargetError(null);
+  }
+
+  async function handleSelectCompanyPage() {
+    if (!orgPostingEnabled) return;
+    setPickerTarget("organization");
+    if (orgs === null && !orgsLoading) {
+      setOrgsLoading(true);
+      setOrgsError(null);
+      try {
+        const result = await publishingApi.getLinkedInOrganizations(clientId);
+        setOrgs(result.organizations);
+        if (result.organizations.length > 0) {
+          setSelectedOrgId(result.organizations[0].id);
+          setSelectedOrgName(result.organizations[0].name);
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Failed to load pages.";
+        if (msg === "token_insufficient_scope" || (e as { code?: string })?.code === "token_insufficient_scope") {
+          setOrgsError("token_insufficient_scope");
+        } else {
+          setOrgsError(msg);
+        }
+      } finally {
+        setOrgsLoading(false);
+      }
+    }
+  }
+
+  async function handleSaveTarget() {
+    setSavingTarget(true);
+    setTargetError(null);
+    try {
+      if (pickerTarget === "organization") {
+        await publishingApi.updateLinkedInTarget(clientId, {
+          target: "organization",
+          org_id: selectedOrgId,
+          org_name: selectedOrgName,
+        });
+      } else {
+        await publishingApi.updateLinkedInTarget(clientId, { target: "personal" });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["platform-connections", clientId] });
+      setShowTargetPicker(false);
+    } catch (e: unknown) {
+      setTargetError(e instanceof Error ? e.message : "Failed to save target.");
+    } finally {
+      setSavingTarget(false);
+    }
+  }
+
   async function handleDisconnect() {
     setLoading(true);
     try {
@@ -148,6 +227,21 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
                     {connection.account_identifier && (
                       <span className="block text-xs text-[#555555] mt-0.5">
                         {connection.account_identifier}
+                      </span>
+                    )}
+                    {connection.platform === "linkedin" && (
+                      <span className="block text-xs text-[#555555] mt-0.5">
+                        Posting as:{" "}
+                        {connection.linkedin_target === "organization" && connection.linkedin_org_name
+                          ? connection.linkedin_org_name
+                          : "Personal Account"}
+                        {" "}
+                        <button
+                          onClick={handleOpenTargetPicker}
+                          className="underline underline-offset-2 hover:text-[#111111] transition-colors"
+                        >
+                          Change
+                        </button>
                       </span>
                     )}
                   </>
@@ -192,6 +286,159 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
             )}
           </div>
         </div>
+
+        {showTargetPicker && connection.platform === "linkedin" && (
+          <div className="border-t border-[#E5E5E5] mt-4 pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-[#111111]">Posting destination</p>
+              <button
+                onClick={handleCancelPicker}
+                className="text-xs text-[#555555] hover:text-[#111111] underline underline-offset-2 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+
+            {/* Personal Account option */}
+            <button
+              type="button"
+              onClick={() => {
+                setPickerTarget("personal");
+                if (!orgPostingEnabled) handleCancelPicker();
+              }}
+              className={`w-full text-left px-3 py-2.5 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 ${
+                pickerTarget === "personal"
+                  ? "border-[#111111] ring-1 ring-[#111111]"
+                  : "border-[#E5E5E5] hover:border-[#111111]"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <User className="size-4 shrink-0 text-[#111111]" />
+                <div>
+                  <span className="block text-sm font-medium text-[#111111]">Personal Account</span>
+                  <span className="block text-xs text-[#555555]">Your LinkedIn profile</span>
+                </div>
+              </div>
+            </button>
+
+            {/* Company Page option */}
+            <button
+              type="button"
+              onClick={handleSelectCompanyPage}
+              disabled={!orgPostingEnabled}
+              className={`w-full text-left px-3 py-2.5 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 ${
+                !orgPostingEnabled
+                  ? "opacity-50 cursor-not-allowed border-[#E5E5E5]"
+                  : pickerTarget === "organization"
+                  ? "border-[#111111] ring-1 ring-[#111111]"
+                  : "border-[#E5E5E5] hover:border-[#111111]"
+              }`}
+              title={
+                !orgPostingEnabled
+                  ? "Company page posting requires LinkedIn Marketing Developer Platform approval. Currently only personal profile posting is available."
+                  : undefined
+              }
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Building2 className="size-4 shrink-0 text-[#111111]" />
+                  <div>
+                    <span className="block text-sm font-medium text-[#111111]">Company Page</span>
+                    <span className="block text-xs text-[#555555]">
+                      {orgPostingEnabled
+                        ? "A LinkedIn Page you admin"
+                        : "Requires LinkedIn Marketing Developer Platform approval"}
+                    </span>
+                  </div>
+                </div>
+                {!orgPostingEnabled && (
+                  <Lock className="size-3.5 shrink-0 text-[#555555]" />
+                )}
+              </div>
+            </button>
+
+            {/* Org list — only when feature enabled and company page selected */}
+            {orgPostingEnabled && pickerTarget === "organization" && (
+              <div className="pl-1 space-y-2">
+                {orgsLoading && (
+                  <div className="flex items-center gap-2 py-2">
+                    <Loader2 className="size-3.5 animate-spin text-[#555555]" />
+                    <span className="text-xs text-[#555555]">Loading your pages...</span>
+                  </div>
+                )}
+                {!orgsLoading && orgsError === "token_insufficient_scope" && (
+                  <p className="text-xs text-[#555555]">
+                    Please{" "}
+                    <a
+                      href={`/api/auth/linkedin?client_id=${clientId}`}
+                      className="underline underline-offset-2 hover:text-[#111111] transition-colors"
+                    >
+                      reconnect LinkedIn
+                    </a>{" "}
+                    to enable company page access.
+                  </p>
+                )}
+                {!orgsLoading && orgsError && orgsError !== "token_insufficient_scope" && (
+                  <p className="text-xs text-[#C0392B]" role="alert">{orgsError}</p>
+                )}
+                {!orgsLoading && !orgsError && orgs !== null && orgs.length === 0 && (
+                  <p className="text-xs text-[#555555]">
+                    No pages found. You must be an admin of a LinkedIn Page to post to it.
+                  </p>
+                )}
+                {!orgsLoading && !orgsError && orgs !== null && orgs.length > 0 && (
+                  <div className="space-y-1">
+                    {orgs.map((org) => (
+                      <button
+                        key={org.id}
+                        type="button"
+                        onClick={() => { setSelectedOrgId(org.id); setSelectedOrgName(org.name); }}
+                        className={`w-full text-left px-3 py-2 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 ${
+                          selectedOrgId === org.id
+                            ? "border-[#111111] ring-1 ring-[#111111]"
+                            : "border-[#E5E5E5] hover:border-[#111111]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Building2 className="size-4 shrink-0 text-[#555555]" />
+                          <div>
+                            <span className="block text-sm font-medium text-[#111111]">{org.name}</span>
+                            <span className="block text-xs text-[#555555]">{org.follower_count.toLocaleString()} followers</span>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {targetError && (
+              <p className="text-xs text-[#C0392B]" role="alert">{targetError}</p>
+            )}
+
+            {/* Save/Cancel buttons — shown when feature enabled */}
+            {orgPostingEnabled && (
+              <div className="flex gap-3 pt-1">
+                <Button
+                  variant="primary"
+                  onClick={handleSaveTarget}
+                  disabled={savingTarget || (pickerTarget === "organization" && !selectedOrgId)}
+                  className="text-xs px-4 py-2"
+                >
+                  {savingTarget ? "Saving..." : "Save"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handleCancelPicker}
+                  className="text-xs px-4 py-2"
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
 
         {showForm && (
           <div className="mt-4 pt-4 border-t border-[#E5E5E5] space-y-4">

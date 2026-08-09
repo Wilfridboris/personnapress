@@ -2,7 +2,9 @@ import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Literal, Optional
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,17 @@ from app.services.articles import create_or_update_article_from_campaign
 router = APIRouter(prefix="", tags=["publishing"])
 
 ALL_PLATFORMS = ["wordpress", "webflow", "x", "linkedin", "github_pages", "instagram", "facebook_page", "threads"]
+
+
+def _extract_linkedin_target(encrypted_credentials: str) -> tuple[str, Optional[str]]:
+    """Return (target, org_name) from a LinkedIn credential blob. Defaults to personal."""
+    try:
+        data = json.loads(decrypt_credential(encrypted_credentials))
+        target = data.get("target", "personal")
+        org_name = data.get("org_name") or None
+        return target, org_name
+    except Exception:
+        return "personal", None
 
 
 def _extract_identifier(platform: str, encrypted_credentials: str) -> Optional[str]:
@@ -142,6 +155,11 @@ async def list_platform_connections(
             if platform == "github_pages":
                 item["github_detection"] = _extract_github_detection(pc.encrypted_credentials)
                 item["direct_commit_default"] = _extract_direct_commit_default(pc.encrypted_credentials)
+            if platform == "linkedin":
+                target, org_name = _extract_linkedin_target(pc.encrypted_credentials)
+                item["linkedin_target"] = target
+                if org_name:
+                    item["linkedin_org_name"] = org_name
             items.append(item)
         elif platform == "wordpress" and "wordpress-com" in connected_map:
             # WordPress.com connection shown under the wordpress card
@@ -337,6 +355,148 @@ async def linkedin_oauth_callback(
     await upsert_connection(db, client_id, "linkedin", encrypted)
 
     return {"platform": "linkedin", "connected": True, "account_identifier": name}
+
+
+class LinkedInTargetPatchRequest(BaseModel):
+    target: Literal["personal", "organization"]
+    org_id: Optional[str] = None
+    org_name: Optional[str] = None
+
+
+@router.get("/clients/{client_id}/connections/linkedin/organizations")
+async def list_linkedin_organizations(
+    client_id: uuid.UUID,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+    client = await get_client(db, client_id)
+    _check_ownership(client, user_id)
+
+    if not settings.LINKEDIN_ORG_POSTING_ENABLED:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": {"code": "FEATURE_DISABLED", "message": "LinkedIn company page posting is not yet enabled.", "detail": {}}},
+        )
+
+    connections = await get_connections_for_client(db, client_id)
+    linkedin_conn = next((c for c in connections if c.platform == "linkedin"), None)
+    if not linkedin_conn:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "LinkedIn connection not found.", "detail": {}}},
+        )
+
+    try:
+        cred = json.loads(decrypt_credential(linkedin_conn.encrypted_credentials))
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": {"code": "CREDENTIAL_ERROR", "message": "Failed to read LinkedIn credentials.", "detail": {}}},
+        )
+
+    access_token = cred.get("access_token", "")
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as http_client:
+            resp = await http_client.get(
+                "https://api.linkedin.com/v2/organizationAcls",
+                params={
+                    "q": "roleAssignee",
+                    "role": "ADMINISTRATOR",
+                    "state": "APPROVED",
+                    "projection": "(elements*(organization~(localizedName,followersCount),organizationRole,state),paging)",
+                },
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "LinkedIn-Version": "202602",
+                },
+            )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"error": {"code": "LINKEDIN_API_ERROR", "message": f"Failed to reach LinkedIn API: {str(exc)[:100]}", "detail": {}}},
+        )
+
+    if resp.status_code in (401, 403):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": {"code": "token_insufficient_scope", "message": "Please reconnect LinkedIn to enable company page access.", "detail": {}}},
+        )
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=502,
+            detail={"error": {"code": "LINKEDIN_API_ERROR", "message": f"LinkedIn API returned {resp.status_code}.", "detail": {}}},
+        )
+
+    data = resp.json()
+    elements = data.get("elements", [])
+    organizations = []
+    for el in elements:
+        org_inline = el.get("organization~", {})
+        org_urn: str = el.get("organization", "")
+        # Parse org id from URN: urn:li:organization:123456
+        org_id = ""
+        if org_urn:
+            parts = org_urn.rsplit(":", 1)
+            if len(parts) == 2:
+                org_id = parts[1]
+        org_name = org_inline.get("localizedName", "")
+        follower_count = org_inline.get("followersCount", 0)
+        if org_id and org_name:
+            organizations.append({"id": org_id, "name": org_name, "follower_count": follower_count})
+
+    return {"organizations": organizations}
+
+
+@router.patch("/clients/{client_id}/connections/linkedin/target", status_code=200)
+async def update_linkedin_target(
+    client_id: uuid.UUID,
+    body: LinkedInTargetPatchRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+    client = await get_client(db, client_id)
+    _check_ownership(client, user_id)
+
+    if body.target == "organization" and not (body.org_id and body.org_name):
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": "MISSING_ORG_FIELDS", "message": "org_id and org_name are required when target is 'organization'.", "detail": {}}},
+        )
+
+    connections = await get_connections_for_client(db, client_id)
+    linkedin_conn = next((c for c in connections if c.platform == "linkedin"), None)
+    if not linkedin_conn:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "LinkedIn connection not found.", "detail": {}}},
+        )
+
+    try:
+        cred = json.loads(decrypt_credential(linkedin_conn.encrypted_credentials))
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": {"code": "CREDENTIAL_ERROR", "message": "Failed to read LinkedIn credentials.", "detail": {}}},
+        )
+
+    cred["target"] = body.target
+    if body.target == "organization":
+        cred["org_id"] = body.org_id
+        cred["org_name"] = body.org_name
+    else:
+        cred.pop("org_id", None)
+        cred.pop("org_name", None)
+
+    encrypted = encrypt_credential(json.dumps(cred))
+    await upsert_connection(db, client_id, "linkedin", encrypted)
+
+    return {
+        "target": body.target,
+        "org_id": cred.get("org_id"),
+        "org_name": cred.get("org_name"),
+    }
 
 
 class WpComCallbackRequest(BaseModel):

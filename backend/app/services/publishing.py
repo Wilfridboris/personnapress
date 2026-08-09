@@ -562,16 +562,21 @@ async def dispatch_publish_for_platform(
             if not campaign.linkedin_post:
                 logger.debug("dispatch_publish_for_platform: skipping linkedin (null linkedin_post) campaign=%s", campaign_id)
                 return {platform: "skipped"}
+            li_target = creds.get("target", "personal")
+            li_org_id = creds.get("org_id") if li_target == "organization" else None
             if campaign.image_url:
                 try:
                     async with httpx.AsyncClient(timeout=15.0) as _img_client:
                         img_resp = await _img_client.get(campaign.image_url)
                     img_resp.raise_for_status()
-                    async with httpx.AsyncClient(timeout=15.0) as _li_client:
-                        author_urn = await linkedin_integration._get_linkedin_author_urn(creds["access_token"], _li_client)
-                    image_urn = await linkedin_integration.upload_image(creds["access_token"], author_urn, img_resp.content)
+                    if li_org_id is None:
+                        async with httpx.AsyncClient(timeout=15.0) as _li_client:
+                            author_urn = await linkedin_integration._get_linkedin_author_urn(creds["access_token"], _li_client)
+                    else:
+                        author_urn = ""
+                    image_urn = await linkedin_integration.upload_image(creds["access_token"], author_urn, img_resp.content, org_id=li_org_id)
                     await linkedin_integration.create_post_with_image(
-                        creds["access_token"], author_urn, campaign.linkedin_post, image_urn
+                        creds["access_token"], author_urn, campaign.linkedin_post, image_urn, org_id=li_org_id
                     )
                 except Exception as exc:
                     logger.warning(
@@ -579,11 +584,11 @@ async def dispatch_publish_for_platform(
                         campaign_id, exc,
                     )
                     await linkedin_integration.create_ugc_post(
-                        creds["access_token"], campaign.blog_html or "", campaign.linkedin_post
+                        creds["access_token"], campaign.blog_html or "", campaign.linkedin_post, org_id=li_org_id
                     )
             else:
                 await linkedin_integration.create_ugc_post(
-                    creds["access_token"], campaign.blog_html or "", campaign.linkedin_post
+                    creds["access_token"], campaign.blog_html or "", campaign.linkedin_post, org_id=li_org_id
                 )
         elif platform == "instagram":
             if not campaign.image_url:
@@ -726,16 +731,21 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                 now = asyncio.get_running_loop().time()
                 if last_linkedin_publish_time and now - last_linkedin_publish_time < 5.0:
                     await asyncio.sleep(5.0 - (now - last_linkedin_publish_time))
+                li_target = creds.get("target", "personal")
+                li_org_id = creds.get("org_id") if li_target == "organization" else None
                 if campaign.image_url:
                     try:
                         async with httpx.AsyncClient(timeout=15.0) as _img_client:
                             img_resp = await _img_client.get(campaign.image_url)
                         img_resp.raise_for_status()
-                        async with httpx.AsyncClient(timeout=15.0) as _li_client:
-                            author_urn = await linkedin_integration._get_linkedin_author_urn(creds["access_token"], _li_client)
-                        image_urn = await linkedin_integration.upload_image(creds["access_token"], author_urn, img_resp.content)
+                        if li_org_id is None:
+                            async with httpx.AsyncClient(timeout=15.0) as _li_client:
+                                author_urn = await linkedin_integration._get_linkedin_author_urn(creds["access_token"], _li_client)
+                        else:
+                            author_urn = ""
+                        image_urn = await linkedin_integration.upload_image(creds["access_token"], author_urn, img_resp.content, org_id=li_org_id)
                         await linkedin_integration.create_post_with_image(
-                            creds["access_token"], author_urn, campaign.linkedin_post, image_urn
+                            creds["access_token"], author_urn, campaign.linkedin_post, image_urn, org_id=li_org_id
                         )
                     except Exception as exc:
                         logger.warning(
@@ -743,11 +753,11 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                             campaign_id, exc,
                         )
                         await linkedin_integration.create_ugc_post(
-                            creds["access_token"], campaign.blog_html or "", campaign.linkedin_post
+                            creds["access_token"], campaign.blog_html or "", campaign.linkedin_post, org_id=li_org_id
                         )
                 else:
                     await linkedin_integration.create_ugc_post(
-                        creds["access_token"], campaign.blog_html or "", campaign.linkedin_post
+                        creds["access_token"], campaign.blog_html or "", campaign.linkedin_post, org_id=li_org_id
                     )
                 last_linkedin_publish_time = asyncio.get_running_loop().time()
 

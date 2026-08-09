@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of 5-7-linkedin-company-page-target (2026-08-09)
+
+- No pagination for LinkedIn org list — LinkedIn's `organizationAcls` response includes a `paging` element that is fetched in the projection but never consumed; users with many administered pages receive a silently truncated list. Acceptable for v1; add pagination or a max-count note before enabling the feature in production. [backend/app/routers/publishing.py]
+- `org_id` not validated against LinkedIn API before persisting — the PATCH endpoint stores any arbitrary `org_id` without confirming the user administers that organization; ownership failure surfaces only at publish time when LinkedIn rejects the post. Out of scope for v1; acceptable given org list is fetched from LinkedIn before selection. [backend/app/routers/publishing.py]
+
 ## Deferred from: code review of 3-22-strip-blog-compliance-report-trailer (2026-08-09)
 
 - No debug log when `_strip_blog_trailer` actually strips content — silent truncation with no production observability; add a `logger.debug` at the truncation point if production monitoring becomes a concern. [backend/app/integrations/generation_prompts.py:455-459]

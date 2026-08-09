@@ -44,8 +44,9 @@ async def _get_linkedin_author_urn(access_token: str, client: httpx.AsyncClient)
     return sub
 
 
-async def upload_image(access_token: str, author_urn: str, image_bytes: bytes) -> str:
+async def upload_image(access_token: str, author_urn: str, image_bytes: bytes, org_id: str | None = None) -> str:
     """Upload an image to LinkedIn via initializeUpload + PUT. Returns image URN."""
+    owner = f"urn:li:organization:{org_id}" if org_id is not None else f"urn:li:person:{author_urn}"
     async with httpx.AsyncClient(timeout=30.0) as client:
         # Initialize upload
         init_resp = await client.post(
@@ -56,7 +57,7 @@ async def upload_image(access_token: str, author_urn: str, image_bytes: bytes) -
                 "X-Restli-Protocol-Version": "2.0.0",
                 "Content-Type": "application/json",
             },
-            json={"initializeUploadRequest": {"owner": f"urn:li:person:{author_urn}"}},
+            json={"initializeUploadRequest": {"owner": owner}},
         )
         if init_resp.status_code == 401:
             raise PlatformError("LinkedIn", 401, "LinkedIn connection expired - reconnect your LinkedIn account in Connections")
@@ -82,8 +83,9 @@ async def upload_image(access_token: str, author_urn: str, image_bytes: bytes) -
     return image_urn
 
 
-async def create_post_with_image(access_token: str, author_urn: str, text: str, image_urn: str) -> str:
+async def create_post_with_image(access_token: str, author_urn: str, text: str, image_urn: str, org_id: str | None = None) -> str:
     """Create a LinkedIn post with an attached image. Returns post URN."""
+    author = f"urn:li:organization:{org_id}" if org_id is not None else f"urn:li:person:{author_urn}"
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
             "https://api.linkedin.com/rest/posts",
@@ -94,7 +96,7 @@ async def create_post_with_image(access_token: str, author_urn: str, text: str, 
                 "Content-Type": "application/json",
             },
             json={
-                "author": f"urn:li:person:{author_urn}",
+                "author": author,
                 "commentary": text or "",
                 "visibility": "PUBLIC",
                 "distribution": {
@@ -114,10 +116,18 @@ async def create_post_with_image(access_token: str, author_urn: str, text: str, 
         return resp.headers.get("x-restli-id", "")
 
 
-async def create_ugc_post(access_token: str, blog_html: str, linkedin_text: str) -> str:
-    """Create a LinkedIn UGC post. Returns the post URN."""
+async def create_ugc_post(access_token: str, blog_html: str, linkedin_text: str, org_id: str | None = None) -> str:
+    """Create a LinkedIn UGC post. Returns the post URN.
+
+    When org_id is provided, posts as urn:li:organization:{org_id} and skips the /v2/userinfo call.
+    When org_id is None, posts as the authenticated user's personal profile.
+    """
     async with httpx.AsyncClient(timeout=15.0) as client:
-        author_urn = await _get_linkedin_author_urn(access_token, client)
+        if org_id is not None:
+            author = f"urn:li:organization:{org_id}"
+        else:
+            sub = await _get_linkedin_author_urn(access_token, client)
+            author = f"urn:li:person:{sub}"
 
         post_resp = await client.post(
             "https://api.linkedin.com/v2/ugcPosts",
@@ -128,7 +138,7 @@ async def create_ugc_post(access_token: str, blog_html: str, linkedin_text: str)
                 "X-Restli-Protocol-Version": "2.0.0",
             },
             json={
-                "author": f"urn:li:person:{author_urn}",
+                "author": author,
                 "lifecycleState": "PUBLISHED",
                 "specificContent": {
                     "com.linkedin.ugc.ShareContent": {
