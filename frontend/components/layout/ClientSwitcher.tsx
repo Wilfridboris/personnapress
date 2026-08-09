@@ -154,11 +154,11 @@ export function ClientSwitcher() {
                 );
               })}
               {!planAtLimit && (
-                <div className="border-t border-[#E5E5E5] mt-1">
+                <div className="border-t border-border mt-1">
                   <Link
                     href="/clients/new"
                     onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-2 w-full py-2 px-3 text-[0.9375rem] text-[#555555] hover:bg-[#FFF1B8] hover:text-[#111111] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#111111]"
+                    className="flex items-center gap-2 w-full py-2 px-3 text-[0.9375rem] text-graphite hover:bg-highlighter hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink"
                   >
                     <Plus className="size-4 shrink-0" aria-hidden="true" />
                     <span>New client</span>
@@ -166,13 +166,13 @@ export function ClientSwitcher() {
                 </div>
               )}
               {planAtLimit && (
-                <div className="border-t border-[#E5E5E5] mt-1 px-3 py-2">
-                  <p className="text-xs text-[#555555]">
+                <div className="border-t border-border mt-1 px-3 py-2">
+                  <p className="text-xs text-graphite">
                     {clients.length}/{clientLimit} clients &middot;{" "}
                     <Link
                       href="/account#choose-plan"
                       onClick={() => setIsOpen(false)}
-                      className="text-[#111111] underline hover:no-underline focus-visible:outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-[#111111]"
+                      className="text-ink underline hover:no-underline focus-visible:outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ink"
                     >
                       Upgrade plan
                     </Link>
