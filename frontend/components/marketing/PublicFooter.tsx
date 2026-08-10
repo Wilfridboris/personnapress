@@ -73,7 +73,7 @@ export function PublicFooter() {
                className="text-graphite hover:opacity-70 transition-opacity duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2">
               <PlatformIcon platform="facebook_page" className="size-5" color="brand" aria-hidden="true" />
             </a>
-            <a href="#"
+            {/* <a href="#"
                aria-label="PersonnaPress on X"
                className="text-graphite hover:opacity-70 transition-opacity duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2">
               <PlatformIcon platform="x" className="size-5" color="brand" aria-hidden="true" />
@@ -87,7 +87,7 @@ export function PublicFooter() {
                aria-label="PersonnaPress on Instagram"
                className="text-graphite hover:opacity-70 transition-opacity duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2">
               <PlatformIcon platform="instagram" className="size-5" color="brand" aria-hidden="true" />
-            </a>
+            </a> */}
           </nav>
           <nav className="flex items-center gap-4" aria-label="Legal">
             <Link href="/terms" className="font-mono text-xs text-graphite hover:text-ink transition-colors">Terms of Service</Link>
