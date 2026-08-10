@@ -228,6 +228,8 @@ BANNED WORDS, do not use anywhere: delve, moreover, testament, comprehensive, fu
 
 Every sentence must earn its place. If a sentence does not give the reader new information or a specific action, cut it.
 
+{template_structure_override}
+
 {length_override_section}
 Output ONLY the HTML above. Do NOT append any word count, compliance summary, keyword checklist, or verification notes after the closing HTML tag.
 """
@@ -397,6 +399,104 @@ SUPPORTING KEYWORDS (mention each at most once, naturally):
 - Write exclusively for this audience. Do not broaden the scope. If a reference or tool would be unfamiliar to this audience, explain it in one clause or omit it."""
 
     return seo_section, audience_section
+
+
+def _build_template_structure(
+    article_template: str | None,
+    meta_voice_note: str,
+) -> str:
+    """Return a template_structure_override string for non-standard templates.
+
+    Returns empty string for "standard" or None (existing MANDATORY STRUCTURE applies).
+    For all other templates, returns a block that explicitly replaces the
+    MANDATORY STRUCTURE.
+    """
+    tmpl = (article_template or "standard").lower()
+    if tmpl == "standard":
+        return ""
+
+    if tmpl == "how-to":
+        return (
+            "TEMPLATE: HOW-TO GUIDE\n"
+            "Disregard the MANDATORY STRUCTURE above. Use this structure instead:\n"
+            "<h1>[Action-first title starting with \"How to\" or a direct instruction verb]</h1>\n"
+            f"<!-- meta: [One sentence, max 150 chars, ends with action phrase{meta_voice_note}] -->\n"
+            "<!-- excerpt: [One engaging editorial hook, max 240 chars, conversational -- open with a provocative question, a surprising fact, or an intriguing observation; NOT a summary] -->\n"
+            "<div class=\"tldr\"><p><strong>TL;DR:</strong> [Complete this guide and you will [specific outcome]. [What you need in one sentence].]</p></div>\n"
+            "<p>[BLUF intro: who this is for and what outcome they will achieve. State it in the first sentence.]</p>\n"
+            "<h2>What You Will Need</h2>\n"
+            "<ul>\n"
+            "  <li>[Tool or prerequisite 1]</li>\n"
+            "  <li>[Tool or prerequisite 2]</li>\n"
+            "</ul>\n"
+            "<h2>Step 1: [First action as a verb phrase]</h2>\n"
+            "<p>[Explain the step. If the brain dump contains a specific example or outcome for this step, lead with it.]</p>\n"
+            "<h2>Step 2: [Second action]</h2>\n"
+            "<p>...</p>\n"
+            "[Continue for 3-5 total steps. Each step is one H2. Do not use H3 inside steps.]\n"
+            "<h2>Common Mistakes to Avoid</h2>\n"
+            "<p>[1-3 specific mistakes drawn from the brain dump. Not generic advice.]</p>\n"
+            "<h2>Frequently Asked Questions</h2>\n"
+            "<dl class=\"faq\">\n"
+            "  <dt>[Question 1]</dt><dd><strong>[Direct answer.]</strong> [1-2 sentences.]</dd>\n"
+            "  <dt>[Question 2]</dt><dd><strong>[Direct answer.]</strong> [1-2 sentences.]</dd>\n"
+            "  <dt>[Question 3]</dt><dd><strong>[Direct answer.]</strong> [1-2 sentences.]</dd>\n"
+            "</dl>\n"
+            "<h2>[Wrap-up heading: \"What to Try Next\", \"Your Next Step\", or similar]</h2>\n"
+            "<p>[Single clear action. Forward momentum. No recap.]</p>"
+        )
+
+    if tmpl == "listicle":
+        return (
+            "TEMPLATE: LISTICLE\n"
+            "Disregard the MANDATORY STRUCTURE above. Use this structure instead:\n"
+            "<h1>[[Number] [Things/Ways/Reasons/Mistakes] [verb phrase] -- specific and direct]</h1>\n"
+            f"<!-- meta: [One sentence, max 150 chars, ends with action phrase{meta_voice_note}] -->\n"
+            "<!-- excerpt: [One engaging editorial hook, max 240 chars, conversational] -->\n"
+            "<p>[Hook paragraph: the problem this list solves, why it matters, who should read it. "
+            "2-3 sentences. This replaces the TL;DR -- state the payoff upfront. "
+            "Do NOT include a <div class=\"tldr\"> block.]</p>\n"
+            "<ol>\n"
+            "  <li>\n"
+            "    <h3>[Item title: specific and direct, 4-8 words]</h3>\n"
+            "    <p>[80-120 word explanation. Lead with one specific example, number, or outcome. Avoid generic advice.]</p>\n"
+            "  </li>\n"
+            "  <li>\n"
+            "    <h3>[Item title]</h3>\n"
+            "    <p>...</p>\n"
+            "  </li>\n"
+            "  [Continue for the number of items named in the H1. Each item is one <li>. "
+            "Do NOT use <h2> sections. Do NOT add a FAQ section.]\n"
+            "</ol>\n"
+            "<p>[Recap paragraph: the single most important takeaway across all items. "
+            "End with a call to action or an honest opinion. 2-3 sentences.]</p>"
+        )
+
+    if tmpl == "thought-leadership":
+        return (
+            "TEMPLATE: THOUGHT LEADERSHIP\n"
+            "Disregard the MANDATORY STRUCTURE above. Use this structure instead:\n"
+            "<h1>[Bold contrarian claim or clear opinion as title -- not a question, not a how-to]</h1>\n"
+            f"<!-- meta: [One sentence, max 150 chars, ends with action phrase{meta_voice_note}] -->\n"
+            "<!-- excerpt: [Open with the author's position in one sharp sentence. Max 240 chars.] -->\n"
+            "<p>[Opening paragraph: state your position in the first sentence without hedging. "
+            "If the brain dump contains an AUTHORED PASSAGE with a first-person opinion, use it here verbatim. "
+            "Do NOT include a <div class=\"tldr\"> block -- this paragraph IS the TL;DR.]</p>\n"
+            "<h2>[Your core argument: name the thing most people get wrong or misunderstand]</h2>\n"
+            "<p>[Make the case. Use specific numbers, named examples, or personal experience from the brain dump. "
+            "State the argument as the author's direct view, not universal fact.]</p>\n"
+            "<h2>[Your evidence: the specific experience, test, or data point]</h2>\n"
+            "<p>[Concrete and specific. First-person where the brain dump supports it.]</p>\n"
+            "<h2>[The counter-argument: steelman the opposing view honestly]</h2>\n"
+            "<p>[Acknowledge what is true in the opposite position. Then explain why your view still holds.]</p>\n"
+            "<h2>[Your rebuttal or the nuance that resolves the tension]</h2>\n"
+            "<p>...</p>\n"
+            "<h2>[Call to action: one specific thing the reader should do, think, or stop doing]</h2>\n"
+            "<p>[Closing with forward momentum. No recap. End with your honest opinion. "
+            "Do NOT add a FAQ section.]</p>"
+        )
+
+    return ""
 
 
 def _extract_json_object(text: str) -> str:

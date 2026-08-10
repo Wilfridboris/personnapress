@@ -11,6 +11,9 @@ import { useClientStore } from "@/lib/stores/useClientStore";
 import { campaignsApi, publishingApi, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { LengthSelector, type TargetLength } from "@/components/campaigns/LengthSelector";
+import { TemplateSelector, type ArticleTemplate } from "@/components/campaigns/TemplateSelector";
+
+const VALID_ARTICLE_TEMPLATES: ArticleTemplate[] = ["standard", "how-to", "listicle", "thought-leadership"];
 
 function platformLabel(platform: string): string {
   const MAP: Record<string, string> = {
@@ -39,6 +42,7 @@ interface BrainDumpDraft {
   supportingKeywords: string;
   targetAudience: string;
   targetLength: TargetLength;
+  articleTemplate: ArticleTemplate;
   savedAt: string;
 }
 
@@ -77,6 +81,7 @@ export default function NewCampaignPage() {
 
   const [campaignType, setCampaignType] = useState<"blog_full" | "social_only">("blog_full");
   const [targetLength, setTargetLength] = useState<TargetLength>("600-1000");
+  const [articleTemplate, setArticleTemplate] = useState<ArticleTemplate>("standard");
   const [generateImage, setGenerateImage] = useState(true);
   const [brainDump, setBrainDump] = useState("");
   const [targetKeyword, setTargetKeyword] = useState("");
@@ -127,6 +132,7 @@ export default function NewCampaignPage() {
         supportingKeywords,
         targetAudience,
         targetLength,
+        articleTemplate,
         savedAt: new Date().toISOString(),
       };
       try {
@@ -139,7 +145,7 @@ export default function NewCampaignPage() {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [brainDump, targetKeyword, supportingKeywords, targetAudience, targetLength, activeClientId]);
+  }, [brainDump, targetKeyword, supportingKeywords, targetAudience, targetLength, articleTemplate, activeClientId]);
 
   // Load draft from localStorage on mount / client change (AC 2, AC 3)
   useEffect(() => {
@@ -158,11 +164,14 @@ export default function NewCampaignPage() {
         localStorage.removeItem(DRAFT_KEY(activeClientId));
         return;
       }
+      const validLengths: TargetLength[] = ["300-500", "600-1000", "1500-2500"];
       setDraftBanner({
         brainDump: typeof draft.brainDump === "string" ? draft.brainDump : "",
         targetKeyword: typeof draft.targetKeyword === "string" ? draft.targetKeyword : "",
         supportingKeywords: typeof draft.supportingKeywords === "string" ? draft.supportingKeywords : "",
         targetAudience: typeof draft.targetAudience === "string" ? draft.targetAudience : "",
+        targetLength: validLengths.includes(draft.targetLength) ? draft.targetLength : "600-1000",
+        articleTemplate: VALID_ARTICLE_TEMPLATES.includes(draft.articleTemplate) ? draft.articleTemplate : "standard",
         savedAt: draft.savedAt,
       });
     } catch {
@@ -236,6 +245,11 @@ export default function NewCampaignPage() {
         ? (draftBanner.targetLength as TargetLength)
         : "600-1000"
     );
+    setArticleTemplate(
+      VALID_ARTICLE_TEMPLATES.includes(draftBanner.articleTemplate)
+        ? draftBanner.articleTemplate
+        : "standard"
+    );
     setDraftBanner(null);
   }
 
@@ -260,6 +274,7 @@ export default function NewCampaignPage() {
         campaign_type: campaignType,
         skip_image: campaignType === "social_only" ? true : !generateImage,
         target_word_count: campaignType === "blog_full" ? targetLength : null,
+        article_template: campaignType === "blog_full" ? articleTemplate : null,
       });
       setBrainDump("");
       setTargetKeyword("");
@@ -569,6 +584,7 @@ export default function NewCampaignPage() {
         <div className="overflow-hidden" aria-hidden={campaignType === "social_only" || undefined}>
           {/* NEW -- length selector first */}
           <LengthSelector value={targetLength} onChange={setTargetLength} />
+          <TemplateSelector value={articleTemplate} onChange={setArticleTemplate} />
 
           <div className="space-y-1 mb-2">
             <label className="font-mono text-xs text-graphite uppercase tracking-widest">

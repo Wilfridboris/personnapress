@@ -18,6 +18,7 @@ async def create_campaign(
     campaign_type: str = "blog_full",
     skip_image: bool = False,
     target_word_count: Optional[str] = None,
+    article_template: Optional[str] = None,
 ) -> Campaign:
     campaign = Campaign(
         client_id=client_id,
@@ -29,6 +30,7 @@ async def create_campaign(
         campaign_type=campaign_type,
         skip_image=skip_image,
         target_word_count=target_word_count,
+        article_template=article_template,
     )
     session.add(campaign)
     await session.flush()

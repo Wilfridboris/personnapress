@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of 3-24-blog-article-template-selector (2026-08-10)
+
+- No DB-level CHECK constraint on `article_template` column -- consistent with project pattern for campaign_type and target_word_count (also unconstrained nullable Text); Pydantic guards the inbound API boundary. [backend/alembic/versions/20260810_1811_ae296c4a3414_add_article_template_to_campaigns.py]
+- `_build_template_structure` silently returns "" for unknown DB values -- safe default (produces standard behavior); consistent with how other helpers handle unexpected inputs; add a log.warning if silent-fallback observability becomes a requirement. [backend/app/integrations/generation_prompts.py]
+
 ## Deferred from: code review of 3-23-blog-target-length-selector (2026-08-10)
 
 - Alembic migration includes unrelated ops beyond `add_column` — autogenerate drift includes `apscheduler_jobs` table/index drop and `users_email_key` unique constraint removal; not caused by this story; the extra ops reflect existing schema drift. [backend/alembic/versions/20260809_1946_4317d2f4b9b7_add_target_word_count_to_campaigns.py]

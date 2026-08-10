@@ -20,6 +20,7 @@ from app.integrations.generation_prompts import (
     _SOCIAL_STANDALONE_PROMPT,
     _build_seo_section,
     _build_standalone_voice_injection,
+    _build_template_structure,
     _build_voice_injection,
     _meta_voice_note,
     _strip_fences,
@@ -224,6 +225,7 @@ async def generate_blog(
     target_audience: str | None = None,
     secondary_keywords: str | None = None,
     target_word_count: str | None = None,
+    article_template: str | None = None,
 ) -> str:
     if brand_voice_profile:
         tone_list = ", ".join(str(t) for t in brand_voice_profile.get("tone", []))
@@ -254,6 +256,8 @@ async def generate_blog(
     meta_voice_note = _meta_voice_note(brand_voice_profile or {})
 
     seo_target_section, audience_section = _build_seo_section(target_keyword, target_audience, secondary_keywords)
+
+    template_structure_override = _build_template_structure(article_template, meta_voice_note)
 
     _WORD_COUNT_MAP = {
         "300-500": "300-500 words",
@@ -286,6 +290,7 @@ async def generate_blog(
         seo_target_section=seo_target_section,
         audience_section=audience_section,
         word_count_range=word_count_range,
+        template_structure_override=template_structure_override,
         length_override_section=length_override_section,
     )
 

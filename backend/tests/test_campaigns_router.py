@@ -38,6 +38,7 @@ def _make_campaign(campaign_id=None, client_id=None, campaign_type="blog_full", 
     c.github_pr_url = None
     c.roadmap_id = None
     c.target_word_count = None
+    c.article_template = None
     c.created_at = datetime(2026, 7, 2, 10, 0, 0, tzinfo=timezone.utc)
     c.updated_at = datetime(2026, 7, 2, 10, 0, 0, tzinfo=timezone.utc)
     return c
@@ -1529,3 +1530,54 @@ async def test_regenerate_preserves_target_word_count():
     assert result.campaign_id == new_campaign.id
     call_kwargs = mock_create.call_args[1]
     assert call_kwargs.get("target_word_count") == "1500-2500"
+
+
+# ── article_template: Story 3.24 ──────────────────────────────────────────────
+
+async def test_campaign_create_with_article_template():
+    """POST /campaigns with article_template='how-to' passes value to create_campaign."""
+    from app.routers.campaigns import create_new_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.article_template = "how-to"
+    job = _make_job(campaign_id=campaign.id)
+
+    db = AsyncMock()
+    body = CampaignCreate(
+        client_id=client.id,
+        brain_dump="A" * 25,
+        article_template="how-to",
+    )
+    background_tasks = MagicMock()
+    mock_create = AsyncMock(return_value=campaign)
+
+    with (
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.check_trial_not_expired", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.check_campaign_limit", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.create_campaign", mock_create),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=job)),
+    ):
+        result = await create_new_campaign(
+            body=body,
+            background_tasks=background_tasks,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.campaign_id == campaign.id
+    call_kwargs = mock_create.call_args[1]
+    assert call_kwargs.get("article_template") == "how-to"
+
+
+def test_campaign_create_invalid_article_template():
+    """CampaignCreate schema rejects unknown article_template values with ValidationError."""
+    import pydantic
+    with pytest.raises(pydantic.ValidationError):
+        CampaignCreate(
+            client_id=uuid.uuid4(),
+            brain_dump="A" * 25,
+            article_template="newsletter",
+        )

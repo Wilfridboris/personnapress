@@ -138,6 +138,7 @@ async def create_new_campaign(
         campaign_type=body.campaign_type,
         skip_image=effective_skip_image,
         target_word_count=body.target_word_count,
+        article_template=body.article_template,
     )
     job = await create_job(db, job_type="generation", status="pending", campaign_id=campaign.id)
 
@@ -452,7 +453,8 @@ async def regenerate_campaign(
         secondary_keywords=campaign.secondary_keywords,
         campaign_type=campaign.campaign_type,
         skip_image=campaign.skip_image,
-        target_word_count=campaign.target_word_count,   # <-- new
+        target_word_count=campaign.target_word_count,
+        article_template=campaign.article_template,
     )
     new_job = await create_job(db, job_type="generation", status="pending", campaign_id=new_campaign.id)
 

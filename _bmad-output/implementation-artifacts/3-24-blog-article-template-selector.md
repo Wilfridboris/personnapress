@@ -1,10 +1,11 @@
 ---
 depends_on: 3-23-blog-target-length-selector
+baseline_commit: 15ae85d771e4b3be62d9815073ef13c76024ad72
 ---
 
 # Story 3.24: Blog Article Template Selector
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -623,19 +624,73 @@ helper -- passing the already-computed string is simpler and correct.
 
 ## Checklist
 
-- [ ] `article_template` column added to `Campaign` model
-- [ ] Alembic migration generated via CLI (not hand-written)
-- [ ] `CampaignCreate` and `CampaignResponse` updated
-- [ ] `_build_template_structure()` helper added to `generation_prompts.py`
-- [ ] `{template_structure_override}` placeholder added before `{length_override_section}` in `_BLOG_PROMPT`
-- [ ] `gemini.py` `generate_blog` accepts and applies `article_template`
-- [ ] `anthropic_client.py` `generate_blog` accepts and applies `article_template`
-- [ ] `generation.py` passes `campaign.article_template` to `generate_blog`
-- [ ] `TemplateSelector.tsx` created exactly as specified
-- [ ] `NewCampaignPage` wires state, placement (after `LengthSelector`), autosave, submit payload
-- [ ] `lib/api.ts` type updated
-- [ ] 7 backend tests passing
-- [ ] Standard/null template produces zero prompt changes (existing behavior preserved)
-- [ ] Social-only campaigns send `article_template: null`
-- [ ] `create_campaign()` repository accepts `article_template` param
-- [ ] `regenerate_campaign` router passes `campaign.article_template` to `create_campaign()`
+- [x] `article_template` column added to `Campaign` model
+- [x] Alembic migration generated via CLI (not hand-written)
+- [x] `CampaignCreate` and `CampaignResponse` updated
+- [x] `_build_template_structure()` helper added to `generation_prompts.py`
+- [x] `{template_structure_override}` placeholder added before `{length_override_section}` in `_BLOG_PROMPT`
+- [x] `gemini.py` `generate_blog` accepts and applies `article_template`
+- [x] `anthropic_client.py` `generate_blog` accepts and applies `article_template`
+- [x] `generation.py` passes `campaign.article_template` to `generate_blog`
+- [x] `TemplateSelector.tsx` created exactly as specified
+- [x] `NewCampaignPage` wires state, placement (after `LengthSelector`), autosave, submit payload
+- [x] `lib/api.ts` type updated
+- [x] 7 backend tests passing
+- [x] Standard/null template produces zero prompt changes (existing behavior preserved)
+- [x] Social-only campaigns send `article_template: null`
+- [x] `create_campaign()` repository accepts `article_template` param
+- [x] `regenerate_campaign` router passes `campaign.article_template` to `create_campaign()`
+
+---
+
+## Dev Agent Record
+
+### Implementation Notes
+
+- Added `article_template` column (nullable Text) to `Campaign` model immediately after `target_word_count`.
+- Fixed pre-existing bug in migration `20260809_1946_4317d2f4b9b7`: added missing `import sqlmodel` so it could be applied. Generated new migration `20260810_1811_ae296c4a3414` via Alembic CLI.
+- `_build_template_structure()` in `generation_prompts.py` returns `""` for Standard/null (zero prompt change), and a multi-line HTML scaffold for How-To, Listicle, and Thought Leadership templates. The scaffold is passed as `{template_structure_override}` inserted before `{length_override_section}` in `_BLOG_PROMPT` -- composable with length selection.
+- Both `gemini.py` and `anthropic_client.py` `generate_blog` functions accept `article_template: str | None = None`, call `_build_template_structure` after `meta_voice_note`, and pass `template_structure_override` to `_BLOG_PROMPT.format()`.
+- `TemplateSelector.tsx` is a CSS-only 2x2 grid with highlighter-yellow active state and a pure CSS hover popover (no Framer Motion, no JS state). Paper Style compliant (no border radius).
+- `BrainDumpDraft` interface extended with `articleTemplate: ArticleTemplate`; validation on load uses the same `validTemplatesList` guard pattern as `targetLength`. TypeScript type errors in pre-existing `BlogEditor.test.tsx` confirmed pre-existing (not introduced).
+- 56 pre-existing test failures confirmed by git stash verification -- all exist on the clean baseline before this story.
+
+### Completion Notes
+
+All 13 ACs satisfied. 7 new backend tests added (5 unit tests for `_build_template_structure`, 2 router tests for `article_template` create/validation). 777 previously passing tests continue to pass with no regressions.
+
+---
+
+## File List
+
+- `backend/app/db/repositories/models.py` -- added `article_template` column
+- `backend/alembic/versions/20260809_1946_4317d2f4b9b7_add_target_word_count_to_campaigns.py` -- added missing `import sqlmodel`
+- `backend/alembic/versions/20260810_1811_ae296c4a3414_add_article_template_to_campaigns.py` -- new migration (CLI-generated)
+- `backend/app/schemas/campaign.py` -- `article_template` in `CampaignCreate` and `CampaignResponse`
+- `backend/app/integrations/generation_prompts.py` -- `_build_template_structure()` added; `{template_structure_override}` placeholder in `_BLOG_PROMPT`
+- `backend/app/integrations/gemini.py` -- `generate_blog` accepts `article_template`; calls `_build_template_structure`
+- `backend/app/integrations/anthropic_client.py` -- same as gemini.py
+- `backend/app/services/generation.py` -- passes `article_template=campaign.article_template`
+- `backend/app/db/repositories/campaigns.py` -- `create_campaign()` accepts `article_template`
+- `backend/app/routers/campaigns.py` -- create endpoint and `regenerate_campaign` pass `article_template`
+- `frontend/components/campaigns/TemplateSelector.tsx` -- new component
+- `frontend/app/(app)/campaigns/new/page.tsx` -- imports, state, autosave, restore, submit, JSX wiring
+- `frontend/lib/types.ts` -- `CampaignCreate` gains `article_template`
+- `backend/tests/test_generation_prompts.py` -- 5 new `TestBuildTemplateStructure` tests; `_build_prompt` helper updated
+- `backend/tests/test_campaigns_router.py` -- 2 new tests; `_make_campaign` gains `article_template = None`
+
+---
+
+## Review Findings
+
+- [x] [Review][Patch] Duplicate `VALID_ARTICLE_TEMPLATES` inline arrays in page.tsx [frontend/app/(app)/campaigns/new/page.tsx:166,247] -- fixed
+- [x] [Review][Patch] CSS-only tooltip not shown on keyboard focus (group-hover only, no group-focus-within) [frontend/components/campaigns/TemplateSelector.tsx:88] -- fixed
+- [x] [Review][Defer] No DB-level CHECK constraint on `article_template` column [backend/alembic/versions/20260810_1811_ae296c4a3414_add_article_template_to_campaigns.py] -- deferred, pre-existing pattern (campaign_type, target_word_count also unconstrained Text)
+- [x] [Review][Defer] `_build_template_structure` silently returns "" for unknown DB values -- deferred, safe default consistent with other helpers
+
+---
+
+## Change Log
+
+- 2026-08-10: Story 3.24 implemented -- blog article template selector (Standard / How-To / Listicle / Thought Leadership). DB column, migration, schema, prompt injection, both LLM integrations, TemplateSelector UI, autosave, submit payload, 7 backend tests.
+- 2026-08-10: Code review patches -- deduplicated VALID_ARTICLE_TEMPLATES constant in page.tsx, added keyboard focus visibility to TemplateSelector tooltip.

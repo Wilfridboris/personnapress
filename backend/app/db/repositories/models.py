@@ -189,6 +189,10 @@ class Campaign(SQLModel, table=True):
         default=None,
         sa_column=Column(Text, nullable=True),
     )
+    article_template: Optional[str] = Field(
+        default=None,
+        sa_column=Column(Text, nullable=True),
+    )
     github_pr_url: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True, index=True))
     roadmap_id: Optional[uuid.UUID] = Field(
         default=None,

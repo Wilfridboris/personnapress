@@ -7,6 +7,7 @@ from app.integrations.generation_prompts import (
     _SOCIAL_PROMPT,
     _SOCIAL_STANDALONE_PROMPT,
     _build_standalone_voice_injection,
+    _build_template_structure,
     _build_voice_injection,
     _strip_blog_trailer,
 )
@@ -345,6 +346,7 @@ class TestWordCountPrompt:
             seo_target_section="",
             audience_section="",
             word_count_range=word_count_range,
+            template_structure_override="",
             length_override_section=length_override_section,
         )
 
@@ -366,3 +368,40 @@ class TestWordCountPrompt:
         prompt = self._build_prompt(target_word_count="1500-2500")
         assert "1,500-2,500 words" in prompt
         assert "QUICK READ MODE" not in prompt
+
+
+# ── _build_template_structure tests: Story 3.24 ───────────────────────────────
+
+class TestBuildTemplateStructure:
+    def test_template_standard_no_override(self):
+        """_build_template_structure("standard", "") returns empty string."""
+        result = _build_template_structure("standard", "")
+        assert result == ""
+
+    def test_template_none_no_override(self):
+        """_build_template_structure(None, "") returns empty string."""
+        result = _build_template_structure(None, "")
+        assert result == ""
+
+    def test_template_how_to_structure(self):
+        """_build_template_structure("how-to", "") contains expected markers."""
+        result = _build_template_structure("how-to", "")
+        assert "HOW-TO GUIDE" in result
+        assert "What You Will Need" in result
+        assert "Step 1:" in result
+        assert "Frequently Asked Questions" in result
+
+    def test_template_listicle_structure(self):
+        """_build_template_structure("listicle", "") contains expected markers."""
+        result = _build_template_structure("listicle", "")
+        assert "LISTICLE" in result
+        assert "<ol>" in result
+        assert "<h3>" in result
+        assert "Do NOT add a FAQ section" in result
+
+    def test_template_thought_leadership_structure(self):
+        """_build_template_structure("thought-leadership", "") contains expected markers."""
+        result = _build_template_structure("thought-leadership", "")
+        assert "THOUGHT LEADERSHIP" in result
+        assert "counter-argument" in result
+        assert "Do NOT add a FAQ section" in result
