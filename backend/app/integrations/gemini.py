@@ -223,6 +223,7 @@ async def generate_blog(
     target_keyword: str | None = None,
     target_audience: str | None = None,
     secondary_keywords: str | None = None,
+    target_word_count: str | None = None,
 ) -> str:
     if brand_voice_profile:
         tone_list = ", ".join(str(t) for t in brand_voice_profile.get("tone", []))
@@ -254,6 +255,27 @@ async def generate_blog(
 
     seo_target_section, audience_section = _build_seo_section(target_keyword, target_audience, secondary_keywords)
 
+    _WORD_COUNT_MAP = {
+        "300-500": "300-500 words",
+        "600-1000": "600-1,000 words",
+        "1500-2500": "1,500-2,500 words",
+    }
+    word_count_range = _WORD_COUNT_MAP.get(target_word_count or "", "900-1,500 words")
+
+    if target_word_count == "300-500":
+        length_override_section = (
+            "QUICK READ MODE (300-500 words):\n"
+            "- Strict word limit: 300-500 words total including all headings and HTML.\n"
+            "- OMIT the <div class=\"tldr\"> block entirely. Do not output it.\n"
+            "- OMIT the <h2>Frequently Asked Questions</h2> and <dl class=\"faq\"> block entirely.\n"
+            "- Write 1-2 H2 body sections only (not 3-4).\n"
+            "- The BLUF intro paragraph and conclusion are still required.\n"
+            "- Every sentence must earn its place. Cut anything that does not give the reader\n"
+            "  a new fact or a specific action."
+        )
+    else:
+        length_override_section = ""
+
     prompt = _BLOG_PROMPT.format(
         voice_section=voice_section,
         meta_voice_note=meta_voice_note,
@@ -263,6 +285,8 @@ async def generate_blog(
         banned_jargon_list=banned_jargon_list,
         seo_target_section=seo_target_section,
         audience_section=audience_section,
+        word_count_range=word_count_range,
+        length_override_section=length_override_section,
     )
 
     response = await _client.aio.models.generate_content(

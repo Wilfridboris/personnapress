@@ -91,7 +91,7 @@ def _build_voice_injection(bvp: dict) -> str:
         f"{voice_brief}\n\n"
         "VOICE APPLICATION RULES (apply within the SEO structure -- do not override structure):\n"
         "- SEO structure is mandatory: H1, meta description, H2/H3 headings, body, conclusion, "
-        "800-1500 words are non-negotiable\n"
+        "word count is governed by the content strategy\n"
         f"- {list_rule}\n"
         "- Opening pattern applies to the FIRST BODY PARAGRAPH, not the H1 or meta description\n"
         f"- Pronoun preference applies consistently throughout: {pronoun}\n"
@@ -191,7 +191,7 @@ MANDATORY STRUCTURE (HTML only, no markdown; follow this EXACTLY):
 <p>[Closing paragraph: lead with the single most important action the reader should take. No section recap. End with forward momentum, not a summary.]</p>
 
 REQUIREMENTS:
-- Target 900-1,500 words
+- Target {word_count_range}
 - Use H2 and H3 for structure; only one H1 (the title)
 - Match the tone: {tone_list}
 - Match the cadence: {cadence_instruction}
@@ -228,6 +228,7 @@ BANNED WORDS, do not use anywhere: delve, moreover, testament, comprehensive, fu
 
 Every sentence must earn its place. If a sentence does not give the reader new information or a specific action, cut it.
 
+{length_override_section}
 Output ONLY the HTML above. Do NOT append any word count, compliance summary, keyword checklist, or verification notes after the closing HTML tag.
 """
 

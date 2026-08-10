@@ -224,6 +224,7 @@ export interface CampaignCreate {
   target_audience?: string | null;
   campaign_type?: "blog_full" | "social_only";
   skip_image?: boolean;
+  target_word_count?: "300-500" | "600-1000" | "1500-2500" | null;
 }
 
 export interface Job {

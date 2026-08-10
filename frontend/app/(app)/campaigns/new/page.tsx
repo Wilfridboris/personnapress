@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { useClientStore } from "@/lib/stores/useClientStore";
 import { campaignsApi, publishingApi, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
+import { LengthSelector, type TargetLength } from "@/components/campaigns/LengthSelector";
 
 function platformLabel(platform: string): string {
   const MAP: Record<string, string> = {
@@ -37,6 +38,7 @@ interface BrainDumpDraft {
   targetKeyword: string;
   supportingKeywords: string;
   targetAudience: string;
+  targetLength: TargetLength;
   savedAt: string;
 }
 
@@ -74,6 +76,7 @@ export default function NewCampaignPage() {
   const activeClient = clients.find((c) => c.id === activeClientId) ?? null;
 
   const [campaignType, setCampaignType] = useState<"blog_full" | "social_only">("blog_full");
+  const [targetLength, setTargetLength] = useState<TargetLength>("600-1000");
   const [generateImage, setGenerateImage] = useState(true);
   const [brainDump, setBrainDump] = useState("");
   const [targetKeyword, setTargetKeyword] = useState("");
@@ -123,6 +126,7 @@ export default function NewCampaignPage() {
         targetKeyword,
         supportingKeywords,
         targetAudience,
+        targetLength,
         savedAt: new Date().toISOString(),
       };
       try {
@@ -135,7 +139,7 @@ export default function NewCampaignPage() {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [brainDump, targetKeyword, supportingKeywords, targetAudience, activeClientId]);
+  }, [brainDump, targetKeyword, supportingKeywords, targetAudience, targetLength, activeClientId]);
 
   // Load draft from localStorage on mount / client change (AC 2, AC 3)
   useEffect(() => {
@@ -227,6 +231,11 @@ export default function NewCampaignPage() {
     setTargetKeyword(draftBanner.targetKeyword);
     setSupportingKeywords(draftBanner.supportingKeywords);
     setTargetAudience(draftBanner.targetAudience);
+    setTargetLength(
+      ["300-500", "600-1000", "1500-2500"].includes(draftBanner.targetLength)
+        ? (draftBanner.targetLength as TargetLength)
+        : "600-1000"
+    );
     setDraftBanner(null);
   }
 
@@ -250,6 +259,7 @@ export default function NewCampaignPage() {
         target_audience: targetAudience.trim() || null,
         campaign_type: campaignType,
         skip_image: campaignType === "social_only" ? true : !generateImage,
+        target_word_count: campaignType === "blog_full" ? targetLength : null,
       });
       setBrainDump("");
       setTargetKeyword("");
@@ -557,6 +567,9 @@ export default function NewCampaignPage() {
         campaignType === "blog_full" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
       }`}>
         <div className="overflow-hidden" aria-hidden={campaignType === "social_only" || undefined}>
+          {/* NEW -- length selector first */}
+          <LengthSelector value={targetLength} onChange={setTargetLength} />
+
           <div className="space-y-1 mb-2">
             <label className="font-mono text-xs text-graphite uppercase tracking-widest">
               Focus keyword <span className="normal-case">(optional)</span>

@@ -159,6 +159,7 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
             campaign.target_keyword,
             campaign.target_audience,
             campaign.secondary_keywords,
+            target_word_count=campaign.target_word_count,   # <-- new
         )
         if not blog_html:
             raise ValueError("generate_blog returned empty content")

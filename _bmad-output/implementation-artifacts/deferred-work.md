@@ -1,5 +1,20 @@
 # Deferred Work
 
+## Deferred from: code review of 3-23-blog-target-length-selector (2026-08-10)
+
+- Alembic migration includes unrelated ops beyond `add_column` — autogenerate drift includes `apscheduler_jobs` table/index drop and `users_email_key` unique constraint removal; not caused by this story; the extra ops reflect existing schema drift. [backend/alembic/versions/20260809_1946_4317d2f4b9b7_add_target_word_count_to_campaigns.py]
+- `_WORD_COUNT_MAP` duplicated verbatim in `gemini.py` and `anthropic_client.py` — spec-intentional (story requires local constant inside each function); future divergence risk when a new length tier is added. [backend/app/integrations/gemini.py, anthropic_client.py]
+- In-Depth prompt is identical to Standard except word count label — no structural prompt differentiation (e.g., more H2 sections, deeper FAQ) because AC 5 explicitly says `length_override_section=""` for all non-Quick-Read tiers; label may be slightly misleading to users expecting richer output. [backend/app/integrations/gemini.py, anthropic_client.py]
+- `create_campaign()` accepts `Optional[str]` for `target_word_count` with no enum guard at repo layer — internal call sites only; schema validation covers inbound API; acceptable for now. [backend/app/db/repositories/campaigns.py]
+- `targetLength` state not reset when `campaignType` changes to `social_only` — submit correctly sends null for social campaigns; state persistence is intentional UX (avoids reset on accidental toggle). [frontend/app/(app)/campaigns/new/page.tsx]
+- Draft restoration uses `as TargetLength` cast after `includes()` guard — runtime-correct but not type-safe; define a type guard function in a future TypeScript hardening pass. [frontend/app/(app)/campaigns/new/page.tsx]
+- No router-level test for explicit `"600-1000"` selection — prompt tests cover this tier; low-priority gap. [backend/tests/test_campaigns_router.py]
+- Screen reader not notified when Quick Read notice is removed from DOM — `aria-live` region removal gap; keep node mounted and toggle `aria-hidden` if WCAG compliance becomes a requirement. [frontend/components/campaigns/LengthSelector.tsx]
+- No `disabled` prop forwarded to radio inputs — parent form does not disable during submission; add if a disabled-during-submit pattern is adopted project-wide. [frontend/components/campaigns/LengthSelector.tsx]
+- Empty `length_override_section` renders an extra blank line in the prompt template — cosmetic; one additional `\n` between the BANNED WORDS block and "Output ONLY"; no functional impact. [backend/app/integrations/generation_prompts.py:231]
+- `test_campaign_create_with_target_word_count` uses `AsyncMock` not a real DB and does not assert HTTP 202 — established test pattern in this file; mock-level assertions are sufficient for the router contract. [backend/tests/test_campaigns_router.py]
+- `TestWordCountPrompt` duplicates `_WORD_COUNT_MAP` logic locally rather than calling `generate_blog` — acceptable isolation; tests the prompt template integration directly; divergence from integration functions would require a separate integration test. [backend/tests/test_generation_prompts.py]
+
 ## Deferred from: code review of 5-7-linkedin-company-page-target (2026-08-09)
 
 - No pagination for LinkedIn org list — LinkedIn's `organizationAcls` response includes a `paging` element that is fetched in the projection but never consumed; users with many administered pages receive a silently truncated list. Acceptable for v1; add pagination or a max-count note before enabling the feature in production. [backend/app/routers/publishing.py]

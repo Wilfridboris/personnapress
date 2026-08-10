@@ -27,6 +27,7 @@ def _make_campaign(campaign_id=None, client_id=None, campaign_type="blog_full", 
     c.x_post = None
     c.linkedin_post = None
     c.image_url = None
+    c.image_alt = None
     c.status = "pending_approval"
     c.voice_score = None
     c.rejection_reason = None
@@ -35,6 +36,8 @@ def _make_campaign(campaign_id=None, client_id=None, campaign_type="blog_full", 
     c.campaign_type = campaign_type
     c.skip_image = skip_image
     c.github_pr_url = None
+    c.roadmap_id = None
+    c.target_word_count = None
     c.created_at = datetime(2026, 7, 2, 10, 0, 0, tzinfo=timezone.utc)
     c.updated_at = datetime(2026, 7, 2, 10, 0, 0, tzinfo=timezone.utc)
     return c
@@ -1437,3 +1440,92 @@ async def test_regenerate_preserves_skip_image():
     assert result.campaign_id == new_campaign.id
     call_kwargs = mock_create.call_args[1]
     assert call_kwargs.get("skip_image") is True
+
+
+# ── target_word_count: Story 3.23 ─────────────────────────────────────────────
+
+async def test_campaign_create_with_target_word_count():
+    """POST /campaigns with target_word_count='300-500' passes value to create_campaign."""
+    from app.routers.campaigns import create_new_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.target_word_count = "300-500"
+    job = _make_job(campaign_id=campaign.id)
+
+    db = AsyncMock()
+    body = CampaignCreate(
+        client_id=client.id,
+        brain_dump="A" * 25,
+        target_word_count="300-500",
+    )
+    background_tasks = MagicMock()
+    mock_create = AsyncMock(return_value=campaign)
+
+    with (
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.check_trial_not_expired", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.check_campaign_limit", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.create_campaign", mock_create),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=job)),
+    ):
+        result = await create_new_campaign(
+            body=body,
+            background_tasks=background_tasks,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.campaign_id == campaign.id
+    call_kwargs = mock_create.call_args[1]
+    assert call_kwargs.get("target_word_count") == "300-500"
+
+
+def test_campaign_create_invalid_target_word_count():
+    """CampaignCreate schema rejects unknown target_word_count values with ValidationError."""
+    import pydantic
+    with pytest.raises(pydantic.ValidationError):
+        CampaignCreate(
+            client_id=uuid.uuid4(),
+            brain_dump="A" * 25,
+            target_word_count="999-9999",
+        )
+
+
+async def test_regenerate_preserves_target_word_count():
+    """regenerate_campaign passes the source campaign's target_word_count to create_campaign."""
+    from app.routers.campaigns import regenerate_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    source = _make_campaign(client_id=client.id)
+    source.status = "rejected"
+    source.target_keyword = None
+    source.target_audience = None
+    source.secondary_keywords = None
+    source.target_word_count = "1500-2500"
+    new_campaign = _make_campaign(client_id=client.id)
+    new_campaign.target_word_count = "1500-2500"
+    new_job = _make_job(campaign_id=new_campaign.id)
+    db = AsyncMock()
+    mock_create = AsyncMock(return_value=new_campaign)
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=source)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.check_trial_not_expired", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.check_campaign_limit", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.create_campaign", mock_create),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=new_job)),
+    ):
+        result = await regenerate_campaign(
+            campaign_id=source.id,
+            background_tasks=MagicMock(),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.campaign_id == new_campaign.id
+    call_kwargs = mock_create.call_args[1]
+    assert call_kwargs.get("target_word_count") == "1500-2500"

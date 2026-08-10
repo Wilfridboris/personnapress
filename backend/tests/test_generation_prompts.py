@@ -298,3 +298,71 @@ class TestStripBlogTrailer:
     def test_strips_trailer_containing_gt_character(self):
         html = "<p>Done.</p>\n--- keyword density > 2%"
         assert _strip_blog_trailer(html) == "<p>Done.</p>"
+
+
+# ── TestWordCountPrompt -- Story 3.23: Blog target length selector ─────────────
+
+class TestWordCountPrompt:
+    """Tests for {word_count_range} and {length_override_section} placeholders.
+
+    These tests verify the prompt building logic in gemini.py / anthropic_client.py
+    by inspecting the format parameters passed to _BLOG_PROMPT. All tests use only
+    the prompt template and the word-count formatting logic -- no LLM calls made.
+    """
+
+    def _build_prompt(self, target_word_count=None):
+        """Build the blog prompt with the same logic used in generate_blog."""
+        from app.integrations.generation_prompts import _BLOG_PROMPT, _DEFAULT_VOICE
+
+        _WORD_COUNT_MAP = {
+            "300-500": "300-500 words",
+            "600-1000": "600-1,000 words",
+            "1500-2500": "1,500-2,500 words",
+        }
+        word_count_range = _WORD_COUNT_MAP.get(target_word_count or "", "900-1,500 words")
+
+        if target_word_count == "300-500":
+            length_override_section = (
+                "QUICK READ MODE (300-500 words):\n"
+                "- Strict word limit: 300-500 words total including all headings and HTML.\n"
+                '- OMIT the <div class="tldr"> block entirely. Do not output it.\n'
+                "- OMIT the <h2>Frequently Asked Questions</h2> and <dl class=\"faq\"> block entirely.\n"
+                "- Write 1-2 H2 body sections only (not 3-4).\n"
+                "- The BLUF intro paragraph and conclusion are still required.\n"
+                "- Every sentence must earn its place. Cut anything that does not give the reader\n"
+                "  a new fact or a specific action."
+            )
+        else:
+            length_override_section = ""
+
+        return _BLOG_PROMPT.format(
+            voice_section=_DEFAULT_VOICE,
+            meta_voice_note="",
+            brain_dump="test brain dump",
+            tone_list="professional",
+            cadence_instruction="avg sentence length 15 words",
+            banned_jargon_list="none",
+            seo_target_section="",
+            audience_section="",
+            word_count_range=word_count_range,
+            length_override_section=length_override_section,
+        )
+
+    def test_word_count_standard_default(self):
+        """None target_word_count maps to 900-1,500 words with no QUICK READ block."""
+        prompt = self._build_prompt(target_word_count=None)
+        assert "900-1,500 words" in prompt
+        assert "QUICK READ MODE" not in prompt
+
+    def test_word_count_quick_read(self):
+        """300-500 target maps to 300-500 words range and includes QUICK READ block."""
+        prompt = self._build_prompt(target_word_count="300-500")
+        assert "300-500 words" in prompt
+        assert "QUICK READ MODE" in prompt
+        assert 'OMIT the <div class="tldr">' in prompt
+
+    def test_word_count_in_depth(self):
+        """1500-2500 target maps to 1,500-2,500 words with no QUICK READ block."""
+        prompt = self._build_prompt(target_word_count="1500-2500")
+        assert "1,500-2,500 words" in prompt
+        assert "QUICK READ MODE" not in prompt

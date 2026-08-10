@@ -32,6 +32,7 @@ class CampaignCreate(BaseModel):
     secondary_keywords: Optional[str] = Field(default=None, max_length=500)
     campaign_type: Literal["blog_full", "social_only"] = "blog_full"
     skip_image: bool = False
+    target_word_count: Optional[Literal["300-500", "600-1000", "1500-2500"]] = None
 
     @field_validator("brain_dump", mode="before")
     @classmethod
@@ -68,6 +69,7 @@ class CampaignResponse(BaseModel):
     skip_image: bool = False
     github_pr_url: Optional[str] = None
     roadmap_id: Optional[uuid.UUID] = None
+    target_word_count: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
