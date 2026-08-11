@@ -356,7 +356,7 @@ export default function HeadlessBlogApiPage() {
       <main className="-mt-8 -mx-4">
 
         {/* Hero */}
-        <section className="max-w-6xl mx-auto px-6 pt-24 pb-20">
+        <section className="max-w-6xl mx-auto px-6 pt-12 md:pt-24 pb-16 md:pb-20">
           <div className="max-w-3xl">
             <h1 className="font-display text-6xl lg:text-7xl font-bold text-ink leading-tight tracking-tight text-balance mb-8">
               The AI Headless Blog API{" "}

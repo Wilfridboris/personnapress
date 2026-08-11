@@ -133,7 +133,7 @@ export default async function BlogListPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaBlog) }}
       />
       {/* Hero */}
-      <section className="max-w-6xl mx-auto px-6 pt-20 pb-12">
+      <section className="max-w-6xl mx-auto px-6 pt-10 md:pt-20 pb-10 md:pb-12">
         <p className="font-mono text-xs text-graphite uppercase tracking-widest mb-4">
           The PersonnaPress Blog
         </p>
