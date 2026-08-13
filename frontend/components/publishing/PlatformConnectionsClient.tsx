@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Info } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { publishingApi, clientsApi } from "@/lib/api";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
@@ -350,13 +351,19 @@ function MetaPlatformsSection({ clientId, enabled, showBetaBadge, onUnlock, conn
           {enabled ? (
             <div className="flex flex-col gap-2">
               {!hasFBIG && (
-                <a
-                  href={`/api/auth/meta?client_id=${clientId}`}
-                  className="inline-flex items-center justify-center px-5 min-h-[44px] border border-[#111111] text-[#111111] text-xs font-medium rounded-none hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
-                  aria-label="Connect Facebook and Instagram"
-                >
-                  Connect Facebook &amp; Instagram
-                </a>
+                <>
+                  <a
+                    href={`/api/auth/meta?client_id=${clientId}`}
+                    className="inline-flex items-center justify-center px-5 min-h-[44px] border border-[#111111] text-[#111111] text-xs font-medium rounded-none hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
+                    aria-label="Connect Facebook and Instagram"
+                  >
+                    Connect Facebook &amp; Instagram
+                  </a>
+                  <p className="flex items-start gap-1 mt-2 text-xs text-[#555555]">
+                    <Info className="size-3 mt-0.5 shrink-0" aria-hidden="true" />
+                    You&apos;ll be asked to select your Business Portfolio and choose which Pages and Instagram accounts to connect.
+                  </p>
+                </>
               )}
               {!hasThreads && (
                 <a

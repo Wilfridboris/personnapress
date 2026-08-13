@@ -11,7 +11,8 @@ export async function GET(request: NextRequest) {
   }
 
   const metaAppId = process.env.NEXT_PUBLIC_META_APP_ID;
-  if (!metaAppId) {
+  const metaConfigId = process.env.NEXT_PUBLIC_META_OAUTH_CONFIG_ID;
+  if (!metaAppId || !metaConfigId) {
     return NextResponse.json({ error: "Meta OAuth is not configured" }, { status: 500 });
   }
 
@@ -23,10 +24,7 @@ export async function GET(request: NextRequest) {
   authUrl.searchParams.set("redirect_uri", `${APP_URL}/api/auth/meta/callback`);
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("state", state);
-  authUrl.searchParams.set(
-    "scope",
-    "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,pages_manage_posts"
-  );
+  authUrl.searchParams.set("config_id", metaConfigId);
 
   const response = NextResponse.redirect(authUrl.toString());
   response.cookies.set("oauth_state_meta", cookieValue, {

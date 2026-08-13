@@ -75,9 +75,14 @@ export async function GET(request: NextRequest) {
     );
 
     if (!backendResp.ok) {
-      const err = await backendResp.json().catch(() => ({})) as { detail?: { error?: { message?: string } } };
+      const err = await backendResp.json().catch(() => ({})) as { detail?: { error?: { code?: string } } };
+      const SAFE_META_ERRORS: Record<string, string> = {
+        TOKEN_EXCHANGE_FAILED: "Meta authorization failed. Please try connecting again.",
+        ACCOUNT_DISCOVERY_FAILED: "Could not fetch your Facebook Pages. Ensure your Instagram is linked to a Facebook Page and try again.",
+      };
+      const safeMessage = SAFE_META_ERRORS[err?.detail?.error?.code ?? ""] ?? "Meta connection failed. Please try again.";
       return clearCookieRedirect(
-        `${errorBase}?error=${encodeURIComponent(err?.detail?.error?.message ?? "Meta connection failed. Please try again.")}`
+        `${errorBase}?error=${encodeURIComponent(safeMessage)}`
       );
     }
 

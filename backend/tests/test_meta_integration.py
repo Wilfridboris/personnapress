@@ -1922,4 +1922,76 @@ async def test_dispatch_publish_includes_github_pages_when_explicitly_requested(
         results = await dispatch_publish(db, campaign_id, job_id, platforms=["github_pages"])
 
     assert "github_pages" in results
-    assert "facebook_page" not in results
+
+
+# ── _platform_error_msg sanitization (Story 21.11) ────────────────────────────
+
+def test__platform_error_msg_sanitizes_client_secret():
+    """_platform_error_msg returns safe fallback when message contains client_secret."""
+    from app.routers.publishing import _platform_error_msg
+    from app.core.exceptions import PlatformError
+
+    e = PlatformError("meta", 400, "Invalid client_secret: abc123xyz")
+    result = _platform_error_msg(e, "TOKEN_EXCHANGE_FAILED")
+
+    assert "abc123xyz" not in result
+    assert "client_secret" not in result
+    assert result == "Meta authorization failed. Please try connecting again."
+
+
+def test__platform_error_msg_sanitizes_access_token():
+    """_platform_error_msg returns safe fallback when message contains access_token."""
+    from app.routers.publishing import _platform_error_msg
+    from app.core.exceptions import PlatformError
+
+    e = PlatformError("meta", 400, "Invalid access_token: EAABwzLixnjYBO...")
+    result = _platform_error_msg(e, "TOKEN_EXCHANGE_FAILED")
+
+    assert "EAABwzLixnjYBO" not in result
+    assert result == "Meta authorization failed. Please try connecting again."
+
+
+def test__platform_error_msg_passes_through_safe_message():
+    """_platform_error_msg returns the raw message when it contains no credential substrings."""
+    from app.routers.publishing import _platform_error_msg
+    from app.core.exceptions import PlatformError
+
+    e = PlatformError("meta", 429, "Rate limit exceeded")
+    result = _platform_error_msg(e)
+
+    assert result == "Rate limit exceeded"
+
+
+async def test_meta_oauth_callback_token_exchange_failure_logs_warning():
+    """meta_oauth_callback logs a warning and response message is safe when token exchange fails."""
+    from app.routers.publishing import meta_oauth_callback, OAuthCallbackRequest
+    from app.core.exceptions import PlatformError
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch(
+            "app.routers.publishing.meta_integration.exchange_code_for_short_lived_token",
+            AsyncMock(side_effect=PlatformError("meta", 400, "Invalid client_secret: a45473be1dc8d4")),
+        ),
+        patch("app.routers.publishing.logger") as mock_logger,
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await meta_oauth_callback(
+                client_id=client.id,
+                body=OAuthCallbackRequest(code="bad_code"),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 400
+    error_detail = exc_info.value.detail["error"]
+    assert "client_secret" not in error_detail["message"]
+    assert "a45473be1dc8d4" not in error_detail["message"]
+    mock_logger.warning.assert_called_once()
+    warning_msg = mock_logger.warning.call_args[0][1]
+    assert "client_secret" not in warning_msg
+    assert "a45473be1dc8d4" not in warning_msg

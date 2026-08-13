@@ -3,4 +3,4 @@ class PlatformError(Exception):
         self.platform = platform
         self.status_code = status_code
         self.message = message
-        super().__init__(f"{platform} returned {status_code}: {message}")
+        super().__init__(f"{platform} returned {status_code}")

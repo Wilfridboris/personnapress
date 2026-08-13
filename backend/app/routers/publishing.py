@@ -278,10 +278,27 @@ class MetaSelectPageRequest(BaseModel):
     page_id: str
 
 
-def _platform_error_msg(e: Exception) -> str:
-    """Extract a safe, serializable message from a platform exception."""
+_CREDENTIAL_SUBSTRINGS = frozenset(["client_secret", "access_token", "appsecret", "client_id"])
+
+_SAFE_ERROR_MSGS: dict[tuple[str, str], str] = {
+    ("meta", "TOKEN_EXCHANGE_FAILED"): "Meta authorization failed. Please try connecting again.",
+    ("meta", "ACCOUNT_DISCOVERY_FAILED"): "Could not fetch your Facebook Pages. Ensure your Instagram is linked to a Facebook Page and try again.",
+    ("threads", "TOKEN_EXCHANGE_FAILED"): "Threads authorization failed. Please try connecting again.",
+    ("threads", "USER_FETCH_FAILED"): "Threads authorization failed. Please try connecting again.",
+}
+
+
+def _platform_error_msg(e: Exception, error_code: str = "") -> str:
+    """Return a safe, non-credential error message for HTTP responses."""
     msg = getattr(e, "message", None)
-    return str(msg) if msg is not None else str(e)
+    raw = str(msg) if msg is not None else str(e)
+    platform = getattr(e, "platform", "")
+    if any(sub in raw.lower() for sub in _CREDENTIAL_SUBSTRINGS):
+        return _SAFE_ERROR_MSGS.get(
+            (platform, error_code),
+            "Authorization failed. Please try connecting again.",
+        )
+    return raw
 
 
 @router.post("/clients/{client_id}/connections/x/callback", status_code=201)
@@ -555,27 +572,30 @@ async def meta_oauth_callback(
     try:
         short_lived_token = await meta_integration.exchange_code_for_short_lived_token(body.code, redirect_uri)
     except Exception as e:
+        logger.warning("Meta OAuth token exchange failed: %s", _platform_error_msg(e, "TOKEN_EXCHANGE_FAILED"), exc_info=True)
         raise HTTPException(
             status_code=400,
-            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": _platform_error_msg(e), "detail": {}}},
+            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": _platform_error_msg(e, "TOKEN_EXCHANGE_FAILED"), "detail": {}}},
         )
 
     # Step b: Exchange short-lived for 60-day long-lived token
     try:
         long_lived_token = await meta_integration.exchange_short_lived_for_long_lived_token(short_lived_token)
     except Exception as e:
+        logger.warning("Meta OAuth token exchange failed: %s", _platform_error_msg(e, "TOKEN_EXCHANGE_FAILED"), exc_info=True)
         raise HTTPException(
             status_code=400,
-            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": _platform_error_msg(e), "detail": {}}},
+            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": _platform_error_msg(e, "TOKEN_EXCHANGE_FAILED"), "detail": {}}},
         )
 
     # Step c: Discover linked Pages and Instagram accounts
     try:
         pages = await meta_integration.discover_accounts(long_lived_token)
     except Exception as e:
+        logger.warning("Meta OAuth step failed: %s", _platform_error_msg(e, "ACCOUNT_DISCOVERY_FAILED"), exc_info=True)
         raise HTTPException(
             status_code=400,
-            detail={"error": {"code": "ACCOUNT_DISCOVERY_FAILED", "message": _platform_error_msg(e), "detail": {}}},
+            detail={"error": {"code": "ACCOUNT_DISCOVERY_FAILED", "message": _platform_error_msg(e, "ACCOUNT_DISCOVERY_FAILED"), "detail": {}}},
         )
 
     # Multi-page path: require user selection
@@ -780,27 +800,30 @@ async def threads_oauth_callback(
     try:
         short_lived_token = await threads_auth.exchange_code_for_short_lived_token(body.code, redirect_uri)
     except Exception as e:
+        logger.warning("Threads OAuth token exchange failed: %s", _platform_error_msg(e, "TOKEN_EXCHANGE_FAILED"), exc_info=True)
         raise HTTPException(
             status_code=400,
-            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": _platform_error_msg(e), "detail": {}}},
+            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": _platform_error_msg(e, "TOKEN_EXCHANGE_FAILED"), "detail": {}}},
         )
 
     # Step b: Exchange for 60-day long-lived token
     try:
         long_lived_token = await threads_auth.exchange_short_lived_for_long_lived_token(short_lived_token)
     except Exception as e:
+        logger.warning("Threads OAuth token exchange failed: %s", _platform_error_msg(e, "TOKEN_EXCHANGE_FAILED"), exc_info=True)
         raise HTTPException(
             status_code=400,
-            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": _platform_error_msg(e), "detail": {}}},
+            detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": _platform_error_msg(e, "TOKEN_EXCHANGE_FAILED"), "detail": {}}},
         )
 
     # Step c: Fetch Threads user info
     try:
         user_info = await threads_auth.get_threads_user(long_lived_token)
     except Exception as e:
+        logger.warning("Threads OAuth user fetch failed: %s", _platform_error_msg(e, "USER_FETCH_FAILED"), exc_info=True)
         raise HTTPException(
             status_code=400,
-            detail={"error": {"code": "USER_FETCH_FAILED", "message": _platform_error_msg(e), "detail": {}}},
+            detail={"error": {"code": "USER_FETCH_FAILED", "message": _platform_error_msg(e, "USER_FETCH_FAILED"), "detail": {}}},
         )
 
     threads_user_id = user_info.get("id", "")
