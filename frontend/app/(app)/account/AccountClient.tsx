@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
 import { fetchAPI, APIError } from "@/lib/api";
@@ -87,6 +88,15 @@ export function AccountClient({ status, currentTier }: AccountClientProps) {
       >
         {logoutLoading ? "Logging out..." : "Log out"}
       </Button>
+
+      <hr className="border-[#E5E5E5] my-6" />
+
+      <Link
+        href="/account/support"
+        className="font-body text-sm text-graphite underline underline-offset-2 hover:text-ink transition-colors"
+      >
+        Help &amp; Support
+      </Link>
     </>
   );
 }

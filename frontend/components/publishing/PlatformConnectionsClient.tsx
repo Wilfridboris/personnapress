@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Lock } from "lucide-react";
 import { publishingApi, clientsApi } from "@/lib/api";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { useUIStore } from "@/lib/stores/useUIStore";
@@ -46,6 +45,10 @@ export function PlatformConnectionsClient({ clientId }: Props) {
   const addToast = useUIStore((s) => s.addToast);
   const handledRef = useRef(false);
   const queryClient = useQueryClient();
+  const [metaBetaUnlocked, setMetaBetaUnlocked] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("meta_beta") === "1";
+  });
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerPages, setPickerPages] = useState<MetaPageOption[]>([]);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
@@ -144,16 +147,25 @@ export function PlatformConnectionsClient({ clientId }: Props) {
 
   const connectedItems = connections?.items ?? [];
 
-  // Show MetaPlatformsSection (connect/locked) only when ALL Meta platforms are connected.
-  // If some are connected and some aren't, show individual cards for connected ones AND
+  const metaEffectivelyEnabled =
+    META_PUBLISHING_ENABLED ||
+    metaBetaUnlocked ||
+    connectedItems.some((c) => META_PLATFORMS.has(c.platform) && c.connected);
+
+  function handleMetaUnlock() {
+    localStorage.setItem("meta_beta", "1");
+    setMetaBetaUnlocked(true);
+    addToast("Meta platforms unlocked.", "success");
+  }
+
+  // Hide MetaPlatformsSection once ALL Meta platforms are connected (individual cards handle them).
+  // If some are connected and some aren't, show connected ones as individual cards AND
   // the section for remaining unconnected ones (AC7 requires unconnected always have a connect path).
   const hasAllMetaConnected =
     META_PLATFORMS.size > 0 &&
     [...META_PLATFORMS].every((p) => connectedItems.some((c) => c.platform === p && c.connected));
 
-  const normalItems = isLoading
-    ? ALL_PLATFORMS.filter((p) => !META_PLATFORMS.has(p)).map((p) => ({ platform: p, connected: false }))
-    : connectedItems.filter((c) => !META_PLATFORMS.has(c.platform));
+  const normalItems = connectedItems.filter((c) => !META_PLATFORMS.has(c.platform));
 
   const metaConnectedItems = connectedItems.filter(
     (c) => META_PLATFORMS.has(c.platform) && c.connected
@@ -196,7 +208,9 @@ export function PlatformConnectionsClient({ clientId }: Props) {
           {!hasAllMetaConnected && (
             <MetaPlatformsSection
               clientId={clientId}
-              enabled={META_PUBLISHING_ENABLED}
+              enabled={metaEffectivelyEnabled}
+              showBetaBadge={!META_PUBLISHING_ENABLED && metaEffectivelyEnabled}
+              onUnlock={handleMetaUnlock}
               connectedItems={connectedItems}
             />
           )}
@@ -293,10 +307,12 @@ export function PlatformConnectionsClient({ clientId }: Props) {
 interface MetaPlatformsSectionProps {
   clientId: string;
   enabled: boolean;
+  showBetaBadge: boolean;
+  onUnlock: () => void;
   connectedItems: Array<{ platform: string; connected: boolean }>;
 }
 
-function MetaPlatformsSection({ clientId, enabled, connectedItems }: MetaPlatformsSectionProps) {
+function MetaPlatformsSection({ clientId, enabled, showBetaBadge, onUnlock, connectedItems }: MetaPlatformsSectionProps) {
   const hasFBIG = connectedItems.some(
     (c) => (c.platform === "instagram" || c.platform === "facebook_page") && c.connected
   );
@@ -317,8 +333,13 @@ function MetaPlatformsSection({ clientId, enabled, connectedItems }: MetaPlatfor
             )}
             <PlatformIcon platform="threads" className="size-4 text-graphite" color="mono" aria-hidden="true" />
           </div>
-          <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#111111]">
+          <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#111111] flex items-center gap-1.5">
             {hasFBIG ? "Threads" : "Meta Platforms"}
+            {showBetaBadge && (
+              <span className="text-[10px] font-medium uppercase tracking-[0.06em] px-1.5 py-0.5 bg-[#FFF1B8] text-[#111111] border border-[#E5E5E5]">
+                Beta
+              </span>
+            )}
           </p>
           <p className="text-xs text-[#555555] mt-0.5">
             {hasFBIG ? "Connect your Threads account" : "Instagram, Facebook Page, and Threads"}
@@ -348,24 +369,23 @@ function MetaPlatformsSection({ clientId, enabled, connectedItems }: MetaPlatfor
               )}
             </div>
           ) : (
-            <div className="relative group">
+            <div className="flex flex-col items-end gap-2">
               <button
-                disabled
-                className="inline-flex items-center gap-1.5 px-5 min-h-[44px] border border-[#E5E5E5] text-[#999999] text-xs font-medium rounded-none opacity-50 cursor-not-allowed"
-                aria-label="Connect Meta Platforms (unavailable)"
-                aria-disabled="true"
-                aria-describedby="meta-locked-tooltip"
+                type="button"
+                onClick={onUnlock}
+                className="border border-[#111111] text-[#111111] text-xs font-medium px-4 min-h-[44px] rounded-none hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
               >
-                <Lock className="size-3.5" aria-hidden="true" />
-                Connect Meta Platforms
+                I&apos;m a beta tester
               </button>
-              <div
-                id="meta-locked-tooltip"
-                role="tooltip"
-                className="absolute right-0 top-full mt-1 w-64 bg-[#111111] text-white text-xs px-3 py-2 rounded-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none transition-opacity z-10"
+              <a
+                href="mailto:support@personnapress.com?subject=Beta%20Access%20Request%20-%20PersonnaPress"
+                className="text-xs text-[#555555] underline underline-offset-2 hover:text-[#111111] transition-colors"
               >
-                Meta Business API approval in progress. Available soon.
-              </div>
+                Request early access
+              </a>
+              <p className="text-xs text-[#555555] mt-2">
+                Currently in beta. Available to invited testers only.
+              </p>
             </div>
           )}
         </div>

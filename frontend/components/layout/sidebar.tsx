@@ -1,6 +1,6 @@
 "use client";
 
-import { Newspaper, Plug } from "lucide-react";
+import { HelpCircle, Newspaper, Plug } from "lucide-react";
 import { useClientStore } from "@/lib/stores/useClientStore";
 import { ClientSwitcher } from "./ClientSwitcher";
 import { NavItem } from "./NavItem";
@@ -43,6 +43,7 @@ export function Sidebar() {
         ))}
       </nav>
       <div className="border-t border-[#E5E5E5] shrink-0">
+        <NavItem href="/account/support" label="Help" icon={HelpCircle} />
         <NavItem {...ACCOUNT_NAV_ITEM} />
       </div>
     </aside>

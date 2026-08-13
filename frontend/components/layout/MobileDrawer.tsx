@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { X, Newspaper, Plug } from "lucide-react";
+import { HelpCircle, Newspaper, Plug, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { useClientStore } from "@/lib/stores/useClientStore";
@@ -99,6 +99,7 @@ export function MobileDrawer() {
           ))}
         </nav>
         <div className="border-t border-[#E5E5E5] shrink-0">
+          <NavItem href="/account/support" label="Help" icon={HelpCircle} onClick={close} forceLabel />
           <NavItem {...ACCOUNT_NAV_ITEM} onClick={close} forceLabel />
         </div>
       </div>
