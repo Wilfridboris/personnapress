@@ -126,8 +126,6 @@ async def create_new_campaign(
     await check_trial_not_expired(user_id, db, "create campaigns")
     await check_campaign_limit(db, user_id)
 
-    effective_skip_image = True if body.campaign_type == "social_only" else body.skip_image
-
     campaign = await create_campaign(
         db,
         body.client_id,
@@ -136,7 +134,7 @@ async def create_new_campaign(
         target_audience=body.target_audience,
         secondary_keywords=body.secondary_keywords,
         campaign_type=body.campaign_type,
-        skip_image=effective_skip_image,
+        skip_image=body.skip_image,
         target_word_count=body.target_word_count,
         article_template=body.article_template,
     )

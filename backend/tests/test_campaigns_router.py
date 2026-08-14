@@ -1374,17 +1374,16 @@ async def test_create_campaign_skip_image_default_false():
     assert call_kwargs.get("skip_image") is False
 
 
-async def test_social_only_forces_skip_image():
-    """POST with campaign_type=social_only forces skip_image=True regardless of request value."""
+async def test_social_only_respects_skip_image_from_request():
+    """POST with campaign_type=social_only passes skip_image from the request body (not forced True)."""
     from app.routers.campaigns import create_new_campaign
 
     user_id = uuid.uuid4()
     client = _make_client(user_id=user_id)
-    campaign = _make_campaign(client_id=client.id, campaign_type="social_only", skip_image=True)
+    campaign = _make_campaign(client_id=client.id, campaign_type="social_only", skip_image=False)
     job = _make_job(campaign_id=campaign.id)
 
     db = AsyncMock()
-    # Request sends skip_image=False but campaign_type=social_only
     body = CampaignCreate(client_id=client.id, brain_dump="A" * 25, campaign_type="social_only", skip_image=False)
     background_tasks = MagicMock()
     mock_create = AsyncMock(return_value=campaign)
@@ -1404,7 +1403,7 @@ async def test_social_only_forces_skip_image():
         )
 
     call_kwargs = mock_create.call_args[1]
-    assert call_kwargs.get("skip_image") is True
+    assert call_kwargs.get("skip_image") is False
 
 
 async def test_regenerate_preserves_skip_image():
