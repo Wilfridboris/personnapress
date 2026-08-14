@@ -2286,6 +2286,32 @@ So that my Threads audience receives concise, brand-voice content without me wri
 
 ---
 
+### Story 21.14: Social Post AI Image Generation and Upload
+
+As a PersonnaPress user creating a social-only campaign,
+I want to opt in to AI image generation during the brain dump and manage the image from the approval gate,
+so that my social posts have a featured image for Instagram and visual context on other platforms.
+
+**Implemented in Story 21.14.** Key changes: brain dump image checkbox ungated for social_only; skip_image logic respects the checkbox; worker runs image generation after run_social_only_pipeline when skip_image=False; ImagePanel rendered for social_only in the approval gate (stacked above SocialPostEditors, full-width aside).
+
+---
+
+### Story 21.15: Platform-Native Image Sizing for Social (Future)
+
+As a PersonnaPress user publishing to Instagram,
+I want the featured image generated in the optimal aspect ratio for each platform,
+so that Instagram posts display as native square images rather than letterboxed landscape.
+
+**Deferred -- not yet implemented.** Requires:
+- DB migration: `instagram_image_url` column (or `social_image_url`) on `campaigns` table
+- Worker: dual image generation (1:1 square for Instagram + 16:9 landscape for X/LinkedIn/Facebook) when Instagram is connected and skip_image=False
+- `publish_instagram_feed_post`: use `instagram_image_url` when available, fall back to `image_url`
+- Approval gate: display platform-labeled image variants
+
+A landscape image is valid for Instagram (Story 21-14 unblocks the core value). This is a quality improvement for a future sprint.
+
+---
+
 ## Epic 22: Mobile Responsive Web
 
 **Goal:** Make PersonnaPress genuinely usable on phones and tablets through a focused mobile responsiveness pass on the existing Next.js + Tailwind CSS v4 app. No native app, no visual redesign. Paper Style monochrome palette and `rounded-none` surfaces are preserved throughout. All changes use existing Tailwind `md:` / `lg:` breakpoints with no new CSS files.

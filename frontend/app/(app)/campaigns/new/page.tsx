@@ -272,7 +272,7 @@ export default function NewCampaignPage() {
         secondary_keywords: campaignType === "blog_full" ? (supportingKeywords.trim() || null) : null,
         target_audience: targetAudience.trim() || null,
         campaign_type: campaignType,
-        skip_image: campaignType === "social_only" ? true : !generateImage,
+        skip_image: !generateImage,
         target_word_count: campaignType === "blog_full" ? targetLength : null,
         article_template: campaignType === "blog_full" ? articleTemplate : null,
       });
@@ -443,7 +443,7 @@ export default function NewCampaignPage() {
             <span className="flex flex-col gap-0.5">
               <span className="font-mono text-sm text-ink">Blog + Social</span>
               <span id="ct-blog-desc" className="font-mono text-xs text-graphite">
-                Blog post, X and LinkedIn posts, featured image
+                Blog post, social posts, and featured image
               </span>
             </span>
           </label>
@@ -467,7 +467,7 @@ export default function NewCampaignPage() {
             <span className="flex flex-col gap-0.5">
               <span className="font-mono text-sm text-ink">Social post only</span>
               <span id="ct-social-desc" className="font-mono text-xs text-graphite">
-                X and LinkedIn posts only, no blog or featured image
+                Social posts for all connected platforms - no blog article. Featured image optional.
               </span>
             </span>
           </label>
@@ -478,7 +478,7 @@ export default function NewCampaignPage() {
             aria-live="polite"
             className="mt-2 font-mono text-xs text-graphite border-l-2 border-ink/30 pl-3"
           >
-            Shorter generation time. You can publish directly to X and LinkedIn after approval.
+            Shorter generation time. Publish to all connected social platforms after approval.
           </p>
         )}
       </fieldset>
@@ -635,34 +635,32 @@ export default function NewCampaignPage() {
         />
       </div>
 
-      {campaignType === "blog_full" && (
-        <div className="mb-6">
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={generateImage}
-              onChange={(e) => setGenerateImage(e.target.checked)}
-              className="mt-0.5 accent-ink focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1"
-              aria-describedby={generateImage ? undefined : "image-skip-hint"}
-            />
-            <span className="flex flex-col gap-0.5">
-              <span className="font-mono text-xs text-graphite uppercase tracking-widest">
-                AI featured image
-              </span>
-              {!generateImage && (
-                <span
-                  id="image-skip-hint"
-                  role="status"
-                  aria-live="polite"
-                  className="font-mono text-xs text-graphite"
-                >
-                  Upload your own image from the approval page.
-                </span>
-              )}
+      <div className="mb-6">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={generateImage}
+            onChange={(e) => setGenerateImage(e.target.checked)}
+            className="mt-0.5 accent-ink focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1"
+            aria-describedby={generateImage ? undefined : "image-skip-hint"}
+          />
+          <span className="flex flex-col gap-0.5">
+            <span className="font-mono text-xs text-graphite uppercase tracking-widest">
+              AI featured image
             </span>
-          </label>
-        </div>
-      )}
+            {!generateImage && (
+              <span
+                id="image-skip-hint"
+                role="status"
+                aria-live="polite"
+                className="font-mono text-xs text-graphite"
+              >
+                Upload your own image from the approval page.
+              </span>
+            )}
+          </span>
+        </label>
+      </div>
 
       <Button
         variant="primary"

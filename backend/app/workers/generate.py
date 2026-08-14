@@ -38,6 +38,21 @@ async def run_generation(job_id: uuid.UUID) -> None:
 
             if campaign_type == "social_only":
                 await generation_service.run_social_only_pipeline(job_id, db)
+
+                # Image generation gate -- same pattern as blog_full
+                job = await get_job(db, job_id)
+                if job and job.status == "in_progress" and job.campaign_id:
+                    campaign_check = await get_campaign(db, job.campaign_id)
+                    if campaign_check and campaign_check.skip_image:
+                        job.status = "complete"
+                        job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                        await db.commit()
+                        logger.info(
+                            "run_generation: skip_image=True, image skipped for social_only campaign %s",
+                            job.campaign_id,
+                        )
+                    else:
+                        await image_service.run_image_generation(job.campaign_id, job_id, db)
             else:
                 # Full pipeline: text then image
                 await generation_service.run_generation_pipeline(job_id, db)

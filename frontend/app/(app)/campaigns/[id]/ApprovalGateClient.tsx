@@ -194,8 +194,8 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
           </section>
         )}
 
-        <aside className={hideBlogSection ? "space-y-8" : "lg:col-span-2 space-y-8"}>
-          {!isSocialOnly && (
+        <aside className="lg:col-span-2 space-y-8">
+          {!isRoadmapSocialPost && (
             <ImagePanel
               campaignId={campaign.id}
               clientId={campaign.client_id}

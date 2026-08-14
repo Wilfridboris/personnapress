@@ -329,12 +329,12 @@ async def run_social_only_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
         campaign.x_post = x_post
         campaign.linkedin_post = linkedin_post
         campaign.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-
-        job.status = "complete"
-        job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await db.commit()
 
-        logger.info("run_social_only_pipeline: campaign %s complete", campaign.id)
+        logger.info(
+            "run_social_only_pipeline: campaign %s text complete, returning to worker",
+            campaign.id,
+        )
 
     except Exception as exc:
         logger.exception("run_social_only_pipeline: error for job %s: %s", job_id, exc)

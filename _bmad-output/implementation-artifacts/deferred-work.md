@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 21-14-social-post-image-generation-upload (2026-08-14)
+
+- No warning log when post-pipeline `get_job` returns None or non-in_progress status -- the image gate block silently does nothing; same silent-guard pattern exists in the blog_full branch; add a `logger.warning` if stuck-job observability becomes a requirement. [backend/app/workers/generate.py:44]
+- `campaign_check` re-fetch is a redundant TOCTOU window -- campaign was already fetched earlier to read `campaign_type`; re-fetch to read `skip_image` is a minor code smell mirrored in the blog_full branch; no behavior impact. [backend/app/workers/generate.py:45]
+- No test for post-pipeline `get_job` returning None -- the silent-drop branch when `get_job` returns None after the pipeline succeeds is untested; pre-existing gap in blog_full worker tests too. [backend/tests/test_generation_service.py]
+
 ## Deferred from: code review of 21-13-social-post-image-preview (2026-08-14)
 
 - Instagram warning not shown when `showLinkedInSection=false` -- warning JSX lives inside the LinkedIn section block; if LinkedIn section is suppressed (social-only campaign with no linkedin_post), the warning is invisible even though Instagram will be skipped. Narrow edge case outside spec scope; would require deciding an alternate warning placement. [frontend/components/campaigns/SocialPostEditors.tsx]
