@@ -392,8 +392,8 @@ function MetaPlatformsSection({ clientId, enabled, showBetaBadge, onUnlock, conn
         </div>
       </div>
       {enabled && !hasFBIG && (
-        <p className="flex items-start gap-1.5 mt-3 text-xs" style={{ color: '#555555' }}>
-          <Info className="size-3.5 mt-0.5 shrink-0" style={{ color: '#555555' }} aria-hidden="true" />
+        <p className="flex items-start gap-1.5 mt-3 text-xs text-[#555555]">
+          <Info className="size-3.5 mt-0.5 shrink-0" aria-hidden="true" />
           <span>You&apos;ll be asked to select your Business Portfolio and choose which Pages and Instagram accounts to connect.</span>
         </p>
       )}
