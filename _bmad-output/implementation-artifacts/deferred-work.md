@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 3-25-generation-performance-resilience-ux (2026-08-14)
+
+- LLM concurrency risk with asyncio.gather — if the LLM provider enforces per-account concurrency limits, running check_fidelity + generate_social in parallel may trigger throttling; monitor in production and add sequential fallback if errors occur. [backend/app/services/generation.py]
+- Outer asyncio.wait_for in image.py has no cancel path — the service-level 120s timeout in `_generate_with_retry` wraps the entire `generate_image` call; if it fires before the inner replicate.py timeout, no prediction cancel happens; pre-existing code, not introduced by this diff. [backend/app/services/image.py:91]
+- Python-side dedup vs DB DISTINCT ON — gen_job_rows query fetches all historical generation jobs per campaign and deduplicates in Python; consider replacing with `DISTINCT ON (campaign_id)` or window-function subquery if campaign list page size or job history grows significantly. [backend/app/routers/campaigns.py:200]
+- social["x_post"] / social["linkedin_post"] KeyError — generate_social dict is accessed with direct keys; if LLM returns a malformed dict these raise unhandled KeyError; pre-existing pattern predating this story. [backend/app/services/generation.py]
+
 ## Deferred from: code review of 21-14-social-post-image-generation-upload (2026-08-14)
 
 - No warning log when post-pipeline `get_job` returns None or non-in_progress status -- the image gate block silently does nothing; same silent-guard pattern exists in the blog_full branch; add a `logger.warning` if stuck-job observability becomes a requirement. [backend/app/workers/generate.py:44]

@@ -15,7 +15,7 @@ from app.db.connection import get_session
 from app.db.repositories.campaigns import create_campaign, get_campaign
 from app.db.repositories.clients import get_client
 from app.db.repositories.jobs import create_job, get_publish_job_for_campaign
-from app.db.repositories.models import Article, Campaign, Client
+from app.db.repositories.models import Article, Campaign, Client, Job
 from app.schemas.campaign import CampaignCreate, CampaignCreateResponse, CampaignDetailResponse, CampaignListResponse, CampaignPatch, CampaignResponse
 from app.services import image as image_service
 from app.services.subscription_service import check_campaign_limit, check_trial_not_expired
@@ -194,9 +194,30 @@ async def list_campaigns(
         )
         client_name_map = {row.id: row.name for row in name_rows.all()}
 
+    campaign_ids = [c.id for c in campaigns]
+    gen_job_map: dict[uuid.UUID, str] = {}
+    if campaign_ids:
+        gen_job_rows = await db.execute(
+            select(Job.campaign_id, Job.status)
+            .where(
+                Job.campaign_id.in_(campaign_ids),
+                Job.job_type == "generation",
+            )
+            .order_by(Job.campaign_id, Job.created_at.desc(), Job.id.desc())
+        )
+        seen: set[uuid.UUID] = set()
+        for row in gen_job_rows.all():
+            if row.campaign_id not in seen:
+                gen_job_map[row.campaign_id] = row.status
+                seen.add(row.campaign_id)
+
     return CampaignListResponse(
         items=[
-            CampaignResponse.model_validate({**c.__dict__, "client_name": client_name_map.get(c.client_id)})
+            CampaignResponse.model_validate({
+                **c.__dict__,
+                "client_name": client_name_map.get(c.client_id),
+                "generation_job_status": gen_job_map.get(c.id),
+            })
             for c in campaigns
         ],
         total=total,

@@ -182,6 +182,7 @@ export interface Campaign {
   id: string;
   client_id: string;
   client_name?: string | null;
+  generation_job_status: string | null;
   brain_dump: string;
   blog_html: string | null;
   x_post: string | null;

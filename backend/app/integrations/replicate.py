@@ -4,6 +4,7 @@ Model and schema are controlled by IMAGE_MODEL / IMAGE_PROVIDER settings.
 Called ONLY from services/image.py (AR-19).
 """
 
+import asyncio
 import logging
 from typing import Any
 
@@ -31,6 +32,7 @@ async def generate_image(prompt: str, width: int = 1200, height: int = 630) -> s
         Temporary Replicate CDN URL string.
 
     Raises:
+        asyncio.TimeoutError: If the prediction takes longer than 120 seconds (after cancel).
         Exception: Re-raises any Replicate SDK error for the caller to handle.
     """
     logger.info("replicate.generate_image: calling %s (prompt len=%d)", _MODEL, len(prompt))
@@ -53,8 +55,35 @@ async def generate_image(prompt: str, width: int = 1200, height: int = 630) -> s
             "output_format": "png",
         }
 
-    output: Any = await _client.async_run(_MODEL, input=input_payload)
-    # output is a FileOutput object or a list — normalise either case
+    prediction = await _client.predictions.async_create(model=_MODEL, input=input_payload)
+    logger.info(
+        "replicate.generate_image: prediction %s started (model=%s)", prediction.id, _MODEL
+    )
+
+    try:
+        await asyncio.wait_for(prediction.async_wait(), timeout=120.0)
+    except asyncio.TimeoutError:
+        try:
+            await asyncio.wait_for(prediction.async_cancel(), timeout=10.0)
+            logger.info(
+                "replicate.generate_image: cancelled hung prediction %s", prediction.id
+            )
+        except Exception as cancel_exc:
+            logger.warning(
+                "replicate.generate_image: could not cancel prediction %s: %s",
+                prediction.id,
+                cancel_exc,
+            )
+        raise
+
+    if prediction.status == "failed":
+        raise ValueError(f"Replicate prediction {prediction.id} failed: {prediction.error}")
+    if prediction.status == "canceled":
+        raise ValueError(f"Replicate prediction {prediction.id} was canceled externally")
+
+    output = prediction.output
+    if output is None:
+        raise ValueError("Replicate returned None output")
     if isinstance(output, (list, tuple)) and not output:
         raise ValueError("Replicate returned empty output list")
     image_url = str(output[0] if isinstance(output, (list, tuple)) else output)
