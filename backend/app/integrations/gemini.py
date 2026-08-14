@@ -494,8 +494,8 @@ async def generate_social(
                 f"generate_social: '{key}' must be a string, got {type(data[key]).__name__}"
             )
 
-    data["x_post"] = data["x_post"].replace("—", "--")
-    data["linkedin_post"] = data["linkedin_post"].replace("—", "--")
+    data["x_post"] = data["x_post"].replace("—", ", ")
+    data["linkedin_post"] = data["linkedin_post"].replace("—", ", ")
 
     if len(data["x_post"]) > 280:
         logger.warning(
@@ -574,8 +574,8 @@ async def generate_social_standalone(
                 f"generate_social_standalone: '{key}' must be a string, got {type(data[key]).__name__}"
             )
 
-    data["x_post"] = data["x_post"].replace("—", "--")
-    data["linkedin_post"] = data["linkedin_post"].replace("—", "--")
+    data["x_post"] = data["x_post"].replace("—", ", ")
+    data["linkedin_post"] = data["linkedin_post"].replace("—", ", ")
 
     if len(data["x_post"]) > 280:
         logger.warning(
