@@ -79,11 +79,15 @@ def _build_image_prompt(blog_title: str, brand_voice_profile: dict | None) -> st
 
 
 async def _generate_with_retry(prompt: str, max_retries: int = 3) -> str | bytes:
-    """Call image provider with exponential backoff (8s, 16s between attempts)."""
+    """Call image provider with exponential backoff (8s, 16s between attempts).
+
+    Each attempt is capped at 120s — the Replicate SDK has no built-in timeout
+    and a stalled prediction would otherwise block the worker indefinitely.
+    """
     last_exc: Exception | None = None
     for attempt in range(max_retries):
         try:
-            return await _img.generate_image(prompt)
+            return await asyncio.wait_for(_img.generate_image(prompt), timeout=120.0)
         except Exception as exc:
             last_exc = exc
             logger.warning(
@@ -162,11 +166,16 @@ async def run_image_generation(
         return
 
     # ── Step 3: Build prompt ──────────────────────────────────────────────────
-    h1_match = re.search(
-        r"<h1[^>]*>(.*?)</h1>", campaign.blog_html or "", re.IGNORECASE | re.DOTALL
-    )
-    blog_title_raw = h1_match.group(1).strip() if h1_match else "Untitled"
-    blog_title = re.sub(r"<[^>]+>", "", blog_title_raw).strip() or "Untitled"
+    if campaign.blog_html:
+        h1_match = re.search(
+            r"<h1[^>]*>(.*?)</h1>", campaign.blog_html, re.IGNORECASE | re.DOTALL
+        )
+        blog_title_raw = h1_match.group(1).strip() if h1_match else "Untitled"
+        blog_title = re.sub(r"<[^>]+>", "", blog_title_raw).strip() or "Untitled"
+    else:
+        # social_only campaign: derive image subject from x_post (first line, ≤120 chars)
+        social_text = (campaign.x_post or campaign.linkedin_post or "").strip()
+        blog_title = social_text[:120].split("\n")[0].strip() or "Untitled"
     prompt = _build_image_prompt(blog_title, brand_voice_profile)
 
     image_alt = _build_image_alt(blog_title)

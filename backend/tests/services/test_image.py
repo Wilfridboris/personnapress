@@ -1,4 +1,5 @@
 """Unit tests for services/image.py with mocked image provider and Supabase calls."""
+import asyncio
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -23,6 +24,8 @@ def _make_campaign(client_id=None, image_regen_count=0):
     campaign.id = uuid.uuid4()
     campaign.client_id = client_id or uuid.uuid4()
     campaign.blog_html = "<h1>Test Blog Title</h1><p>Body text.</p>"
+    campaign.x_post = None
+    campaign.linkedin_post = None
     campaign.image_url = None
     campaign.image_alt = None
     campaign.image_regen_count = image_regen_count
@@ -425,3 +428,92 @@ async def test_regen_storage_path_uses_title_slug_with_count(
         "https://replicate.delivery/new.png", expected_path
     )
     assert campaign.image_alt == "5 Ways to Scale Your SaaS Business – featured article image"
+
+
+# ── social_only (blog_html=None) tests ────────────────────────────────────────
+
+@pytest.mark.asyncio
+@patch("app.services.image.generation_logs_repo")
+@patch("app.services.image.supabase_storage")
+@patch("app.services.image.subscription_service")
+@patch("app.services.image._img")
+async def test_social_only_campaign_uses_x_post_as_image_subject(
+    mock_img, mock_sub_svc, mock_storage, mock_logs
+):
+    """social_only campaign (blog_html=None) → image prompt built from x_post, not 'Untitled'."""
+    from app.services.image import run_image_generation
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    campaign = _make_campaign()
+    campaign.id = campaign_id
+    campaign.blog_html = None
+    campaign.x_post = "5 tips for growing your LinkedIn audience without paying for ads"
+    job = _make_job(campaign_id=campaign_id)
+    job.id = job_id
+    client = _make_client()
+    db = _make_db(job, campaign, client)
+
+    mock_sub_svc.check_image_limit = AsyncMock()
+    mock_img.generate_image = AsyncMock(return_value="https://replicate.delivery/image.png")
+    mock_storage.upload_image_from_url = AsyncMock(return_value="https://supabase.co/image.png")
+    mock_logs.create_generation_log = AsyncMock()
+
+    await run_image_generation(campaign_id, job_id, db)
+
+    assert job.status == "complete"
+    prompt_used = mock_img.generate_image.call_args[0][0]
+    assert "Untitled" not in prompt_used
+    assert "5 tips for growing your LinkedIn audience" in prompt_used
+
+
+@pytest.mark.asyncio
+@patch("app.services.image.generation_logs_repo")
+@patch("app.services.image.supabase_storage")
+@patch("app.services.image.subscription_service")
+@patch("app.services.image._img")
+async def test_social_only_no_posts_falls_back_to_untitled(
+    mock_img, mock_sub_svc, mock_storage, mock_logs
+):
+    """social_only campaign with no x_post or linkedin_post → falls back to 'Untitled'."""
+    from app.services.image import run_image_generation
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    campaign = _make_campaign()
+    campaign.id = campaign_id
+    campaign.blog_html = None
+    campaign.x_post = None
+    campaign.linkedin_post = None
+    job = _make_job(campaign_id=campaign_id)
+    job.id = job_id
+    client = _make_client()
+    db = _make_db(job, campaign, client)
+
+    mock_sub_svc.check_image_limit = AsyncMock()
+    mock_img.generate_image = AsyncMock(return_value="https://replicate.delivery/image.png")
+    mock_storage.upload_image_from_url = AsyncMock(return_value="https://supabase.co/image.png")
+    mock_logs.create_generation_log = AsyncMock()
+
+    await run_image_generation(campaign_id, job_id, db)
+
+    assert job.status == "complete"
+    prompt_used = mock_img.generate_image.call_args[0][0]
+    assert "Untitled" in prompt_used
+
+
+# ── _generate_with_retry timeout test ─────────────────────────────────────────
+
+@pytest.mark.asyncio
+@patch("app.services.image._img")
+async def test_generate_with_retry_timeout_is_treated_as_failure(mock_img):
+    """TimeoutError from wait_for is caught as a failure and retried."""
+    from app.services.image import _generate_with_retry
+
+    mock_img.generate_image = AsyncMock(side_effect=asyncio.TimeoutError())
+
+    with patch("app.services.image.asyncio.sleep", new=AsyncMock()):
+        with pytest.raises(asyncio.TimeoutError):
+            await _generate_with_retry("test prompt", max_retries=2)
+
+    assert mock_img.generate_image.call_count == 2
