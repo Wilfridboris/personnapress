@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of 21-13-social-post-image-preview (2026-08-14)
+
+- Instagram warning not shown when `showLinkedInSection=false` -- warning JSX lives inside the LinkedIn section block; if LinkedIn section is suppressed (social-only campaign with no linkedin_post), the warning is invisible even though Instagram will be skipped. Narrow edge case outside spec scope; would require deciding an alternate warning placement. [frontend/components/campaigns/SocialPostEditors.tsx]
+- Whitespace-only `imageUrl` passes the truthiness guard and would render a broken image -- backend produces proper URLs or null; whitespace-only is unrealistic in practice. Guard with `.trim()` if backend validation weakens. [frontend/components/campaigns/SocialPostEditors.tsx:90]
+
 ## Deferred from: code review of 3-24-blog-article-template-selector (2026-08-10)
 
 - No DB-level CHECK constraint on `article_template` column -- consistent with project pattern for campaign_type and target_word_count (also unconstrained nullable Text); Pydantic guards the inbound API boundary. [backend/alembic/versions/20260810_1811_ae296c4a3414_add_article_template_to_campaigns.py]

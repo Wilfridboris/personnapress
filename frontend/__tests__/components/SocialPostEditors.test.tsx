@@ -140,6 +140,38 @@ describe("SocialPostEditors", () => {
     expect(screen.queryByRole("button", { name: /save/i })).not.toBeInTheDocument();
   });
 
+  it("renders campaign image thumbnail when imageUrl is provided", () => {
+    renderEditors({ imageUrl: "https://cdn.example.com/img.png" });
+    const img = screen.getByRole("img", { name: "Campaign image" });
+    expect(img).toBeInTheDocument();
+    expect(img).toHaveAttribute("src", "https://cdn.example.com/img.png");
+  });
+
+  it("does not render image thumbnail when imageUrl is null", () => {
+    renderEditors({ imageUrl: null });
+    expect(screen.queryByRole("img", { name: "Campaign image" })).not.toBeInTheDocument();
+  });
+
+  it("renders Instagram skip warning when instagram is connected and imageUrl is null", () => {
+    renderEditors({ imageUrl: null, metaContext: { instagram: true } });
+    expect(screen.getByText(/Instagram will be skipped at publish/i)).toBeInTheDocument();
+  });
+
+  it("does not render Instagram warning when imageUrl is provided", () => {
+    renderEditors({ imageUrl: "https://cdn.example.com/img.png", metaContext: { instagram: true } });
+    expect(screen.queryByText(/Instagram will be skipped at publish/i)).not.toBeInTheDocument();
+  });
+
+  it("does not render image thumbnail when imageUrl is undefined", () => {
+    renderEditors({});
+    expect(screen.queryByRole("img", { name: "Campaign image" })).not.toBeInTheDocument();
+  });
+
+  it("does not render Instagram warning when instagram is false", () => {
+    renderEditors({ imageUrl: null, metaContext: { instagram: false } });
+    expect(screen.queryByText(/Instagram will be skipped at publish/i)).not.toBeInTheDocument();
+  });
+
   it("getCurrentValues ref returns current textarea values", () => {
     const ref = createRef<SocialPostEditorsHandle>();
     render(

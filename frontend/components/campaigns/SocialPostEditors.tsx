@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
+import { Info } from "lucide-react";
 import { campaignsApi, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
@@ -26,6 +27,7 @@ interface SocialPostEditorsProps {
   showXSection?: boolean;
   showLinkedInSection?: boolean;
   metaContext?: MetaContext;
+  imageUrl?: string | null;
 }
 
 export interface SocialPostEditorsHandle {
@@ -35,7 +37,7 @@ export interface SocialPostEditorsHandle {
 export const SocialPostEditors = forwardRef<
   SocialPostEditorsHandle,
   SocialPostEditorsProps
->(({ campaignId, initialXPost, initialLinkedInPost, readOnly = false, showXSection = true, showLinkedInSection = true, metaContext }, ref) => {
+>(({ campaignId, initialXPost, initialLinkedInPost, readOnly = false, showXSection = true, showLinkedInSection = true, metaContext, imageUrl }, ref) => {
   const [xPost, setXPost] = useState(initialXPost ?? "");
   const [linkedinPost, setLinkedInPost] = useState(initialLinkedInPost ?? "");
   const [isSaving, setIsSaving] = useState(false);
@@ -85,6 +87,15 @@ export const SocialPostEditors = forwardRef<
 
   return (
     <div className="space-y-8">
+      {imageUrl && (
+        <div className="border border-border overflow-hidden aspect-video w-full">
+          <img
+            src={imageUrl}
+            alt="Campaign image"
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
       {showXSection !== false && (
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -166,6 +177,12 @@ export const SocialPostEditors = forwardRef<
               </span>
             )}
           </div>
+          {metaContext?.instagram && !imageUrl && (
+            <p className="flex items-center gap-1 text-[10px] font-mono text-graphite -mt-1 mb-2">
+              <Info className="size-3 shrink-0" aria-hidden="true" />
+              Instagram will be skipped at publish - no image attached to this campaign
+            </p>
+          )}
           <textarea
             id="linkedin-post"
             value={linkedinPost}
