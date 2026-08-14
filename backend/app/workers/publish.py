@@ -120,7 +120,9 @@ async def run_publish(job_id: UUID, campaign_id: UUID, platforms: list[str] | No
         await db.commit()
         try:
             results = await dispatch_publish(db, campaign_id, job_id, platforms)
-            all_success = all(v in ("success", "already_published") for v in results.values()) and bool(results)
+            _successes = {k for k, v in results.items() if v in ("success", "already_published")}
+            _failures  = {k for k, v in results.items() if v not in ("success", "already_published", "skipped")}
+            all_success = bool(_successes) and not _failures
             if all_success:
                 await update_campaign_status(db, campaign_id, "published")
                 await update_campaign_scheduled_at(db, campaign_id, None)

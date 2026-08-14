@@ -577,8 +577,17 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           setActiveJobId(null);
           setClientHasPlatforms(null);
           const jobResults = (() => { try { return JSON.parse(job.error_details ?? "{}"); } catch { return {}; } })();
-          const allAlready = Object.values(jobResults).length > 0 && (Object.values(jobResults) as string[]).every((v) => v === "already_published");
-          addToast(allAlready ? "Already published to all connected platforms." : "Published successfully.", "success");
+          const resultValues = Object.values(jobResults) as string[];
+          const nonSkippedValues = resultValues.filter((v) => v !== "skipped");
+          const allAlready = nonSkippedValues.length > 0 && nonSkippedValues.every((v) => v === "already_published");
+          const skipped = (Object.entries(jobResults) as [string, string][])
+            .filter(([, v]) => v === "skipped")
+            .map(([k]) => platformLabel(k));
+          const baseMsg = allAlready ? "Already published to all connected platforms." : "Published successfully.";
+          const toastMsg = skipped.length > 0
+            ? `${baseMsg} ${skipped.join(", ")} skipped - no content or image for that platform.`
+            : baseMsg;
+          addToast(toastMsg, "success");
           router.push("/dashboard");
         } else if (job.status === "failed") {
           clearInterval(interval);

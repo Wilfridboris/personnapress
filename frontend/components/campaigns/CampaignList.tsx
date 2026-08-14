@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Map as MapIcon } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Map as MapIcon } from "lucide-react";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { usePlatformConnections } from "@/hooks/usePlatformConnections";
 import { useClientStore } from "@/lib/stores/useClientStore";
@@ -172,9 +172,9 @@ export function CampaignList({ basePath = "/dashboard" }: { basePath?: string })
                     <Link
                       href={`/campaigns/${campaign.id}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="text-xs font-mono text-danger underline underline-offset-2 hover:text-ink transition-colors"
+                      className="inline-flex items-center gap-1 text-xs font-mono text-danger underline underline-offset-2 hover:text-ink transition-colors"
                     >
-                      Retry →
+                      Retry <ArrowRight className="size-3 inline-block" aria-hidden="true" />
                     </Link>
                   )}
                   <ArrowRight className="size-3.5 text-graphite opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
@@ -191,9 +191,10 @@ export function CampaignList({ basePath = "/dashboard" }: { basePath?: string })
           <button
             onClick={() => goToPage(page - 1)}
             disabled={page <= 1}
-            className="text-sm font-mono text-graphite hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex items-center gap-1 text-sm font-mono text-graphite hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            ← Previous
+            <ChevronLeft className="size-3.5" aria-hidden="true" />
+            Previous
           </button>
           <span className="text-xs font-mono text-graphite">
             Page {page} of {totalPages}
@@ -201,9 +202,10 @@ export function CampaignList({ basePath = "/dashboard" }: { basePath?: string })
           <button
             onClick={() => goToPage(page + 1)}
             disabled={page >= totalPages}
-            className="text-sm font-mono text-graphite hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex items-center gap-1 text-sm font-mono text-graphite hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            Next →
+            Next
+            <ChevronRight className="size-3.5" aria-hidden="true" />
           </button>
         </div>
       )}

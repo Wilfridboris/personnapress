@@ -27,7 +27,9 @@ async def run_publish_retry(job_id: UUID, campaign_id: UUID, platform: str) -> N
             existing = json.loads(job.error_details or "{}")
             result = await dispatch_publish_for_platform(db, campaign_id, platform)
             merged = {**existing, **result}
-            all_success = all(v == "success" for v in merged.values()) and bool(merged)
+            _successes = {k for k, v in merged.items() if v in ("success", "already_published")}
+            _failures  = {k for k, v in merged.items() if v not in ("success", "already_published", "skipped")}
+            all_success = bool(_successes) and not _failures
 
             if all_success:
                 await update_campaign_status(db, campaign_id, "published")

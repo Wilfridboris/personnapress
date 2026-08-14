@@ -93,3 +93,69 @@ async def test_article_hook_failure_does_not_fail_github_direct_commit():
 
         # Must not raise
         await publish_github_job(job_id, campaign_id, mode="direct")
+
+
+async def test_run_publish_skipped_platform_does_not_fail_job():
+    """One skipped platform + one success → job completes and campaign is published."""
+    from app.workers.publish import run_publish
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    campaign = _make_campaign(campaign_id=campaign_id)
+
+    mock_update_campaign_status = AsyncMock()
+    mock_update_job = AsyncMock()
+
+    with (
+        patch("app.workers.publish.get_session_context") as mock_ctx,
+        patch("app.workers.publish.update_job", mock_update_job),
+        patch("app.workers.publish.dispatch_publish", AsyncMock(return_value={"wordpress": "success", "instagram": "skipped"})),
+        patch("app.workers.publish.update_campaign_status", mock_update_campaign_status),
+        patch("app.workers.publish.update_campaign_scheduled_at", AsyncMock()),
+        patch("app.workers.publish.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.workers.publish.create_or_update_article_from_campaign", AsyncMock()),
+    ):
+        db = AsyncMock()
+        db.__aenter__ = AsyncMock(return_value=db)
+        db.__aexit__ = AsyncMock(return_value=False)
+        mock_ctx.return_value = db
+
+        await run_publish(job_id, campaign_id)
+
+    mock_update_campaign_status.assert_called_with(db, campaign_id, "published")
+    update_job_calls = mock_update_job.call_args_list
+    complete_call = next((c for c in update_job_calls if c.kwargs.get("status") == "complete"), None)
+    assert complete_call is not None, "update_job should have been called with status='complete'"
+
+
+async def test_run_publish_all_skipped_marks_failed():
+    """All platforms skipped → campaign stays failed (nothing was published)."""
+    from app.workers.publish import run_publish
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+
+    mock_update_campaign_status = AsyncMock()
+    mock_update_job = AsyncMock()
+
+    with (
+        patch("app.workers.publish.get_session_context") as mock_ctx,
+        patch("app.workers.publish.update_job", mock_update_job),
+        patch("app.workers.publish.dispatch_publish", AsyncMock(return_value={"instagram": "skipped", "x": "skipped"})),
+        patch("app.workers.publish.update_campaign_status", mock_update_campaign_status),
+        patch("app.workers.publish.update_campaign_scheduled_at", AsyncMock()),
+        patch("app.workers.publish.get_campaign", AsyncMock(return_value=None)),
+    ):
+        db = AsyncMock()
+        db.__aenter__ = AsyncMock(return_value=db)
+        db.__aexit__ = AsyncMock(return_value=False)
+        mock_ctx.return_value = db
+
+        await run_publish(job_id, campaign_id)
+
+    mock_update_campaign_status.assert_called_with(db, campaign_id, "failed")
+    failed_call = next(
+        (c for c in mock_update_job.call_args_list if c.kwargs.get("status") == "failed"),
+        None,
+    )
+    assert failed_call is not None, "update_job should have been called with status='failed'"
