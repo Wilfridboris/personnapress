@@ -347,28 +347,28 @@ function MetaPlatformsSection({ clientId, enabled, showBetaBadge, onUnlock, conn
           </p>
         </div>
 
-        <div className="shrink-0">
+        <div className="shrink-0 w-56">
           {enabled ? (
             <div className="flex flex-col gap-2">
               {!hasFBIG && (
                 <>
                   <a
                     href={`/api/auth/meta?client_id=${clientId}`}
-                    className="inline-flex items-center justify-center px-5 min-h-[44px] border border-[#111111] text-[#111111] text-xs font-medium rounded-none hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
+                    className="w-full inline-flex items-center justify-center px-5 min-h-[44px] border border-[#111111] text-[#111111] text-xs font-medium rounded-none hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
                     aria-label="Connect Facebook and Instagram"
                   >
                     Connect Facebook &amp; Instagram
                   </a>
-                  <p className="flex items-start gap-1 mt-2 text-xs text-[#555555]">
-                    <Info className="size-3 mt-0.5 shrink-0" aria-hidden="true" />
-                    You&apos;ll be asked to select your Business Portfolio and choose which Pages and Instagram accounts to connect.
+                  <p className="flex items-start gap-1 text-xs" style={{ color: '#555555' }}>
+                    <Info className="size-3.5 mt-0.5 shrink-0" style={{ color: '#555555' }} aria-hidden="true" />
+                    <span>You&apos;ll be asked to select your Business Portfolio and choose which Pages and Instagram accounts to connect.</span>
                   </p>
                 </>
               )}
               {!hasThreads && (
                 <a
                   href={`/api/auth/threads?client_id=${clientId}`}
-                  className="inline-flex items-center justify-center px-5 min-h-[44px] border border-[#111111] text-[#111111] text-xs font-medium rounded-none hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
+                  className="w-full inline-flex items-center justify-center px-5 min-h-[44px] border border-[#111111] text-[#111111] text-xs font-medium rounded-none hover:bg-[#111111] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
                   aria-label="Connect Threads"
                 >
                   Connect Threads
