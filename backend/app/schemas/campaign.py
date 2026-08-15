@@ -22,6 +22,9 @@ class CampaignPatch(BaseModel):
     blog_html: Optional[str] = Field(None, max_length=_BLOG_HTML_MAX)
     x_post: Optional[str] = Field(None, max_length=_SOCIAL_POST_MAX)
     linkedin_post: Optional[str] = Field(None, max_length=_SOCIAL_POST_MAX)
+    instagram_caption: Optional[str] = Field(None, max_length=_SOCIAL_POST_MAX)
+    facebook_post: Optional[str] = Field(None, max_length=_SOCIAL_POST_MAX)
+    threads_post: Optional[str] = Field(None, max_length=_SOCIAL_POST_MAX)
 
 
 class CampaignCreate(BaseModel):
@@ -60,6 +63,9 @@ class CampaignResponse(BaseModel):
     blog_html: Optional[str]
     x_post: Optional[str]
     linkedin_post: Optional[str]
+    instagram_caption: Optional[str] = None
+    facebook_post: Optional[str] = None
+    threads_post: Optional[str] = None
     image_url: Optional[str]
     image_alt: Optional[str] = None
     status: str

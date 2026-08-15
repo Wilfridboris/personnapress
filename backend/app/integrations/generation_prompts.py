@@ -259,11 +259,11 @@ Return ONLY a valid JSON object (no markdown):
 }}
 {expanded_scoring_section}"""
 
-_SOCIAL_PROMPT = """Based on the brain dump and brand voice, write two social media posts.
+_SOCIAL_PROMPT = """Based on the brain dump and brand voice, write five platform-native social media posts.
 
 BRAND VOICE PROFILE:
 {bvp_json}
-{linkedin_voice_section}
+{linkedin_voice_section}{instagram_voice_section}{facebook_voice_section}
 BRAIN DUMP:
 {brain_dump}
 
@@ -279,17 +279,20 @@ BLOG TITLE:
 
 Return ONLY a valid JSON object (no markdown):
 {{
-  "x_post": "<X post text, max 280 characters, tease the blog without duplicating it>",
-  "linkedin_post": "<LinkedIn post, 500-1300 characters, use blank lines for paragraph breaks. Must open with a first-person hook tied to the brain dump's key insight. Acceptable openers: 'I just discovered...', 'Last week I...', 'After testing X, I found...'. Tease the specific outcome from the brain dump, not the general topic. No em-dash character (—) anywhere in either post.>"
+  "x_post": "<X post text, max 280 characters, tease the blog without duplicating it. No em-dash character (—) anywhere.>",
+  "linkedin_post": "<LinkedIn post, 300-1300 characters. Open with a striking first line about a business failure, success, career shift, or industry observation -- make it impossible to scroll past. Write in scannable format: one sentence per paragraph, clear line breaks between each. Share a framework, step-by-step lesson, or 'what I learned' story that delivers concrete value. Tone: professional yet personal -- expert authority balanced with human vulnerability. End with 3-5 relevant professional hashtags on their own line at the very bottom (format: #hashtag #hashtag). No em-dash character (—) anywhere.>",
+  "instagram_caption": "<Instagram caption, 150-600 characters. The first 2-3 lines are critical -- Instagram truncates after line 3 before the 'More' button, so the hook must land immediately. Open with a single punchy line or relatable personal moment. Use short paragraphs or bullet points separated by blank lines to create visual white space. Include 1-2 emojis placed naturally within the text (not at the end of every line). End with a blank line then 8-15 hashtags: mix 3-5 broad category hashtags with 5-10 highly specific niche hashtags (format: #hashtag #hashtag). Tone: warm, first-person, conversational -- not the LinkedIn professional register. No em-dash character (—) anywhere. No links (they are not clickable on Instagram).>",
+  "facebook_post": "<Facebook post, 200-800 characters. Open with a relatable problem or an emotional hook that makes people stop scrolling. Write 2-4 short paragraphs. End with a direct engagement question ('What's your take?' / 'Has this happened to you?' / 'Drop your answer below.'). Tone: casual and warm, community-focused -- more personal than LinkedIn, less formal. No hashtags needed. Do NOT include any URLs or links in the post body (links hurt Facebook's organic reach; they belong in the first comment, which is handled separately). No em-dash character (—) anywhere.>",
+  "threads_post": "<Threads post, max 500 characters. Start with a bold statement, hot take, or contrarian opinion. Drop all corporate voice -- write like you're typing from your phone, raw and unpolished. No hashtags. No structured formatting. No 'here's what I learned' framing -- just say the thing directly. Can be a one-liner or 2-3 short sentences. No em-dash character (—) anywhere.>"
 }}
 """
 
-_SOCIAL_STANDALONE_PROMPT = """You are an expert social media copywriter. Write two native social posts.
+_SOCIAL_STANDALONE_PROMPT = """You are an expert social media copywriter. Write five platform-native social posts.
 These posts stand alone -- there is no blog article to link to or tease.
 
 BRAND VOICE PROFILE:
 {bvp_json}
-{linkedin_voice_section}
+{linkedin_voice_section}{instagram_voice_section}{facebook_voice_section}
 {bvp_structure_hints}
 BRAIN DUMP:
 {brain_dump}
@@ -303,8 +306,11 @@ personality signals (humor, self-deprecation, bluntness) from authored passages 
 
 Return ONLY a valid JSON object (no markdown):
 {{
-  "x_post": "<X post, 70-280 characters. Structure: Hook (first ~70 chars, stops the scroll) then Value (1 core insight or 2-3 short bullets) then Proof (a number or outcome from the brain dump if available) then Nudge (simple ask: Save this / Reply with X / Drop a comment). This is the complete thought -- no 'Read the full guide', no link CTA, no em-dash character (—) anywhere.>",
-  "linkedin_post": "<LinkedIn post, 1200-2500 characters. Use blank lines between each section. Structure must follow this order: (1) HOOK lines 1-2: choose the strongest pattern for this content -- bold data claim (I analyzed N things. Here is the pattern.), before/after transformation (X months ago [pain]. Today [outcome]. Here is what changed.), contrarian one-liner (Everyone says X. Here is why that costs you.), personal reveal (I almost [negative outcome]. The problem was not what you think.), timeline/result (In N days we [result]. Here is exactly what changed.), mistake/pain (Most [audience] do X. Here is the cost.). (2) RE-HOOK lines 3-4: one sharp line clarifying who this is for. (3) PROBLEM/STAKES: 3-6 short lines with concrete specifics -- numbers, budget, time, emotional cost -- pulled from the brain dump. (4) STORY/INSIGHT: 5-10 lines with specific details, named tools, outcomes, or data from the brain dump. (5) STEPS/FRAMEWORK: 3-7 bullets, each a clear action or belief shift, not a vague principle. (6) SOFT CTA: 1-2 lines -- a specific question the reader can answer, a comment trigger ('Comment X and I will send it'), or a DM invite. Never close with 'thoughts?' or 'you can too'. No em-dash character (—) anywhere. No 'Read the full guide' or blog link CTA.>"
+  "x_post": "<X post, 70-280 characters. Structure: Hook (first ~70 chars, stops the scroll) then Value (1 core insight or 2-3 short bullets) then Proof (a number or outcome from the brain dump if available) then Nudge (simple ask: Save this / Reply with X / Drop a comment). This is the complete thought -- no 'Read the full guide', no link CTA, no em-dash character anywhere.>",
+  "linkedin_post": "<LinkedIn post, 1200-2500 characters. Use blank lines between each section. Structure must follow this order: (1) HOOK lines 1-2: choose the strongest pattern for this content -- bold data claim (I analyzed N things. Here is the pattern.), before/after transformation (X months ago [pain]. Today [outcome]. Here is what changed.), contrarian one-liner (Everyone says X. Here is why that costs you.), personal reveal (I almost [negative outcome]. The problem was not what you think.), timeline/result (In N days we [result]. Here is exactly what changed.), mistake/pain (Most [audience] do X. Here is the cost.). (2) RE-HOOK lines 3-4: one sharp line clarifying who this is for. (3) PROBLEM/STAKES: 3-6 short lines with concrete specifics -- numbers, budget, time, emotional cost -- pulled from the brain dump. (4) STORY/INSIGHT: 5-10 lines with specific details, named tools, outcomes, or data from the brain dump. (5) STEPS/FRAMEWORK: 3-7 bullets, each a clear action or belief shift, not a vague principle. (6) SOFT CTA: 1-2 lines -- a specific question the reader can answer, a comment trigger ('Comment X and I will send it'), or a DM invite. Never close with 'thoughts?' or 'you can too'. No em-dash character anywhere. No 'Read the full guide' or blog link CTA.>",
+  "instagram_caption": "<Instagram caption, 150-600 characters. The first 2-3 lines are critical -- Instagram truncates after line 3 before the 'More' button, so the hook must land immediately. Open with a single punchy line or relatable personal moment. Use short paragraphs or bullet points separated by blank lines to create visual white space. Include 1-2 emojis placed naturally within the text (not at the end of every line). End with a blank line then 8-15 hashtags: mix 3-5 broad category hashtags with 5-10 highly specific niche hashtags (format: #hashtag #hashtag). Tone: warm, first-person, conversational -- not the LinkedIn professional register. No em-dash character anywhere. No links (they are not clickable on Instagram).>",
+  "facebook_post": "<Facebook post, 200-800 characters. Open with a relatable problem or an emotional hook that makes people stop scrolling. Write 2-4 short paragraphs. End with a direct engagement question ('What's your take?' / 'Has this happened to you?' / 'Drop your answer below.'). Tone: casual and warm, community-focused -- more personal than LinkedIn, less formal. No hashtags needed. Do NOT include any URLs or links in the post body (links hurt Facebook's organic reach; they belong in the first comment, which is handled separately). No em-dash character anywhere.>",
+  "threads_post": "<Threads post, max 500 characters. Start with a bold statement, hot take, or contrarian opinion. Drop all corporate voice -- write like you're typing from your phone, raw and unpolished. No hashtags. No structured formatting. No 'here's what I learned' framing -- just say the thing directly. Can be a one-liner or 2-3 short sentences. No em-dash character anywhere.>"
 }}
 """
 

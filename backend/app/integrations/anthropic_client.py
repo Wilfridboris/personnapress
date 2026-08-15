@@ -292,17 +292,29 @@ async def generate_social(
             "\nLINKEDIN BRAND VOICE (apply to linkedin_post only -- do not apply to x_post):\n"
             f"{voice_brief}\n"
         )
+        instagram_voice_section = (
+            "\nINSTAGRAM BRAND VOICE (apply to instagram_caption only):\n"
+            f"{voice_brief}\n"
+        )
+        facebook_voice_section = (
+            "\nFACEBOOK BRAND VOICE (apply to facebook_post only):\n"
+            f"{voice_brief}\n"
+        )
     else:
         linkedin_voice_section = ""
+        instagram_voice_section = ""
+        facebook_voice_section = ""
 
     prompt = _SOCIAL_PROMPT.format(
         bvp_json=bvp_json,
         linkedin_voice_section=linkedin_voice_section,
+        instagram_voice_section=instagram_voice_section,
+        facebook_voice_section=facebook_voice_section,
         brain_dump=brain_dump,
         blog_title=blog_title,
     )
 
-    raw = _strip_fences((await _call(prompt, max_tokens=1024)).strip())
+    raw = _strip_fences((await _call(prompt, max_tokens=2048)).strip())
 
     try:
         data = json.loads(raw)
@@ -310,16 +322,18 @@ async def generate_social(
         logger.error("generate_social: Anthropic returned invalid JSON: %r", raw[:200])
         raise ValueError(f"generate_social: Anthropic returned invalid JSON: {exc}") from exc
 
-    for key in ("x_post", "linkedin_post"):
+    for key in ("x_post", "linkedin_post", "instagram_caption", "facebook_post", "threads_post"):
         if key not in data:
             raise ValueError(f"generate_social: missing key '{key}' in Anthropic response")
         if not isinstance(data[key], str):
             raise ValueError(
                 f"generate_social: '{key}' must be a string, got {type(data[key]).__name__}"
             )
+        if not data[key]:
+            raise ValueError(f"generate_social: '{key}' must be non-empty")
 
-    data["x_post"] = data["x_post"].replace("—", ", ")
-    data["linkedin_post"] = data["linkedin_post"].replace("—", ", ")
+    for key in ("x_post", "linkedin_post", "instagram_caption", "facebook_post", "threads_post"):
+        data[key] = data[key].replace("—", ", ")
 
     if len(data["x_post"]) > 280:
         logger.warning(
@@ -335,11 +349,32 @@ async def generate_social(
             ln_len,
         )
         data["linkedin_post"] = data["linkedin_post"][:1299] + "…"
-    elif ln_len < 500:
+    elif ln_len < 300:
         logger.warning(
-            "generate_social: LinkedIn post length %d is below expected 500 chars",
+            "generate_social: LinkedIn post length %d is below expected 300 chars",
             ln_len,
         )
+
+    ig_len = len(data["instagram_caption"])
+    if not (150 <= ig_len <= 600):
+        logger.warning(
+            "generate_social: instagram_caption length %d outside expected 150-600 range",
+            ig_len,
+        )
+
+    fb_len = len(data["facebook_post"])
+    if not (200 <= fb_len <= 1000):
+        logger.warning(
+            "generate_social: facebook_post length %d outside expected 200-1000 range",
+            fb_len,
+        )
+
+    if len(data["threads_post"]) > 500:
+        logger.warning(
+            "generate_social: threads_post exceeded 500 chars (%d), truncating",
+            len(data["threads_post"]),
+        )
+        data["threads_post"] = data["threads_post"][:499] + "…"
 
     return data
 
@@ -363,21 +398,36 @@ async def generate_social_standalone(
         bvp_json = _DEFAULT_VOICE
 
     voice_brief = (brand_voice_profile or {}).get("voice_brief") or ""
-    linkedin_voice_section = (
-        "\nLINKEDIN BRAND VOICE (apply to linkedin_post only -- do not apply to x_post):\n"
-        f"{voice_brief}\n"
-    ) if voice_brief else ""
+    if voice_brief:
+        linkedin_voice_section = (
+            "\nLINKEDIN BRAND VOICE (apply to linkedin_post only -- do not apply to x_post):\n"
+            f"{voice_brief}\n"
+        )
+        instagram_voice_section = (
+            "\nINSTAGRAM BRAND VOICE (apply to instagram_caption only):\n"
+            f"{voice_brief}\n"
+        )
+        facebook_voice_section = (
+            "\nFACEBOOK BRAND VOICE (apply to facebook_post only):\n"
+            f"{voice_brief}\n"
+        )
+    else:
+        linkedin_voice_section = ""
+        instagram_voice_section = ""
+        facebook_voice_section = ""
 
     bvp_structure_hints = _build_standalone_voice_injection(brand_voice_profile or {})
 
     prompt = _SOCIAL_STANDALONE_PROMPT.format(
         bvp_json=bvp_json,
         linkedin_voice_section=linkedin_voice_section,
+        instagram_voice_section=instagram_voice_section,
+        facebook_voice_section=facebook_voice_section,
         bvp_structure_hints=bvp_structure_hints,
         brain_dump=brain_dump,
     )
 
-    raw = _strip_fences((await _call(prompt, max_tokens=1536)).strip())
+    raw = _strip_fences((await _call(prompt, max_tokens=2048)).strip())
 
     try:
         data = json.loads(raw)
@@ -385,16 +435,18 @@ async def generate_social_standalone(
         logger.error("generate_social_standalone: Anthropic returned invalid JSON: %r", raw[:200])
         raise ValueError(f"generate_social_standalone: Anthropic returned invalid JSON: {exc}") from exc
 
-    for key in ("x_post", "linkedin_post"):
+    for key in ("x_post", "linkedin_post", "instagram_caption", "facebook_post", "threads_post"):
         if key not in data:
             raise ValueError(f"generate_social_standalone: missing key '{key}' in Anthropic response")
         if not isinstance(data[key], str):
             raise ValueError(
                 f"generate_social_standalone: '{key}' must be a string, got {type(data[key]).__name__}"
             )
+        if not data[key]:
+            raise ValueError(f"generate_social_standalone: '{key}' must be non-empty")
 
-    data["x_post"] = data["x_post"].replace("—", ", ")
-    data["linkedin_post"] = data["linkedin_post"].replace("—", ", ")
+    for key in ("x_post", "linkedin_post", "instagram_caption", "facebook_post", "threads_post"):
+        data[key] = data[key].replace("—", ", ")
 
     if len(data["x_post"]) > 280:
         logger.warning(
@@ -415,5 +467,26 @@ async def generate_social_standalone(
             "generate_social_standalone: LinkedIn post length %d is below expected 1200 chars",
             ln_len,
         )
+
+    ig_len = len(data["instagram_caption"])
+    if not (150 <= ig_len <= 600):
+        logger.warning(
+            "generate_social_standalone: instagram_caption length %d outside expected 150-600 range",
+            ig_len,
+        )
+
+    fb_len = len(data["facebook_post"])
+    if not (200 <= fb_len <= 1000):
+        logger.warning(
+            "generate_social_standalone: facebook_post length %d outside expected 200-1000 range",
+            fb_len,
+        )
+
+    if len(data["threads_post"]) > 500:
+        logger.warning(
+            "generate_social_standalone: threads_post exceeded 500 chars (%d), truncating",
+            len(data["threads_post"]),
+        )
+        data["threads_post"] = data["threads_post"][:499] + "…"
 
     return data

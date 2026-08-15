@@ -741,14 +741,14 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                           return next;
                         })
                       }
-                      disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url) || (p === "threads" && !(campaign.x_post || "").trim()) || (p === "facebook_page" && !(campaign.linkedin_post || "").trim())}
+                      disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url) || (p === "threads" && !((campaign.threads_post || campaign.x_post) || "").trim()) || (p === "facebook_page" && !((campaign.facebook_post || campaign.linkedin_post) || "").trim())}
                       disabledReason={
                         p === "instagram" && !campaign.image_url
                           ? "Requires a featured image"
-                          : p === "threads" && !(campaign.x_post || "").trim()
-                          ? "Requires an X post"
-                          : p === "facebook_page" && !(campaign.linkedin_post || "").trim()
-                          ? "Requires a LinkedIn post"
+                          : p === "threads" && !((campaign.threads_post || campaign.x_post) || "").trim()
+                          ? "Requires a Threads or X post"
+                          : p === "facebook_page" && !((campaign.facebook_post || campaign.linkedin_post) || "").trim()
+                          ? "Requires a Facebook or LinkedIn post"
                           : undefined
                       }
                       label={platformLabels[p]}
@@ -763,21 +763,18 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
               )}
               {selectedPlatforms.has("instagram") && campaign.image_url && (
                 <p className="font-mono text-xs text-graphite">
-                  {Math.min((campaign.linkedin_post ?? "").length, 2200)}/2200 chars (Instagram caption)
+                  {Math.min((campaign.instagram_caption ?? campaign.linkedin_post ?? "").length, 2200)}/2200 chars (Instagram caption)
                 </p>
               )}
-              {availablePlatforms.includes("facebook_page") && !(campaign.linkedin_post || "").trim() && (
+              {availablePlatforms.includes("facebook_page") && !((campaign.facebook_post || campaign.linkedin_post) || "").trim() && (
                 <p className="font-mono text-xs text-graphite">
-                  Facebook Page requires a LinkedIn post to be generated.
+                  Facebook Page requires a Facebook or LinkedIn post to be generated.
                 </p>
               )}
-              {availablePlatforms.includes("threads") && !(campaign.x_post || "").trim() && (
+              {availablePlatforms.includes("threads") && !((campaign.threads_post || campaign.x_post) || "").trim() && (
                 <p className="font-mono text-xs text-graphite">
-                  Threads requires an X post to be generated.
+                  Threads requires a Threads or X post to be generated.
                 </p>
-              )}
-              {selectedPlatforms.has("threads") && selectedPlatforms.has("x") && (
-                <p className="font-mono text-xs text-graphite mt-1">Also posts to Threads</p>
               )}
               {nothingSelected && (
                 <p className="font-mono text-xs text-danger" role="alert">
@@ -1167,14 +1164,14 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
                           return next;
                         })
                       }
-                      disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url) || (p === "threads" && !(campaign.x_post || "").trim()) || (p === "facebook_page" && !(campaign.linkedin_post || "").trim())}
+                      disabled={isPublishing || isGitHubPublishing || (p === "instagram" && !campaign.image_url) || (p === "threads" && !((campaign.threads_post || campaign.x_post) || "").trim()) || (p === "facebook_page" && !((campaign.facebook_post || campaign.linkedin_post) || "").trim())}
                       disabledReason={
                         p === "instagram" && !campaign.image_url
                           ? "Requires a featured image"
-                          : p === "threads" && !(campaign.x_post || "").trim()
-                          ? "Requires an X post"
-                          : p === "facebook_page" && !(campaign.linkedin_post || "").trim()
-                          ? "Requires a LinkedIn post"
+                          : p === "threads" && !((campaign.threads_post || campaign.x_post) || "").trim()
+                          ? "Requires a Threads or X post"
+                          : p === "facebook_page" && !((campaign.facebook_post || campaign.linkedin_post) || "").trim()
+                          ? "Requires a Facebook or LinkedIn post"
                           : undefined
                       }
                       label={platformLabels[p]}
@@ -1189,21 +1186,18 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
               )}
               {selectedPlatforms.has("instagram") && campaign.image_url && (
                 <p className="font-mono text-xs text-graphite">
-                  {Math.min((campaign.linkedin_post ?? "").length, 2200)}/2200 chars (Instagram caption)
+                  {Math.min((campaign.instagram_caption ?? campaign.linkedin_post ?? "").length, 2200)}/2200 chars (Instagram caption)
                 </p>
               )}
-              {availablePlatforms.includes("facebook_page") && !(campaign.linkedin_post || "").trim() && (
+              {availablePlatforms.includes("facebook_page") && !((campaign.facebook_post || campaign.linkedin_post) || "").trim() && (
                 <p className="font-mono text-xs text-graphite">
-                  Facebook Page requires a LinkedIn post to be generated.
+                  Facebook Page requires a Facebook or LinkedIn post to be generated.
                 </p>
               )}
-              {availablePlatforms.includes("threads") && !(campaign.x_post || "").trim() && (
+              {availablePlatforms.includes("threads") && !((campaign.threads_post || campaign.x_post) || "").trim() && (
                 <p className="font-mono text-xs text-graphite">
-                  Threads requires an X post to be generated.
+                  Threads requires a Threads or X post to be generated.
                 </p>
-              )}
-              {selectedPlatforms.has("threads") && selectedPlatforms.has("x") && (
-                <p className="font-mono text-xs text-graphite mt-1">Also posts to Threads</p>
               )}
               {nothingSelected && (
                 <p className="font-mono text-xs text-danger" role="alert">

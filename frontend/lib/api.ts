@@ -143,7 +143,7 @@ export const campaignsApi = {
       `/campaigns/${id}/image/regenerate`,
       { method: "POST" }
     ),
-  patch: (id: string, data: { blog_html?: string; x_post?: string; linkedin_post?: string }) =>
+  patch: (id: string, data: { blog_html?: string; x_post?: string; linkedin_post?: string; instagram_caption?: string; facebook_post?: string; threads_post?: string }) =>
     apiFetch<Campaign>(`/campaigns/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   schedule: (id: string, scheduledAt: string, platforms?: string[]) =>
     apiFetch<{ job_id: string; scheduled_at: string }>(`/campaigns/${id}/publish/schedule`, {

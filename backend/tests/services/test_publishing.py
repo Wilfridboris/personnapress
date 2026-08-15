@@ -14,6 +14,9 @@ def _make_campaign(client_id=None):
     c.blog_html = "<h1>Title</h1><p>Body</p>"
     c.x_post = "Check out our new blog post!"
     c.linkedin_post = "Excited to share..."
+    c.instagram_caption = None
+    c.facebook_post = None
+    c.threads_post = None
     c.image_url = "https://cdn.example.com/img.png"
     return c
 
@@ -1041,7 +1044,7 @@ async def test_x_publish_image_download_failure_falls_back_to_text_only():
         mock_httpx.return_value.get = AsyncMock(return_value=fake_image_resp)
         results = await dispatch_publish(db, campaign.id, uuid.uuid4())
 
-    assert results.get("x") == "success"
+    assert results.get("x") == "success_text_only"
     mock_tweet.assert_called_once()
     mock_media_tweet.assert_not_called()
 
@@ -1110,3 +1113,168 @@ async def test_linkedin_publish_image_upload_failure_falls_back_to_ugc_post():
     assert results.get("linkedin") == "success"
     mock_ugc.assert_called_once()
     mock_img_post.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# AC4: Platform-native field fallback in publishing
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_instagram_publish_uses_instagram_caption_when_set():
+    """dispatch_publish_for_platform uses instagram_caption when it is set."""
+    from app.services.publishing import dispatch_publish_for_platform
+
+    campaign = _make_campaign()
+    campaign.status = "approved"
+    campaign.instagram_caption = "Native IG caption"
+    ig_creds = {"instagram_user_id": "ig123", "page_access_token": "tok"}
+    ig_conn = _make_connection("instagram", creds=ig_creds)
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connection_for_platform", AsyncMock(return_value=ig_conn)),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.meta_integration.publish_instagram_feed_post", AsyncMock(return_value=None)) as mock_ig,
+    ):
+        result = await dispatch_publish_for_platform(db, campaign.id, "instagram")
+
+    assert result.get("instagram") == "success"
+    mock_ig.assert_called_once()
+    _, _, _, caption = mock_ig.call_args.args
+    assert caption == "Native IG caption"
+
+
+@pytest.mark.asyncio
+async def test_instagram_publish_falls_back_to_linkedin_post_when_instagram_caption_null():
+    """dispatch_publish_for_platform falls back to linkedin_post when instagram_caption is None."""
+    from app.services.publishing import dispatch_publish_for_platform
+
+    campaign = _make_campaign()
+    campaign.status = "approved"
+    campaign.instagram_caption = None
+    campaign.linkedin_post = "LinkedIn fallback text"
+    ig_creds = {"instagram_user_id": "ig123", "page_access_token": "tok"}
+    ig_conn = _make_connection("instagram", creds=ig_creds)
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connection_for_platform", AsyncMock(return_value=ig_conn)),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.meta_integration.publish_instagram_feed_post", AsyncMock(return_value=None)) as mock_ig,
+    ):
+        result = await dispatch_publish_for_platform(db, campaign.id, "instagram")
+
+    assert result.get("instagram") == "success"
+    mock_ig.assert_called_once()
+    _, _, _, caption = mock_ig.call_args.args
+    assert caption == "LinkedIn fallback text"
+
+
+@pytest.mark.asyncio
+async def test_facebook_publish_uses_facebook_post_when_set():
+    """dispatch_publish_for_platform uses facebook_post when it is set."""
+    from app.services.publishing import dispatch_publish_for_platform
+
+    campaign = _make_campaign()
+    campaign.status = "approved"
+    campaign.facebook_post = "Native FB post"
+    fb_creds = {"page_id": "pg123", "page_access_token": "tok"}
+    fb_conn = _make_connection("facebook_page", creds=fb_creds)
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connection_for_platform", AsyncMock(return_value=fb_conn)),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.meta_integration.publish_facebook_page_post", AsyncMock(return_value=None)) as mock_fb,
+    ):
+        result = await dispatch_publish_for_platform(db, campaign.id, "facebook_page")
+
+    assert result.get("facebook_page") == "success"
+    mock_fb.assert_called_once()
+    _, _, message, _ = mock_fb.call_args.args
+    assert message == "Native FB post"
+
+
+@pytest.mark.asyncio
+async def test_facebook_publish_falls_back_to_linkedin_post_when_facebook_post_null():
+    """dispatch_publish_for_platform falls back to linkedin_post when facebook_post is None."""
+    from app.services.publishing import dispatch_publish_for_platform
+
+    campaign = _make_campaign()
+    campaign.status = "approved"
+    campaign.facebook_post = None
+    campaign.linkedin_post = "LinkedIn fallback for FB"
+    fb_creds = {"page_id": "pg123", "page_access_token": "tok"}
+    fb_conn = _make_connection("facebook_page", creds=fb_creds)
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connection_for_platform", AsyncMock(return_value=fb_conn)),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.meta_integration.publish_facebook_page_post", AsyncMock(return_value=None)) as mock_fb,
+    ):
+        result = await dispatch_publish_for_platform(db, campaign.id, "facebook_page")
+
+    assert result.get("facebook_page") == "success"
+    mock_fb.assert_called_once()
+    _, _, message, _ = mock_fb.call_args.args
+    assert message == "LinkedIn fallback for FB"
+
+
+@pytest.mark.asyncio
+async def test_threads_publish_uses_threads_post_when_set():
+    """dispatch_publish_for_platform uses threads_post when it is set."""
+    from app.services.publishing import dispatch_publish_for_platform
+
+    campaign = _make_campaign()
+    campaign.status = "approved"
+    campaign.threads_post = "Native Threads post"
+    th_creds = {"threads_user_id": "th123", "user_access_token": "tok", "token_expires_at": None}
+    th_conn = _make_connection("threads", creds=th_creds)
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connection_for_platform", AsyncMock(return_value=th_conn)),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing._refresh_threads_token_if_needed", AsyncMock(return_value=th_creds)),
+        patch("app.services.publishing.meta_integration.publish_threads_post", AsyncMock(return_value=None)) as mock_th,
+    ):
+        result = await dispatch_publish_for_platform(db, campaign.id, "threads")
+
+    assert result.get("threads") == "success"
+    mock_th.assert_called_once()
+    _, _, text = mock_th.call_args.args
+    assert text == "Native Threads post"
+
+
+@pytest.mark.asyncio
+async def test_threads_publish_falls_back_to_x_post_when_threads_post_null():
+    """dispatch_publish_for_platform falls back to x_post when threads_post is None."""
+    from app.services.publishing import dispatch_publish_for_platform
+
+    campaign = _make_campaign()
+    campaign.status = "approved"
+    campaign.threads_post = None
+    campaign.x_post = "X fallback for Threads"
+    th_creds = {"threads_user_id": "th123", "user_access_token": "tok", "token_expires_at": None}
+    th_conn = _make_connection("threads", creds=th_creds)
+    db = AsyncMock()
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.services.publishing.get_connection_for_platform", AsyncMock(return_value=th_conn)),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing._refresh_threads_token_if_needed", AsyncMock(return_value=th_creds)),
+        patch("app.services.publishing.meta_integration.publish_threads_post", AsyncMock(return_value=None)) as mock_th,
+    ):
+        result = await dispatch_publish_for_platform(db, campaign.id, "threads")
+
+    assert result.get("threads") == "success"
+    mock_th.assert_called_once()
+    _, _, text = mock_th.call_args.args
+    assert text == "X fallback for Threads"

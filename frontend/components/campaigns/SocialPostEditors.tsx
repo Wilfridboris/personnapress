@@ -7,11 +7,14 @@ import { useUIStore } from "@/lib/stores/useUIStore";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
 
 const X_LIMIT = 280;
-const LINKEDIN_LIMIT = 1300;
-// AC #2: danger at 267 chars (95% of 280, rounded up per spec)
+const LINKEDIN_LIMIT = 1500;
+const INSTAGRAM_LIMIT = 2200;
+const FACEBOOK_LIMIT = 1000;
+const THREADS_LIMIT = 500;
+// danger at 95%
 const X_DANGER_THRESHOLD = 267;
-// AC #3: danger at 1235 chars (95% of 1300 = 1235.0 exactly)
-const LINKEDIN_DANGER_THRESHOLD = 1235;
+const LINKEDIN_DANGER_THRESHOLD = 1425;
+const THREADS_DANGER_THRESHOLD = 475;
 
 interface MetaContext {
   threads?: boolean;
@@ -23,6 +26,9 @@ interface SocialPostEditorsProps {
   campaignId: string;
   initialXPost: string | null;
   initialLinkedInPost: string | null;
+  initialInstagramCaption?: string | null;
+  initialFacebookPost?: string | null;
+  initialThreadsPost?: string | null;
   readOnly?: boolean;
   showXSection?: boolean;
   showLinkedInSection?: boolean;
@@ -31,32 +37,70 @@ interface SocialPostEditorsProps {
 }
 
 export interface SocialPostEditorsHandle {
-  getCurrentValues: () => { x_post: string; linkedin_post: string };
+  getCurrentValues: () => {
+    x_post: string;
+    linkedin_post: string;
+    instagram_caption: string;
+    facebook_post: string;
+    threads_post: string;
+  };
 }
 
 export const SocialPostEditors = forwardRef<
   SocialPostEditorsHandle,
   SocialPostEditorsProps
->(({ campaignId, initialXPost, initialLinkedInPost, readOnly = false, showXSection = true, showLinkedInSection = true, metaContext, imageUrl }, ref) => {
+>(({
+  campaignId,
+  initialXPost,
+  initialLinkedInPost,
+  initialInstagramCaption,
+  initialFacebookPost,
+  initialThreadsPost,
+  readOnly = false,
+  showXSection = true,
+  showLinkedInSection = true,
+  metaContext,
+  imageUrl,
+}, ref) => {
   const [xPost, setXPost] = useState(initialXPost ?? "");
   const [linkedinPost, setLinkedInPost] = useState(initialLinkedInPost ?? "");
+  const [instagramCaption, setInstagramCaption] = useState(initialInstagramCaption ?? "");
+  const [facebookPost, setFacebookPost] = useState(initialFacebookPost ?? "");
+  const [threadsPost, setThreadsPost] = useState(initialThreadsPost ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
 
-  // Sync state when props arrive post-generation (null → value transition only)
+  // Sync state when props arrive post-generation (null -> value transition only)
   useEffect(() => {
     if (initialXPost && xPost === "") setXPost(initialXPost);
   }, [initialXPost]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (initialLinkedInPost && linkedinPost === "") setLinkedInPost(initialLinkedInPost);
   }, [initialLinkedInPost]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (initialInstagramCaption && instagramCaption === "") setInstagramCaption(initialInstagramCaption);
+  }, [initialInstagramCaption]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (initialFacebookPost && facebookPost === "") setFacebookPost(initialFacebookPost);
+  }, [initialFacebookPost]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (initialThreadsPost && threadsPost === "") setThreadsPost(initialThreadsPost);
+  }, [initialThreadsPost]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addToast = useUIStore((s) => s.addToast);
 
   useImperativeHandle(
     ref,
-    () => ({ getCurrentValues: () => ({ x_post: xPost, linkedin_post: linkedinPost }) }),
-    [xPost, linkedinPost],
+    () => ({
+      getCurrentValues: () => ({
+        x_post: xPost,
+        linkedin_post: linkedinPost,
+        instagram_caption: instagramCaption,
+        facebook_post: facebookPost,
+        threads_post: threadsPost,
+      }),
+    }),
+    [xPost, linkedinPost, instagramCaption, facebookPost, threadsPost],
   );
 
   const xCount = xPost.length;
@@ -65,12 +109,23 @@ export const SocialPostEditors = forwardRef<
   const liCount = linkedinPost.length;
   const liAtDanger = liCount >= LINKEDIN_DANGER_THRESHOLD;
 
+  const threadsCount = threadsPost.length;
+  const threadsAtDanger = threadsCount >= THREADS_DANGER_THRESHOLD;
+
+  // Show new sections based on platform connection state
+  const showInstagram = metaContext?.instagram === true;
+  const showFacebook = metaContext?.facebook_page === true;
+  const showThreads = metaContext?.threads === true;
+
   async function handleSave() {
     setIsSaving(true);
     try {
       await campaignsApi.patch(campaignId, {
         x_post: xPost,
         linkedin_post: linkedinPost,
+        instagram_caption: instagramCaption,
+        facebook_post: facebookPost,
+        threads_post: threadsPost,
       });
       setIsDirty(false);
       addToast("Social posts saved.", "success");
@@ -105,15 +160,6 @@ export const SocialPostEditors = forwardRef<
             >
               X (Twitter)
             </label>
-            {metaContext?.threads && (
-              <span
-                className="flex items-center gap-0.5 text-[10px] font-mono text-graphite"
-                aria-label="Also posts to Threads"
-              >
-                <PlatformIcon platform="threads" className="size-3" color="mono" aria-hidden="true" />
-                Threads
-              </span>
-            )}
           </div>
           <textarea
             id="x-post"
@@ -151,38 +197,7 @@ export const SocialPostEditors = forwardRef<
             >
               LinkedIn
             </label>
-            {(metaContext?.instagram || metaContext?.facebook_page) && (
-              <span className="flex items-center gap-1.5 text-[10px] font-mono text-graphite">
-                {metaContext.instagram && (
-                  <span
-                    className="flex items-center gap-0.5"
-                    aria-label="Also used as Instagram caption"
-                  >
-                    <PlatformIcon platform="instagram" className="size-3" color="mono" aria-hidden="true" />
-                    Instagram
-                  </span>
-                )}
-                {metaContext.instagram && metaContext.facebook_page && (
-                  <span aria-hidden="true" className="text-border">·</span>
-                )}
-                {metaContext.facebook_page && (
-                  <span
-                    className="flex items-center gap-0.5"
-                    aria-label="Also used as Facebook Page post"
-                  >
-                    <PlatformIcon platform="facebook_page" className="size-3" color="mono" aria-hidden="true" />
-                    Facebook
-                  </span>
-                )}
-              </span>
-            )}
           </div>
-          {metaContext?.instagram && !imageUrl && (
-            <p className="flex items-center gap-1 text-[10px] font-mono text-graphite -mt-1 mb-2">
-              <Info className="size-3 shrink-0" aria-hidden="true" />
-              Instagram will be skipped at publish - no image attached to this campaign
-            </p>
-          )}
           <textarea
             id="linkedin-post"
             value={linkedinPost}
@@ -210,7 +225,127 @@ export const SocialPostEditors = forwardRef<
         </div>
       )}
 
-      {/* Save button — only shown when editable and dirty */}
+      {showInstagram && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label
+              htmlFor="instagram-caption"
+              className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-graphite"
+            >
+              <PlatformIcon platform="instagram" className="size-3" color="mono" aria-hidden="true" />
+              Instagram
+            </label>
+          </div>
+          {!imageUrl && (
+            <p className="flex items-center gap-1 text-[10px] font-mono text-graphite -mt-1 mb-2">
+              <Info className="size-3 shrink-0" aria-hidden="true" />
+              Instagram will be skipped at publish - no image attached to this campaign
+            </p>
+          )}
+          <textarea
+            id="instagram-caption"
+            value={instagramCaption}
+            onChange={(e) => {
+              setInstagramCaption(e.target.value);
+              setIsDirty(true);
+            }}
+            disabled={readOnly}
+            rows={6}
+            aria-label="Instagram caption content"
+            aria-describedby={!readOnly ? "instagram-caption-counter" : undefined}
+            className={textareaBase}
+            placeholder="Instagram caption..."
+          />
+          {!readOnly && (
+            <span
+              id="instagram-caption-counter"
+              className="text-xs font-mono mt-1 block text-graphite"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {instagramCaption.length} / {INSTAGRAM_LIMIT}
+            </span>
+          )}
+        </div>
+      )}
+
+      {showFacebook && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label
+              htmlFor="facebook-post"
+              className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-graphite"
+            >
+              <PlatformIcon platform="facebook_page" className="size-3" color="mono" aria-hidden="true" />
+              Facebook
+            </label>
+          </div>
+          <textarea
+            id="facebook-post"
+            value={facebookPost}
+            onChange={(e) => {
+              setFacebookPost(e.target.value);
+              setIsDirty(true);
+            }}
+            disabled={readOnly}
+            rows={5}
+            aria-label="Facebook post content"
+            aria-describedby={!readOnly ? "facebook-post-counter" : undefined}
+            className={textareaBase}
+            placeholder="Facebook post..."
+          />
+          {!readOnly && (
+            <span
+              id="facebook-post-counter"
+              className="text-xs font-mono mt-1 block text-graphite"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {facebookPost.length} / {FACEBOOK_LIMIT}
+            </span>
+          )}
+        </div>
+      )}
+
+      {showThreads && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label
+              htmlFor="threads-post"
+              className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-graphite"
+            >
+              <PlatformIcon platform="threads" className="size-3" color="mono" aria-hidden="true" />
+              Threads
+            </label>
+          </div>
+          <textarea
+            id="threads-post"
+            value={threadsPost}
+            onChange={(e) => {
+              setThreadsPost(e.target.value);
+              setIsDirty(true);
+            }}
+            disabled={readOnly}
+            rows={4}
+            aria-label="Threads post content"
+            aria-describedby={!readOnly ? "threads-post-counter" : undefined}
+            className={textareaBase}
+            placeholder="Threads post..."
+          />
+          {!readOnly && (
+            <span
+              id="threads-post-counter"
+              className={`text-xs font-mono mt-1 block ${threadsAtDanger ? "text-danger" : "text-graphite"}`}
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {threadsCount} / {THREADS_LIMIT}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Save button -- only shown when editable and dirty */}
       {!readOnly && isDirty && (
         <button
           type="button"
@@ -224,7 +359,7 @@ export const SocialPostEditors = forwardRef<
                 className="inline-block w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"
                 aria-hidden="true"
               />
-              Saving…
+              Saving...
             </>
           ) : (
             "Save social posts"

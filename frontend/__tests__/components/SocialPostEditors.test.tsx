@@ -58,21 +58,19 @@ describe("SocialPostEditors", () => {
   it("X counter returns to graphite when below 267", () => {
     renderEditors({ initialXPost: "" });
     const textarea = screen.getByLabelText("X post content");
-    // Go to danger level first
     fireEvent.change(textarea, { target: { value: "a".repeat(267) } });
-    // Then drop below danger threshold
     fireEvent.change(textarea, { target: { value: "a".repeat(266) } });
     const counter = screen.getByText("266 / 280");
     expect(counter.className).not.toContain("text-danger");
     expect(counter.className).toContain("text-graphite");
   });
 
-  it("LinkedIn counter turns danger at >= 1235", () => {
+  it("LinkedIn counter turns danger at >= 1425 (95% of 1500)", () => {
     renderEditors({ initialLinkedInPost: "" });
     const textarea = screen.getByLabelText("LinkedIn post content");
-    const longText = "a".repeat(1235);
+    const longText = "a".repeat(1425);
     fireEvent.change(textarea, { target: { value: longText } });
-    const counter = screen.getByText("1235 / 1300");
+    const counter = screen.getByText("1425 / 1500");
     expect(counter.className).toContain("text-danger");
   });
 
@@ -88,7 +86,7 @@ describe("SocialPostEditors", () => {
     expect(screen.getByRole("button", { name: /save social posts/i })).toBeInTheDocument();
   });
 
-  it("Save calls campaignsApi.patch with correct payload", async () => {
+  it("Save calls campaignsApi.patch with all five fields", async () => {
     vi.mocked(campaignsApi.patch).mockResolvedValue({} as never);
 
     renderEditors({ initialXPost: "original", initialLinkedInPost: "orig-li" });
@@ -101,6 +99,9 @@ describe("SocialPostEditors", () => {
       expect(campaignsApi.patch).toHaveBeenCalledWith("camp-1", {
         x_post: "updated x",
         linkedin_post: "orig-li",
+        instagram_caption: "",
+        facebook_post: "",
+        threads_post: "",
       });
     });
   });
@@ -136,7 +137,7 @@ describe("SocialPostEditors", () => {
     expect(xTextarea).toBeDisabled();
     expect(liTextarea).toBeDisabled();
     expect(screen.queryByText(/\/ 280/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/\/ 1300/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\/ 1500/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /save/i })).not.toBeInTheDocument();
   });
 
@@ -152,7 +153,64 @@ describe("SocialPostEditors", () => {
     expect(screen.queryByRole("img", { name: "Campaign image" })).not.toBeInTheDocument();
   });
 
-  it("renders Instagram skip warning when instagram is connected and imageUrl is null", () => {
+  it("does not render image thumbnail when imageUrl is undefined", () => {
+    renderEditors({});
+    expect(screen.queryByRole("img", { name: "Campaign image" })).not.toBeInTheDocument();
+  });
+
+  it("getCurrentValues ref returns current textarea values for all five fields", () => {
+    const ref = createRef<SocialPostEditorsHandle>();
+    render(
+      <SocialPostEditors
+        campaignId="camp-1"
+        initialXPost="init-x"
+        initialLinkedInPost="init-li"
+        initialInstagramCaption="init-ig"
+        initialFacebookPost="init-fb"
+        initialThreadsPost="init-th"
+        ref={ref}
+      />
+    );
+    const xTextarea = screen.getByLabelText("X post content");
+    fireEvent.change(xTextarea, { target: { value: "new-x" } });
+    expect(ref.current?.getCurrentValues()).toEqual({
+      x_post: "new-x",
+      linkedin_post: "init-li",
+      instagram_caption: "init-ig",
+      facebook_post: "init-fb",
+      threads_post: "init-th",
+    });
+  });
+
+  // AC 6: Instagram section visibility driven by connection state
+
+  it("shows Instagram section when instagram connected", () => {
+    renderEditors({ metaContext: { instagram: true } });
+    expect(screen.getByLabelText("Instagram caption content")).toBeInTheDocument();
+  });
+
+  it("hides Instagram section when instagram not connected", () => {
+    renderEditors({ metaContext: { instagram: false } });
+    expect(screen.queryByLabelText("Instagram caption content")).not.toBeInTheDocument();
+  });
+
+  it("hides Instagram section when metaContext is undefined", () => {
+    renderEditors({ metaContext: undefined });
+    expect(screen.queryByLabelText("Instagram caption content")).not.toBeInTheDocument();
+  });
+
+  it("shows Instagram section with empty textarea when caption is null but instagram connected", () => {
+    renderEditors({
+      metaContext: { instagram: true },
+      initialInstagramCaption: null,
+      imageUrl: "https://cdn.example.com/img.png",
+    });
+    const textarea = screen.getByLabelText("Instagram caption content");
+    expect(textarea).toBeInTheDocument();
+    expect(textarea).toHaveValue("");
+  });
+
+  it("shows Instagram skip warning when instagram connected and no imageUrl", () => {
     renderEditors({ imageUrl: null, metaContext: { instagram: true } });
     expect(screen.getByText(/Instagram will be skipped at publish/i)).toBeInTheDocument();
   });
@@ -162,31 +220,72 @@ describe("SocialPostEditors", () => {
     expect(screen.queryByText(/Instagram will be skipped at publish/i)).not.toBeInTheDocument();
   });
 
-  it("does not render image thumbnail when imageUrl is undefined", () => {
-    renderEditors({});
-    expect(screen.queryByRole("img", { name: "Campaign image" })).not.toBeInTheDocument();
-  });
-
   it("does not render Instagram warning when instagram is false", () => {
     renderEditors({ imageUrl: null, metaContext: { instagram: false } });
     expect(screen.queryByText(/Instagram will be skipped at publish/i)).not.toBeInTheDocument();
   });
 
-  it("getCurrentValues ref returns current textarea values", () => {
-    const ref = createRef<SocialPostEditorsHandle>();
-    render(
-      <SocialPostEditors
-        campaignId="camp-1"
-        initialXPost="init-x"
-        initialLinkedInPost="init-li"
-        ref={ref}
-      />
-    );
-    const xTextarea = screen.getByLabelText("X post content");
-    fireEvent.change(xTextarea, { target: { value: "new-x" } });
-    expect(ref.current?.getCurrentValues()).toEqual({
-      x_post: "new-x",
-      linkedin_post: "init-li",
+  it("shows Facebook section when facebook_page connected", () => {
+    renderEditors({ metaContext: { facebook_page: true } });
+    expect(screen.getByLabelText("Facebook post content")).toBeInTheDocument();
+  });
+
+  it("hides Facebook section when facebook_page not connected", () => {
+    renderEditors({ metaContext: { facebook_page: false } });
+    expect(screen.queryByLabelText("Facebook post content")).not.toBeInTheDocument();
+  });
+
+  it("shows Threads section when threads connected", () => {
+    renderEditors({ metaContext: { threads: true } });
+    expect(screen.getByLabelText("Threads post content")).toBeInTheDocument();
+  });
+
+  it("hides Threads section when threads not connected", () => {
+    renderEditors({ metaContext: { threads: false } });
+    expect(screen.queryByLabelText("Threads post content")).not.toBeInTheDocument();
+  });
+
+  it("Threads counter turns danger at >= 475 (95% of 500)", () => {
+    renderEditors({ metaContext: { threads: true } });
+    const textarea = screen.getByLabelText("Threads post content");
+    fireEvent.change(textarea, { target: { value: "a".repeat(475) } });
+    const counter = screen.getByText("475 / 500");
+    expect(counter.className).toContain("text-danger");
+  });
+
+  it("LinkedIn section no longer shows Instagram or Facebook badges", () => {
+    renderEditors({ metaContext: { instagram: true, facebook_page: true } });
+    expect(screen.queryByLabelText("Also used as Instagram caption")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Also used as Facebook Page post")).not.toBeInTheDocument();
+  });
+
+  it("X section no longer shows Threads badge", () => {
+    renderEditors({ metaContext: { threads: true } });
+    // The old badge was a span with aria-label "Also posts to Threads"
+    expect(screen.queryByLabelText("Also posts to Threads")).not.toBeInTheDocument();
+  });
+
+  it("save includes all five fields after editing instagram caption", async () => {
+    vi.mocked(campaignsApi.patch).mockResolvedValue({} as never);
+
+    renderEditors({
+      initialXPost: "x-post",
+      initialLinkedInPost: "li-post",
+      metaContext: { instagram: true },
+    });
+
+    const igTextarea = screen.getByLabelText("Instagram caption content");
+    fireEvent.change(igTextarea, { target: { value: "ig caption updated" } });
+    fireEvent.click(screen.getByRole("button", { name: /save social posts/i }));
+
+    await waitFor(() => {
+      expect(campaignsApi.patch).toHaveBeenCalledWith("camp-1", {
+        x_post: "x-post",
+        linkedin_post: "li-post",
+        instagram_caption: "ig caption updated",
+        facebook_post: "",
+        threads_post: "",
+      });
     });
   });
 });

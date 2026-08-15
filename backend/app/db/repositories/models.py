@@ -156,6 +156,9 @@ class Campaign(SQLModel, table=True):
     blog_html: Optional[str] = None
     x_post: Optional[str] = None
     linkedin_post: Optional[str] = None
+    instagram_caption: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    facebook_post: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    threads_post: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     image_url: Optional[str] = None
     image_alt: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     excerpt: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))

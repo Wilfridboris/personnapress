@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of 21-16-platform-native-social-content (2026-08-14)
+
+- `facebook_post` length inconsistency: prompt instructs LLM to write 200-800 chars but validator warns at 200-1000 — internal spec contradiction; implementation chose AC value (200-1000). Update prompt text from "200-800" to "200-1000" if alignment is desired. [gemini.py, anthropic_client.py, generation_prompts.py]
+- `handleSave` in `SocialPostEditors.tsx` sends all 5 fields including empty strings for platforms the user has not connected — functionally safe (publishing fallback treats "" as falsy), but semantically impure. Could conditionally omit fields for hidden platform sections. [frontend/components/campaigns/SocialPostEditors.tsx]
+
 ## Deferred from: code review of 21-15-social-platform-bug-fixes (2026-08-14)
 
 - Threads poll loop first-iteration 5s sleep unnecessary for TEXT containers — TEXT containers are instant; add a quick first check before sleeping, or sleep at end of loop. [backend/app/integrations/meta.py]

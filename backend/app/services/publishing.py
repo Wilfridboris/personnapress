@@ -596,34 +596,37 @@ async def dispatch_publish_for_platform(
             if not campaign.image_url:
                 logger.debug("dispatch_publish_for_platform: skipping instagram (no image_url) campaign=%s", campaign_id)
                 return {platform: "skipped"}
-            if not (campaign.linkedin_post or "").strip():
-                logger.debug("dispatch_publish_for_platform: skipping instagram (no linkedin_post for caption) campaign=%s", campaign_id)
+            resolved_caption = campaign.instagram_caption or campaign.linkedin_post
+            if not (resolved_caption or "").strip():
+                logger.debug("dispatch_publish_for_platform: skipping instagram (no caption) campaign=%s", campaign_id)
                 return {platform: "skipped"}
             await meta_integration.publish_instagram_feed_post(
                 creds["instagram_user_id"],
                 creds["page_access_token"],
                 campaign.image_url,
-                campaign.linkedin_post,
+                resolved_caption,
             )
         elif platform == "facebook_page":
-            if not (campaign.linkedin_post or "").strip():
-                logger.debug("dispatch_publish_for_platform: skipping facebook_page (no linkedin_post) campaign=%s", campaign_id)
+            resolved_message = campaign.facebook_post or campaign.linkedin_post
+            if not (resolved_message or "").strip():
+                logger.debug("dispatch_publish_for_platform: skipping facebook_page (no message) campaign=%s", campaign_id)
                 return {platform: "skipped"}
             await meta_integration.publish_facebook_page_post(
                 creds["page_id"],
                 creds["page_access_token"],
-                campaign.linkedin_post,
+                resolved_message,
                 campaign.image_url or None,
             )
         elif platform == "threads":
             creds = await _refresh_threads_token_if_needed(creds, db, campaign.client_id)
-            if not (campaign.x_post or "").strip():
-                logger.debug("dispatch_publish_for_platform: skipping threads (no x_post) campaign=%s", campaign_id)
+            resolved_text = campaign.threads_post or campaign.x_post
+            if not (resolved_text or "").strip():
+                logger.debug("dispatch_publish_for_platform: skipping threads (no text) campaign=%s", campaign_id)
                 return {platform: "skipped"}
             await meta_integration.publish_threads_post(
                 creds["threads_user_id"],
                 creds["user_access_token"],
-                campaign.x_post,
+                resolved_text,
                 image_url=campaign.image_url or None,
             )
         elif platform == "github_pages":
@@ -773,39 +776,42 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                     logger.debug("dispatch_publish: skipping instagram (no image_url) campaign=%s", campaign_id)
                     results[platform] = "skipped"
                     continue
-                if not (campaign.linkedin_post or "").strip():
-                    logger.debug("dispatch_publish: skipping instagram (no linkedin_post for caption) campaign=%s", campaign_id)
+                resolved_caption = campaign.instagram_caption or campaign.linkedin_post
+                if not (resolved_caption or "").strip():
+                    logger.debug("dispatch_publish: skipping instagram (no caption) campaign=%s", campaign_id)
                     results[platform] = "skipped"
                     continue
                 await meta_integration.publish_instagram_feed_post(
                     creds["instagram_user_id"],
                     creds["page_access_token"],
                     campaign.image_url,
-                    campaign.linkedin_post,
+                    resolved_caption,
                 )
 
             elif platform == "facebook_page":
-                if not (campaign.linkedin_post or "").strip():
-                    logger.debug("dispatch_publish: skipping facebook_page (no linkedin_post) campaign=%s", campaign_id)
+                resolved_message = campaign.facebook_post or campaign.linkedin_post
+                if not (resolved_message or "").strip():
+                    logger.debug("dispatch_publish: skipping facebook_page (no message) campaign=%s", campaign_id)
                     results[platform] = "skipped"
                     continue
                 await meta_integration.publish_facebook_page_post(
                     creds["page_id"],
                     creds["page_access_token"],
-                    campaign.linkedin_post,
+                    resolved_message,
                     campaign.image_url or None,
                 )
 
             elif platform == "threads":
                 creds = await _refresh_threads_token_if_needed(creds, db, campaign.client_id)
-                if not (campaign.x_post or "").strip():
-                    logger.debug("dispatch_publish: skipping threads (no x_post) campaign=%s", campaign_id)
+                resolved_text = campaign.threads_post or campaign.x_post
+                if not (resolved_text or "").strip():
+                    logger.debug("dispatch_publish: skipping threads (no text) campaign=%s", campaign_id)
                     results[platform] = "skipped"
                     continue
                 await meta_integration.publish_threads_post(
                     creds["threads_user_id"],
                     creds["user_access_token"],
-                    campaign.x_post,
+                    resolved_text,
                     image_url=campaign.image_url or None,
                 )
 

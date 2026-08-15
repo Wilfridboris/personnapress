@@ -192,6 +192,9 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
         campaign.voice_score = voice_score
         campaign.x_post = social["x_post"]
         campaign.linkedin_post = social["linkedin_post"]
+        campaign.instagram_caption = social.get("instagram_caption")
+        campaign.facebook_post = social.get("facebook_post")
+        campaign.threads_post = social.get("threads_post")
 
         # ── Step 5: Single atomic DB write ────────────────────────────────────
         await db.commit()
@@ -262,6 +265,24 @@ async def generate_social_only(
             logger.error("generate_social_only: empty linkedin_post from LLM for campaign %s", campaign_id)
             raise ValueError("LLM returned empty linkedin_post content")
         campaign.linkedin_post = post_content
+    elif platform == "instagram":
+        post_content = social.get("instagram_caption")
+        if not post_content:
+            logger.error("generate_social_only: empty instagram_caption from LLM for campaign %s", campaign_id)
+            raise ValueError("LLM returned empty instagram_caption content")
+        campaign.instagram_caption = post_content
+    elif platform == "facebook_page":
+        post_content = social.get("facebook_post")
+        if not post_content:
+            logger.error("generate_social_only: empty facebook_post from LLM for campaign %s", campaign_id)
+            raise ValueError("LLM returned empty facebook_post content")
+        campaign.facebook_post = post_content
+    elif platform == "threads":
+        post_content = social.get("threads_post")
+        if not post_content:
+            logger.error("generate_social_only: empty threads_post from LLM for campaign %s", campaign_id)
+            raise ValueError("LLM returned empty threads_post content")
+        campaign.threads_post = post_content
     else:
         logger.error("generate_social_only: unknown platform %r for campaign %s", platform, campaign_id)
         return
@@ -324,6 +345,9 @@ async def run_social_only_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
 
         campaign.x_post = x_post
         campaign.linkedin_post = linkedin_post
+        campaign.instagram_caption = social.get("instagram_caption")
+        campaign.facebook_post = social.get("facebook_post")
+        campaign.threads_post = social.get("threads_post")
         campaign.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await db.commit()
 

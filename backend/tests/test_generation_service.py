@@ -25,6 +25,9 @@ def _make_campaign(client_id=None, target_keyword=None, target_audience=None):
     campaign.voice_score = None
     campaign.x_post = None
     campaign.linkedin_post = None
+    campaign.instagram_caption = None
+    campaign.facebook_post = None
+    campaign.threads_post = None
     campaign.target_keyword = target_keyword
     campaign.target_audience = target_audience
     return campaign
@@ -81,7 +84,13 @@ _VOICE_SCORE = {
     "seo_faq_present": True,
     "seo_fluff_detected": False,
 }
-_SOCIAL = {"x_post": "Tweet!", "linkedin_post": "LinkedIn post " * 40}
+_SOCIAL = {
+    "x_post": "Tweet!",
+    "linkedin_post": "LinkedIn post " * 40,
+    "instagram_caption": "Instagram caption with hashtags #test #social",
+    "facebook_post": "Facebook post content for the campaign",
+    "threads_post": "Threads hot take right here.",
+}
 
 
 @pytest.mark.asyncio
@@ -108,6 +117,9 @@ async def test_happy_path_all_fields_updated(mock_gemini, mock_logs_repo):
     assert campaign.voice_score == _VOICE_SCORE
     assert campaign.x_post == "Tweet!"
     assert campaign.linkedin_post == _SOCIAL["linkedin_post"]
+    assert campaign.instagram_caption == _SOCIAL["instagram_caption"]
+    assert campaign.facebook_post == _SOCIAL["facebook_post"]
+    assert campaign.threads_post == _SOCIAL["threads_post"]
     # Job must still be in_progress (not complete) after text generation
     assert job.status == "in_progress"
 
@@ -337,6 +349,9 @@ def _make_campaign_for_social(client_id=None):
     campaign.brain_dump = "Social-only brain dump"
     campaign.x_post = None
     campaign.linkedin_post = None
+    campaign.instagram_caption = None
+    campaign.facebook_post = None
+    campaign.threads_post = None
     campaign.updated_at = None
     return campaign
 
@@ -364,7 +379,13 @@ async def test_generate_social_only_x_platform_writes_x_post(mock_llm):
     db = _make_db_for_social(campaign)
 
     mock_llm.generate_social_standalone = AsyncMock(
-        return_value={"x_post": "Great X post!", "linkedin_post": "LinkedIn post " * 55}
+        return_value={
+            "x_post": "Great X post!",
+            "linkedin_post": "LinkedIn post " * 55,
+            "instagram_caption": "Instagram caption #test",
+            "facebook_post": "Facebook post content",
+            "threads_post": "Threads hot take.",
+        }
     )
 
     await generate_social_only("brain dump", _BVP, "x", campaign.id, db)
@@ -386,7 +407,13 @@ async def test_generate_social_only_linkedin_platform_writes_linkedin_post(mock_
 
     linkedin_text = "LinkedIn standalone post. " * 55
     mock_llm.generate_social_standalone = AsyncMock(
-        return_value={"x_post": "Some X post.", "linkedin_post": linkedin_text}
+        return_value={
+            "x_post": "Some X post.",
+            "linkedin_post": linkedin_text,
+            "instagram_caption": "Instagram caption #test",
+            "facebook_post": "Facebook post content",
+            "threads_post": "Threads hot take.",
+        }
     )
 
     await generate_social_only("brain dump", _BVP, "linkedin", campaign.id, db)
@@ -407,10 +434,22 @@ async def test_generate_social_only_does_not_call_generate_social(mock_llm):
     db = _make_db_for_social(campaign)
 
     mock_llm.generate_social_standalone = AsyncMock(
-        return_value={"x_post": "Tweet!", "linkedin_post": "LinkedIn post " * 55}
+        return_value={
+            "x_post": "Tweet!",
+            "linkedin_post": "LinkedIn post " * 55,
+            "instagram_caption": "Instagram caption #test",
+            "facebook_post": "Facebook post content",
+            "threads_post": "Threads hot take.",
+        }
     )
     mock_llm.generate_social = AsyncMock(
-        return_value={"x_post": "Should not be called", "linkedin_post": ""}
+        return_value={
+            "x_post": "Should not be called",
+            "linkedin_post": "",
+            "instagram_caption": "",
+            "facebook_post": "",
+            "threads_post": "",
+        }
     )
 
     await generate_social_only("brain dump", _BVP, "x", campaign.id, db)
@@ -459,13 +498,22 @@ async def test_run_social_only_pipeline_success(mock_llm):
     db = _make_db_social_only(job, campaign, client)
 
     mock_llm.generate_social_standalone = AsyncMock(
-        return_value={"x_post": "Tweet!", "linkedin_post": "LinkedIn post " * 40}
+        return_value={
+            "x_post": "Tweet!",
+            "linkedin_post": "LinkedIn post " * 40,
+            "instagram_caption": "Instagram caption #test",
+            "facebook_post": "Facebook post content",
+            "threads_post": "Threads hot take.",
+        }
     )
 
     await run_social_only_pipeline(job.id, db)
 
     assert campaign.x_post == "Tweet!"
     assert campaign.linkedin_post == "LinkedIn post " * 40
+    assert campaign.instagram_caption == "Instagram caption #test"
+    assert campaign.facebook_post == "Facebook post content"
+    assert campaign.threads_post == "Threads hot take."
     assert job.status == "in_progress"
     mock_llm.generate_social_standalone.assert_called_once()
 
@@ -483,7 +531,13 @@ async def test_run_social_only_pipeline_empty_x_post(mock_llm, mock_sentry):
     db = _make_db_social_only(job, campaign, client)
 
     mock_llm.generate_social_standalone = AsyncMock(
-        return_value={"x_post": "", "linkedin_post": "LinkedIn post " * 40}
+        return_value={
+            "x_post": "",
+            "linkedin_post": "LinkedIn post " * 40,
+            "instagram_caption": "ig",
+            "facebook_post": "fb",
+            "threads_post": "th",
+        }
     )
 
     await run_social_only_pipeline(job.id, db)
@@ -506,7 +560,13 @@ async def test_run_social_only_pipeline_empty_linkedin_post(mock_llm, mock_sentr
     db = _make_db_social_only(job, campaign, client)
 
     mock_llm.generate_social_standalone = AsyncMock(
-        return_value={"x_post": "Tweet!", "linkedin_post": ""}
+        return_value={
+            "x_post": "Tweet!",
+            "linkedin_post": "",
+            "instagram_caption": "ig",
+            "facebook_post": "fb",
+            "threads_post": "th",
+        }
     )
 
     await run_social_only_pipeline(job.id, db)
@@ -528,7 +588,13 @@ async def test_run_social_only_pipeline_leaves_job_in_progress(mock_llm):
     db = _make_db_social_only(job, campaign, client)
 
     mock_llm.generate_social_standalone = AsyncMock(
-        return_value={"x_post": "x", "linkedin_post": "li"}
+        return_value={
+            "x_post": "x",
+            "linkedin_post": "li",
+            "instagram_caption": "ig",
+            "facebook_post": "fb",
+            "threads_post": "th",
+        }
     )
 
     await run_social_only_pipeline(job.id, db)
@@ -775,3 +841,133 @@ async def test_fidelity_failure_in_gather_fails_job(mock_gemini, mock_logs_repo,
 
     assert job.status == "failed"
     mock_sentry.capture_exception.assert_called_once()
+
+
+# ── AC 3: platform-native social fields saved in both pipelines ───────────────
+
+@pytest.mark.asyncio
+@patch("app.services.generation.generation_logs_repo")
+@patch("app.services.generation._llm")
+async def test_run_generation_pipeline_saves_all_five_social_fields(mock_llm, mock_logs_repo):
+    """run_generation_pipeline saves all five social fields from LLM response."""
+    from app.services.generation import run_generation_pipeline
+
+    job_id = uuid.uuid4()
+    campaign = _make_campaign()
+    client = _make_client(bvp=_BVP)
+    job = _make_job(campaign_id=campaign.id)
+
+    mock_llm.generate_blog = AsyncMock(return_value=_BLOG_HTML)
+    mock_llm.check_fidelity = AsyncMock(return_value=_VOICE_SCORE)
+    mock_llm.generate_social = AsyncMock(return_value=_SOCIAL)
+    mock_logs_repo.create_generation_log = AsyncMock()
+
+    db = _make_db(job, campaign, client)
+    await run_generation_pipeline(job_id, db)
+
+    assert campaign.x_post == _SOCIAL["x_post"]
+    assert campaign.linkedin_post == _SOCIAL["linkedin_post"]
+    assert campaign.instagram_caption == _SOCIAL["instagram_caption"]
+    assert campaign.facebook_post == _SOCIAL["facebook_post"]
+    assert campaign.threads_post == _SOCIAL["threads_post"]
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation._llm")
+async def test_run_social_only_pipeline_saves_all_five_social_fields(mock_llm):
+    """run_social_only_pipeline saves all five social fields from LLM response."""
+    from app.services.generation import run_social_only_pipeline
+
+    job = _make_job()
+    campaign = _make_campaign()
+    client = _make_client(bvp=_BVP)
+    db = _make_db_social_only(job, campaign, client)
+
+    mock_llm.generate_social_standalone = AsyncMock(return_value={
+        "x_post": "Tweet!",
+        "linkedin_post": "LinkedIn post " * 40,
+        "instagram_caption": "IG caption #hashtag #test",
+        "facebook_post": "Facebook post content here",
+        "threads_post": "Threads hot take.",
+    })
+
+    await run_social_only_pipeline(job.id, db)
+
+    assert campaign.instagram_caption == "IG caption #hashtag #test"
+    assert campaign.facebook_post == "Facebook post content here"
+    assert campaign.threads_post == "Threads hot take."
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation._llm")
+async def test_generate_social_only_instagram_platform(mock_llm):
+    """generate_social_only with instagram platform writes instagram_caption."""
+    from app.services.generation import generate_social_only
+
+    campaign = _make_campaign_for_social()
+    db = _make_db_for_social(campaign)
+
+    mock_llm.generate_social_standalone = AsyncMock(return_value={
+        "x_post": "Tweet!",
+        "linkedin_post": "LinkedIn post " * 40,
+        "instagram_caption": "IG caption #hashtag",
+        "facebook_post": "Facebook post",
+        "threads_post": "Threads take.",
+    })
+
+    await generate_social_only("brain dump", _BVP, "instagram", campaign.id, db)
+
+    assert campaign.instagram_caption == "IG caption #hashtag"
+    assert campaign.x_post is None
+    assert campaign.linkedin_post is None
+    db.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation._llm")
+async def test_generate_social_only_facebook_page_platform(mock_llm):
+    """generate_social_only with facebook_page platform writes facebook_post."""
+    from app.services.generation import generate_social_only
+
+    campaign = _make_campaign_for_social()
+    db = _make_db_for_social(campaign)
+
+    mock_llm.generate_social_standalone = AsyncMock(return_value={
+        "x_post": "Tweet!",
+        "linkedin_post": "LinkedIn post " * 40,
+        "instagram_caption": "IG caption",
+        "facebook_post": "Facebook post content",
+        "threads_post": "Threads take.",
+    })
+
+    await generate_social_only("brain dump", _BVP, "facebook_page", campaign.id, db)
+
+    assert campaign.facebook_post == "Facebook post content"
+    assert campaign.x_post is None
+    assert campaign.linkedin_post is None
+    db.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation._llm")
+async def test_generate_social_only_threads_platform(mock_llm):
+    """generate_social_only with threads platform writes threads_post."""
+    from app.services.generation import generate_social_only
+
+    campaign = _make_campaign_for_social()
+    db = _make_db_for_social(campaign)
+
+    mock_llm.generate_social_standalone = AsyncMock(return_value={
+        "x_post": "Tweet!",
+        "linkedin_post": "LinkedIn post " * 40,
+        "instagram_caption": "IG caption",
+        "facebook_post": "Facebook post",
+        "threads_post": "Threads hot take right here.",
+    })
+
+    await generate_social_only("brain dump", _BVP, "threads", campaign.id, db)
+
+    assert campaign.threads_post == "Threads hot take right here."
+    assert campaign.x_post is None
+    assert campaign.linkedin_post is None
+    db.commit.assert_called_once()

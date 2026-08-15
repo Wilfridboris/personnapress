@@ -187,6 +187,9 @@ export interface Campaign {
   blog_html: string | null;
   x_post: string | null;
   linkedin_post: string | null;
+  instagram_caption: string | null;
+  facebook_post: string | null;
+  threads_post: string | null;
   image_url: string | null;
   image_alt: string | null;
   status: CampaignStatus;
