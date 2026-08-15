@@ -128,6 +128,51 @@ async def test_run_publish_skipped_platform_does_not_fail_job():
     assert complete_call is not None, "update_job should have been called with status='complete'"
 
 
+async def test_run_publish_success_text_only_marks_published():
+    """X returns success_text_only (image 503 fallback) + others succeed → campaign published, not failed."""
+    from app.workers.publish import run_publish
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    campaign = _make_campaign(campaign_id=campaign_id)
+
+    mock_update_campaign_status = AsyncMock()
+    mock_update_job = AsyncMock()
+
+    with (
+        patch("app.workers.publish.get_session_context") as mock_ctx,
+        patch("app.workers.publish.update_job", mock_update_job),
+        patch("app.workers.publish.dispatch_publish", AsyncMock(return_value={
+            "x": "success_text_only",
+            "facebook_page": "success",
+            "threads": "success",
+            "instagram": "success",
+        })),
+        patch("app.workers.publish.update_campaign_status", mock_update_campaign_status),
+        patch("app.workers.publish.update_campaign_scheduled_at", AsyncMock()),
+        patch("app.workers.publish.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.workers.publish.create_or_update_article_from_campaign", AsyncMock()),
+    ):
+        db = AsyncMock()
+        db.__aenter__ = AsyncMock(return_value=db)
+        db.__aexit__ = AsyncMock(return_value=False)
+        mock_ctx.return_value = db
+
+        await run_publish(job_id, campaign_id)
+
+    mock_update_campaign_status.assert_called_with(db, campaign_id, "published")
+    complete_call = next(
+        (c for c in mock_update_job.call_args_list if c.kwargs.get("status") == "complete"),
+        None,
+    )
+    assert complete_call is not None, "update_job should have been called with status='complete'"
+    failed_call = next(
+        (c for c in mock_update_job.call_args_list if c.kwargs.get("status") == "failed"),
+        None,
+    )
+    assert failed_call is None, "update_job must NOT be called with status='failed' when X falls back to text-only"
+
+
 async def test_run_publish_all_skipped_marks_failed():
     """All platforms skipped → campaign stays failed (nothing was published)."""
     from app.workers.publish import run_publish
