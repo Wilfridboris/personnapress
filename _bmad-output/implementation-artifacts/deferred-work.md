@@ -1,5 +1,15 @@
 # Deferred Work
 
+## Deferred from: code review of 23-1-brand-voice-generator-feature-page (2026-08-15)
+
+- `FaqAccordion` `aria-controls` references non-existent DOM id when panel is closed — pre-existing bug in `frontend/app/_components/FaqAccordion.tsx:25,37`; fix requires always-rendering the panel with `hidden` instead of conditional render
+- `sitemap.ts` fallback `"https://personnapress.com"` diverges from `page.tsx` fallback `"https://www.personnapress.com"` — canonical vs sitemap URL mismatch when `NEXT_PUBLIC_APP_URL` is unset; pre-existing in sitemap.ts
+- SoftwareApplication JSON-LD `price: "0"` on paid SaaS — may display as free in Google rich results; spec-defined (AC 3); requires product decision to change
+- Page title "Brand Voice Generator | PersonnaPress - Extract Your Voice, Keep It Everywhere" is 82 chars — exceeds ~60-char SERP display limit; spec-defined (AC 2)
+- `sitemap.ts` uses `lastModified: new Date()` for force-static page — signals re-crawl on every sitemap request; pre-existing pattern for all entries
+- `NEXT_PUBLIC_APP_URL` as runtime env var silently bakes fallback at build time with no warning; pre-existing across all public pages
+- FAQ JSON-LD answers always present in structured data but absent from DOM when panels closed — potential Google rich-result mismatch; pre-existing FaqAccordion behavior; Google processes JS-rendered content
+
 ## Deferred from: code review of 3-27-image-prompt-enrichment (2026-08-15)
 
 - Duplicate social fallback logic in `run_image_generation` and `regenerate_image` — extract `_derive_social_title(campaign)` helper; pre-existing pattern, DRY improvement. [backend/app/services/image.py:198-206, 390-397]
