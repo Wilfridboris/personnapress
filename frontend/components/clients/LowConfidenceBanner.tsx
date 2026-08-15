@@ -15,7 +15,7 @@ export function LowConfidenceBanner({ onAddContent }: Props) {
       <div className="flex items-start gap-3 flex-1">
         <AlertTriangle size={16} className="text-[#F59E0B] mt-0.5 shrink-0" aria-hidden="true" />
         <p className="text-sm text-[#111111]">
-          Your voice profile was built from limited content -- fewer than 300 words were analysed.
+          Your voice profile was built from limited content; fewer than 300 words were analysed.
           Add more writing samples for a more accurate voice match.
         </p>
       </div>

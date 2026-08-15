@@ -122,11 +122,11 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
             {isLowConfidence && (
               <Link
                 href={`/clients/${campaign.client_id}/voice`}
-                aria-label={`View voice profile for ${clientName} -- accuracy may vary due to limited samples`}
+                aria-label={`View voice profile for ${clientName}, accuracy may vary due to limited samples`}
                 className="flex items-center gap-1 text-xs text-[#555555] hover:text-[#111111] transition-colors duration-150 mt-1 focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-1"
               >
                 <Info size={12} aria-hidden="true" />
-                Voice profile built from limited samples -- accuracy may vary.
+                Voice profile built from limited samples, accuracy may vary.
               </Link>
             )}
           </div>

@@ -593,7 +593,7 @@ export function OnboardingFlow() {
             {linkCount > 0 && (
               <p className="flex items-center gap-1 text-xs font-mono text-sky-600 mt-1">
                 <LinkIcon size={12} aria-hidden="true" />
-                {linkCount === 1 ? "1 link detected" : `${linkCount} links detected`} -- will be cited in your article
+                {linkCount === 1 ? "1 link detected" : `${linkCount} links detected`}, will be cited in your article
               </p>
             )}
           </div>

@@ -433,7 +433,7 @@ export function PlanMyWeekClient() {
           ref={textareaRef}
           value={brainDump}
           onChange={(e) => setBrainDump(e.target.value.slice(0, MAX_CHARS))}
-          placeholder="Paste your raw ideas here -- voice note transcript, rough bullets, half-finished thoughts. No structure needed."
+          placeholder="Paste your raw ideas here: voice note transcript, rough bullets, half-finished thoughts. No structure needed."
           className={cn(
             "w-full bg-transparent resize-none font-mono text-sm text-ink leading-[1.7]",
             "border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink",

@@ -154,7 +154,7 @@ function ComputedMetricsRow({ bvp }: ComputedMetricsRowProps) {
       <div className="flex items-center gap-1.5 mb-3">
         <Lock size={12} className="text-[#555555]" aria-hidden="true" />
         <span className="text-[11px] uppercase tracking-[0.06em] text-[#555555]">
-          Computed from your writing -- not editable
+          Computed from your writing, not editable
         </span>
       </div>
       <div className="flex flex-wrap gap-2">
