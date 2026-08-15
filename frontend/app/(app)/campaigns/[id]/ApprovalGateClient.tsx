@@ -46,9 +46,7 @@ function parseErrorDetails(raw: string | null | undefined): Record<string, strin
 function getCampaignTitle(campaign: Campaign): string {
   if (campaign.blog_html) return "Campaign";
   if (campaign.roadmap_id || campaign.campaign_type === "social_only") {
-    if (campaign.x_post) return "X Post";
-    if (campaign.linkedin_post) return "LinkedIn Post";
-    return "Social Post";
+    return "Social Campaign";
   }
   return "Generating...";
 }

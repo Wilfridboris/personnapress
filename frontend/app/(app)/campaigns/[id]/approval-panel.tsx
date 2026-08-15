@@ -578,7 +578,7 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
           setClientHasPlatforms(null);
           const jobResults = (() => { try { return JSON.parse(job.error_details ?? "{}"); } catch { return {}; } })();
           const resultValues = Object.values(jobResults) as string[];
-          const nonSkippedValues = resultValues.filter((v) => v !== "skipped");
+          const nonSkippedValues = resultValues.filter((v) => v !== "skipped" && v !== "success_text_only");
           const allAlready = nonSkippedValues.length > 0 && nonSkippedValues.every((v) => v === "already_published");
           const skipped = (Object.entries(jobResults) as [string, string][])
             .filter(([, v]) => v === "skipped")
@@ -588,6 +588,9 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
             ? `${baseMsg} ${skipped.join(", ")} skipped - no content or image for that platform.`
             : baseMsg;
           addToast(toastMsg, "success");
+          if ((jobResults as Record<string, string>)["x"] === "success_text_only") {
+            addToast("X post published -- image could not be attached.", "info");
+          }
           router.push("/dashboard");
         } else if (job.status === "failed") {
           clearInterval(interval);

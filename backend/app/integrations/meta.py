@@ -184,19 +184,31 @@ async def publish_facebook_page_post(
     message: str,
     image_url: Optional[str] = None,
 ) -> str:
-    """Post to a Facebook Page feed. Returns post ID."""
-    payload: dict = {
-        "message": (message or ""),
-        "access_token": page_access_token,
-    }
-    if image_url:
-        payload["link"] = image_url
+    """Post to a Facebook Page. Returns post ID.
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(
-            f"{META_GRAPH_BASE}/{page_id}/feed",
-            data=payload,
-        )
+    With image: POST /{page_id}/photos (url + caption + published=true).
+    Text only: POST /{page_id}/feed (message only, no link field).
+    """
+    if image_url:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"{META_GRAPH_BASE}/{page_id}/photos",
+                data={
+                    "url": image_url,
+                    "caption": (message or ""),
+                    "published": "true",
+                    "access_token": page_access_token,
+                },
+            )
+    else:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"{META_GRAPH_BASE}/{page_id}/feed",
+                data={
+                    "message": (message or ""),
+                    "access_token": page_access_token,
+                },
+            )
     if resp.status_code == 429:
         raise PlatformError("facebook_page", 429, "Facebook Page rate limit reached")
     if resp.status_code == 401:
@@ -205,7 +217,7 @@ async def publish_facebook_page_post(
         raise PlatformError("facebook_page", resp.status_code, _extract_error(resp))
     post_id = resp.json().get("id", "")
     if not post_id:
-        raise PlatformError("facebook_page", 200, "feed post returned no id")
+        raise PlatformError("facebook_page", 200, "post returned no id")
     return post_id
 
 
@@ -213,16 +225,26 @@ async def publish_threads_post(
     threads_user_id: str,
     user_access_token: str,
     text: str,
+    image_url: Optional[str] = None,
 ) -> str:
-    """Create and publish a Threads text post. Returns Threads post ID."""
+    """Create and publish a Threads post. Returns Threads post ID.
+
+    With image_url: IMAGE container. Without: TEXT container.
+    """
+    container_data: dict = {
+        "text": (text or ""),
+        "access_token": user_access_token,
+    }
+    if image_url:
+        container_data["media_type"] = "IMAGE"
+        container_data["image_url"] = image_url
+    else:
+        container_data["media_type"] = "TEXT"
+
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
             f"{THREADS_GRAPH_BASE}/{threads_user_id}/threads",
-            data={
-                "media_type": "TEXT",
-                "text": (text or ""),
-                "access_token": user_access_token,
-            },
+            data=container_data,
         )
     if resp.status_code != 200:
         raise PlatformError("threads", resp.status_code, _extract_error(resp))
@@ -230,8 +252,27 @@ async def publish_threads_post(
     if not container_id:
         raise PlatformError("threads", 200, "threads container creation returned no id")
 
-    # The Threads API requires ~30s for the server to process the container before publishing.
-    await asyncio.sleep(30)
+    # Poll for container readiness. TEXT containers are instant; IMAGE containers take 5-60s.
+    for _ in range(15):
+        await asyncio.sleep(5)
+        async with httpx.AsyncClient(timeout=10.0) as status_client:
+            status_resp = await status_client.get(
+                f"{THREADS_GRAPH_BASE}/{container_id}",
+                params={"fields": "status,error_message", "access_token": user_access_token},
+            )
+        if status_resp.status_code != 200:
+            raise PlatformError("threads", status_resp.status_code, _extract_error(status_resp))
+        status_data = status_resp.json()
+        status = status_data.get("status", "")
+        if status == "FINISHED":
+            break
+        if status == "ERROR":
+            raise PlatformError(
+                "threads", 500,
+                f"Threads container processing failed: {status_data.get('error_message', 'unknown error')}",
+            )
+    else:
+        raise PlatformError("threads", 500, "Threads container did not finish processing after 75s")
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         pub_resp = await client.post(

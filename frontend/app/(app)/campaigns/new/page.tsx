@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronDown, ChevronUp, Feather, FileText, Lightbulb, Link as LinkIcon, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { useClientStore } from "@/lib/stores/useClientStore";
@@ -75,6 +75,7 @@ function resizeTextarea(ta: HTMLTextAreaElement, maxH: number) {
 
 export default function NewCampaignPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { clients, activeClientId, isInitialized } = useClientStore();
   const showUpgradePrompt = useUIStore((s) => s.showUpgradePrompt);
   const activeClient = clients.find((c) => c.id === activeClientId) ?? null;
@@ -283,6 +284,7 @@ export default function NewCampaignPage() {
       setIsSubmitting(false);
       if (activeClientId) localStorage.removeItem(DRAFT_KEY(activeClientId));
       router.push(`/campaigns/${data.campaign_id}?job_id=${data.job_id}`);
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
     } catch (err: unknown) {
       if (err instanceof APIError && err.code === "TRIAL_EXPIRED") {
         showUpgradePrompt(err.message);

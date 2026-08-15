@@ -135,7 +135,43 @@ async def test_image_limit_reached_job_complete_image_url_null(
 
     assert campaign.image_url is None
     assert job.status == "complete"
+    assert job.error_details is not None
+    assert "image generation skipped" in job.error_details.lower()
     mock_img.generate_image.assert_not_called()
+
+
+@pytest.mark.asyncio
+@patch("app.services.image.supabase_storage")
+@patch("app.services.image.subscription_service")
+@patch("app.services.image._img")
+async def test_run_image_generation_limit_reached_sets_error_details(
+    mock_img, mock_sub_svc, mock_storage
+):
+    """Image limit reached: job.error_details contains 'image generation skipped' before commit."""
+    from app.services.image import run_image_generation
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    campaign = _make_campaign()
+    campaign.id = campaign_id
+    job = _make_job(campaign_id=campaign_id)
+    client = _make_client()
+    db = _make_db(job, campaign, client)
+
+    mock_sub_svc.check_image_limit = AsyncMock(
+        side_effect=HTTPException(
+            status_code=400,
+            detail={"error": {"code": "IMAGE_LIMIT_EXCEEDED", "message": "limit", "detail": {}}},
+        )
+    )
+
+    await run_image_generation(campaign_id, job_id, db)
+
+    assert job.status == "complete"
+    assert job.error_details is not None
+    assert "image generation skipped" in job.error_details.lower()
+    assert "billing cycle" in job.error_details.lower()
+    db.commit.assert_called()
 
 
 @pytest.mark.asyncio
@@ -517,3 +553,60 @@ async def test_generate_with_retry_timeout_is_treated_as_failure(mock_img):
             await _generate_with_retry("test prompt", max_retries=2)
 
     assert mock_img.generate_image.call_count == 2
+
+
+# ── _generate_with_retry jitter tests ─────────────────────────────────────────
+
+@pytest.mark.asyncio
+@patch("app.services.image.random.uniform")
+@patch("app.services.image._img")
+async def test_generate_with_retry_first_retry_sleeps_with_jitter(mock_img, mock_uniform):
+    """First retry sleep = 8 * 2^0 * jitter where jitter = random.uniform(0.8, 1.2)."""
+    from app.services.image import _generate_with_retry
+
+    mock_img.generate_image = AsyncMock(
+        side_effect=[RuntimeError("timeout"), "https://replicate.delivery/image.png"]
+    )
+    mock_uniform.return_value = 1.1
+
+    sleep_calls = []
+    async def fake_sleep(duration):
+        sleep_calls.append(duration)
+
+    with patch("app.services.image.asyncio.sleep", side_effect=fake_sleep):
+        result = await _generate_with_retry("prompt", max_retries=3)
+
+    assert result == "https://replicate.delivery/image.png"
+    assert len(sleep_calls) == 1
+    mock_uniform.assert_called_once_with(0.8, 1.2)
+    expected = 8 * (2 ** 0) * 1.1
+    assert abs(sleep_calls[0] - expected) < 0.001
+
+
+@pytest.mark.asyncio
+@patch("app.services.image.random.uniform")
+@patch("app.services.image._img")
+async def test_generate_with_retry_second_retry_uses_doubled_base(mock_img, mock_uniform):
+    """Second retry sleep = 8 * 2^1 * jitter (16s base)."""
+    from app.services.image import _generate_with_retry
+
+    mock_img.generate_image = AsyncMock(
+        side_effect=[
+            RuntimeError("first fail"),
+            RuntimeError("second fail"),
+            "https://replicate.delivery/image.png",
+        ]
+    )
+    mock_uniform.return_value = 0.9
+
+    sleep_calls = []
+    async def fake_sleep(duration):
+        sleep_calls.append(duration)
+
+    with patch("app.services.image.asyncio.sleep", side_effect=fake_sleep):
+        result = await _generate_with_retry("prompt", max_retries=3)
+
+    assert result == "https://replicate.delivery/image.png"
+    assert len(sleep_calls) == 2
+    expected_second = 8 * (2 ** 1) * 0.9
+    assert abs(sleep_calls[1] - expected_second) < 0.001

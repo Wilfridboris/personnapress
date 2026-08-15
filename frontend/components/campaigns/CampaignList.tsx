@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, ChevronLeft, ChevronRight, Map as MapIcon } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, ImageOff, Loader2, Map as MapIcon } from "lucide-react";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { usePlatformConnections } from "@/hooks/usePlatformConnections";
 import { useClientStore } from "@/lib/stores/useClientStore";
@@ -140,7 +140,31 @@ export function CampaignList({ basePath = "/dashboard" }: { basePath?: string })
                   <p className="text-xs text-graphite font-mono">{formatDate(campaign.created_at)}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 ml-4 shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <StatusBadge status={campaign.status} />
+                  {(campaign.generation_job_status === "pending" || campaign.generation_job_status === "in_progress") ? (
+                    <span
+                      role="status"
+                      aria-label="Campaign is being generated"
+                      className="inline-flex items-center gap-1.5 border border-ink/25 px-2 py-0.5 font-mono text-xs text-graphite"
+                    >
+                      <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+                      Generating
+                    </span>
+                  ) : (
+                    <StatusBadge status={campaign.status} />
+                  )}
+                  {campaign.generation_job_status === "complete"
+                    && !campaign.image_url
+                    && !campaign.skip_image
+                    && campaign.campaign_type !== "social_only" && (
+                    <span
+                      aria-label="Featured image could not be generated"
+                      title="Featured image could not be generated"
+                      className="inline-flex items-center gap-1 border border-[#E5E5E5] px-1.5 py-0.5 font-mono text-[10px] text-graphite/60"
+                    >
+                      <ImageOff className="size-3" aria-hidden="true" />
+                      No image
+                    </span>
+                  )}
                   {campaign.roadmap_id && (
                     <Link
                       href={`/roadmap/${campaign.roadmap_id}/review`}

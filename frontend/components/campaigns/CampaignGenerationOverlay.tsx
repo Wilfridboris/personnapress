@@ -78,6 +78,7 @@ export function CampaignGenerationOverlay({
   useEffect(() => {
     if (job?.status === "complete" || job?.status === "completed") {
       queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
       const timer = setTimeout(() => {
         router.replace(`/campaigns/${campaignId}`);
       }, 1500);

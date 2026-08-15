@@ -710,3 +710,68 @@ async def test_run_generation_social_only_skip_image_true_skips_image_generation
     mock_image.assert_not_called()
     assert in_progress_job.status == "complete"
     assert in_progress_job.completed_at is not None
+
+
+# ── AC 6: fidelity + social run in parallel via asyncio.gather ────────────────
+
+@pytest.mark.asyncio
+@patch("app.services.generation.generation_logs_repo")
+@patch("app.services.generation._llm")
+async def test_fidelity_and_social_called_via_gather(mock_gemini, mock_logs_repo):
+    """check_fidelity and generate_social are both called; neither is ordered relative to the other."""
+    from app.services.generation import run_generation_pipeline
+
+    job_id = uuid.uuid4()
+    campaign = _make_campaign()
+    client = _make_client(bvp=_BVP)
+    job = _make_job(campaign_id=campaign.id)
+
+    call_order = []
+
+    async def fake_check_fidelity(*args, **kwargs):
+        call_order.append("fidelity")
+        return _VOICE_SCORE
+
+    async def fake_generate_social(*args, **kwargs):
+        call_order.append("social")
+        return _SOCIAL
+
+    mock_gemini.generate_blog = AsyncMock(return_value=_BLOG_HTML)
+    mock_gemini.check_fidelity = fake_check_fidelity
+    mock_gemini.generate_social = fake_generate_social
+    mock_logs_repo.create_generation_log = AsyncMock()
+
+    db = _make_db(job, campaign, client)
+    await run_generation_pipeline(job_id, db)
+
+    # Both must have been called
+    assert "fidelity" in call_order
+    assert "social" in call_order
+    # Both fields populated correctly
+    assert campaign.voice_score == _VOICE_SCORE
+    assert campaign.x_post == "Tweet!"
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation.sentry_sdk")
+@patch("app.services.generation.generation_logs_repo")
+@patch("app.services.generation._llm")
+async def test_fidelity_failure_in_gather_fails_job(mock_gemini, mock_logs_repo, mock_sentry):
+    """If check_fidelity raises inside asyncio.gather, the job is failed."""
+    from app.services.generation import run_generation_pipeline
+
+    job_id = uuid.uuid4()
+    campaign = _make_campaign()
+    client = _make_client(bvp=_BVP)
+    job = _make_job(campaign_id=campaign.id)
+
+    mock_gemini.generate_blog = AsyncMock(return_value=_BLOG_HTML)
+    mock_gemini.check_fidelity = AsyncMock(side_effect=ValueError("fidelity crash"))
+    mock_gemini.generate_social = AsyncMock(return_value=_SOCIAL)
+    mock_logs_repo.create_generation_log = AsyncMock()
+
+    db = _make_db(job, campaign, client)
+    await run_generation_pipeline(job_id, db)
+
+    assert job.status == "failed"
+    mock_sentry.capture_exception.assert_called_once()

@@ -552,10 +552,12 @@ async def dispatch_publish_for_platform(
                     await twitter_integration.create_tweet_with_media(creds["access_token"], campaign.x_post, media_id)
                 except Exception as exc:
                     logger.warning(
-                        "social image upload failed for campaign %s on X: %s — falling back to text-only post",
+                        "social image upload failed for campaign %s on X: %s -- falling back to text-only post",
                         campaign_id, exc,
+                        exc_info=True,
                     )
                     await twitter_integration.create_tweet(creds["access_token"], campaign.x_post)
+                    return {platform: "success_text_only"}
             else:
                 await twitter_integration.create_tweet(creds["access_token"], campaign.x_post)
         elif platform == "linkedin":
@@ -580,7 +582,7 @@ async def dispatch_publish_for_platform(
                     )
                 except Exception as exc:
                     logger.warning(
-                        "social image upload failed for campaign %s on linkedin: %s — falling back to text-only post",
+                        "social image upload failed for campaign %s on linkedin: %s -- falling back to text-only post",
                         campaign_id, exc,
                     )
                     await linkedin_integration.create_ugc_post(
@@ -622,6 +624,7 @@ async def dispatch_publish_for_platform(
                 creds["threads_user_id"],
                 creds["user_access_token"],
                 campaign.x_post,
+                image_url=campaign.image_url or None,
             )
         elif platform == "github_pages":
             await _publish_github(campaign, creds, db)
@@ -715,10 +718,14 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                         await twitter_integration.create_tweet_with_media(creds["access_token"], campaign.x_post, media_id)
                     except Exception as exc:
                         logger.warning(
-                            "social image upload failed for campaign %s on X: %s — falling back to text-only post",
+                            "social image upload failed for campaign %s on X: %s -- falling back to text-only post",
                             campaign_id, exc,
+                            exc_info=True,
                         )
                         await twitter_integration.create_tweet(creds["access_token"], campaign.x_post)
+                        results[platform] = "success_text_only"
+                        last_x_publish_time = asyncio.get_running_loop().time()
+                        continue
                 else:
                     await twitter_integration.create_tweet(creds["access_token"], campaign.x_post)
                 last_x_publish_time = asyncio.get_running_loop().time()
@@ -749,7 +756,7 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                         )
                     except Exception as exc:
                         logger.warning(
-                            "social image upload failed for campaign %s on linkedin: %s — falling back to text-only post",
+                            "social image upload failed for campaign %s on linkedin: %s -- falling back to text-only post",
                             campaign_id, exc,
                         )
                         await linkedin_integration.create_ugc_post(
@@ -799,6 +806,7 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                     creds["threads_user_id"],
                     creds["user_access_token"],
                     campaign.x_post,
+                    image_url=campaign.image_url or None,
                 )
 
             elif platform == "github_pages":

@@ -125,6 +125,9 @@ export function ImagePanel({
 
   // No image state — covers failed generation and no-context cases.
   if (!currentImageUrl) {
+    const isLimitReached = (jobErrorDetails ?? "").toLowerCase().includes("image generation skipped");
+    const isGenerationFailed = (jobErrorDetails ?? "").toLowerCase().includes("image generation failed");
+
     return (
       <div className="border border-border">
         <div className="px-6 py-4 border-b border-border">
@@ -134,10 +137,23 @@ export function ImagePanel({
         </div>
         <div className="p-6 space-y-3">
           <p className="font-mono text-sm text-graphite">
-            {jobErrorDetails?.includes("Image generation failed")
+            {isLimitReached
+              ? "Image limit reached for this billing cycle."
+              : isGenerationFailed
               ? "Image generation failed. Blog and social posts are complete."
               : "No featured image yet."}
           </p>
+          {isLimitReached && (
+            <p className="font-mono text-xs text-graphite">
+              <a
+                href="/account#choose-plan"
+                className="underline hover:text-ink transition-colors"
+              >
+                Upgrade your plan
+              </a>{" "}
+              to generate more images.
+            </p>
+          )}
           <Button
             variant="primary"
             onClick={handleRegenerate}

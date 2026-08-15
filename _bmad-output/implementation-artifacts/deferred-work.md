@@ -1,5 +1,13 @@
 # Deferred Work
 
+## Deferred from: code review of 21-15-social-platform-bug-fixes (2026-08-14)
+
+- Threads poll loop first-iteration 5s sleep unnecessary for TEXT containers — TEXT containers are instant; add a quick first check before sleeping, or sleep at end of loop. [backend/app/integrations/meta.py]
+- `asyncio.gather` cancel-both behavior in generation pipeline — if one of fidelity/social raises, the other is cancelled; equivalent to prior sequential behavior but `return_exceptions=True` would allow partial result preservation. [backend/app/services/generation.py]
+- Threads poll unknown terminal status causes misleading timeout — statuses other than FINISHED/ERROR (e.g. CANCELLED) exhaust all 15 iterations and raise a "75s" timeout error instead of surfacing the real status. [backend/app/integrations/meta.py]
+- `status_resp.json()` lacks non-JSON body guard in Threads poll — 200 with HTML/CDN error response body raises JSONDecodeError instead of PlatformError. [backend/app/integrations/meta.py]
+- Threads timeout error message "75s" understates actual worst-case — 15 × (5s sleep + 10s GET timeout) = 225s possible; "75s" reflects only sleep time. [backend/app/integrations/meta.py]
+
 ## Deferred from: code review of 3-25-generation-performance-resilience-ux (2026-08-14)
 
 - LLM concurrency risk with asyncio.gather — if the LLM provider enforces per-account concurrency limits, running check_fidelity + generate_social in parallel may trigger throttling; monitor in production and add sequential fallback if errors occur. [backend/app/services/generation.py]

@@ -168,32 +168,28 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
         campaign.excerpt = _extract_excerpt(blog_html)
         campaign.meta_description = _extract_meta_description(blog_html)
 
-        # ── Step 3: Voice fidelity check ─────────────────────────────────────
+        # ── Steps 3+4: Voice fidelity + social posts (parallel after blog) ────
         h1_match = re.search(r"<h1[^>]*>(.*?)</h1>", blog_html, re.IGNORECASE | re.DOTALL)
         blog_title_raw = h1_match.group(1).strip() if h1_match else "Untitled"
         blog_title = re.sub(r"<[^>]+>", "", blog_title_raw).strip() or "Untitled"
 
-        voice_score: dict = await _llm_with_retry(
-            _llm.check_fidelity,
-            blog_html,
-            brand_voice_profile,
-            _FIDELITY_THINKING_TOKENS,
-            campaign.brain_dump,
+        voice_score, social = await asyncio.gather(
+            _llm_with_retry(
+                _llm.check_fidelity,
+                blog_html,
+                brand_voice_profile,
+                _FIDELITY_THINKING_TOKENS,
+                campaign.brain_dump,
+            ),
+            _llm_with_retry(
+                _llm.generate_social,
+                campaign.brain_dump,
+                blog_title,
+                brand_voice_profile,
+                _SOCIAL_THINKING_TOKENS,
+            ),
         )
         campaign.voice_score = voice_score
-
-        # ── Step 4: Social post generation ───────────────────────────────────
-        logger.info(
-            "run_generation_pipeline: generating social posts for campaign %s",
-            campaign.id,
-        )
-        social: dict = await _llm_with_retry(
-            _llm.generate_social,
-            campaign.brain_dump,
-            blog_title,
-            brand_voice_profile,
-            _SOCIAL_THINKING_TOKENS,
-        )
         campaign.x_post = social["x_post"]
         campaign.linkedin_post = social["linkedin_post"]
 

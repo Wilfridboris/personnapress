@@ -818,16 +818,28 @@ async def test_dispatch_publish_instagram_platform_independence():
 
     connections = [make_connection("instagram", ig_creds), make_connection("x", x_creds)]
 
+    img_response = MagicMock()
+    img_response.content = b"fake_image_bytes"
+    img_response.raise_for_status = MagicMock()
+
     with (
         patch("app.services.publishing.get_campaign", AsyncMock(return_value=mock_campaign)),
         patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
         patch("app.services.publishing.get_connections_for_client", AsyncMock(return_value=connections)),
         patch("app.services.publishing.meta_integration.publish_instagram_feed_post",
               AsyncMock(side_effect=PlatformError("instagram", 500, "Internal error"))),
-        patch("app.services.publishing.twitter_integration.create_tweet", AsyncMock()),
+        patch("app.services.publishing.twitter_integration.upload_media", AsyncMock(return_value="media_id_xyz")),
+        patch("app.services.publishing.twitter_integration.create_tweet_with_media", AsyncMock()),
         patch("app.services.publishing._refresh_x_token_if_needed",
               AsyncMock(return_value={"access_token": "x_tok"})),
+        patch("httpx.AsyncClient") as mock_http_cls,
     ):
+        mock_http = AsyncMock()
+        mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+        mock_http.__aexit__ = AsyncMock(return_value=False)
+        mock_http.get = AsyncMock(return_value=img_response)
+        mock_http_cls.return_value = mock_http
+
         db = AsyncMock()
         results = await dispatch_publish(db, campaign_id, job_id, platforms=["instagram", "x"])
 
@@ -867,17 +879,18 @@ async def test_publish_facebook_page_success():
 
 
 async def test_publish_facebook_page_with_image():
-    """publish_facebook_page_post: link field included when image_url provided."""
+    """publish_facebook_page_post with image: POST to /{page_id}/photos with url/caption/published."""
     from app.integrations.meta import publish_facebook_page_post
 
     post_resp = _make_httpx_response(200, {"id": "post_xyz"})
     captured = {}
 
     async def fake_post(url, data=None, **kwargs):
+        captured["url"] = url
         captured["data"] = data
         return post_resp
 
-    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
+    with patch("httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -886,21 +899,27 @@ async def test_publish_facebook_page_with_image():
 
         await publish_facebook_page_post("page_111", "page_tok", "Hello", "https://example.com/img.jpg")
 
-    assert captured["data"]["link"] == "https://example.com/img.jpg"
+    assert "page_111/photos" in captured["url"]
+    assert captured["data"]["url"] == "https://example.com/img.jpg"
+    assert captured["data"]["caption"] == "Hello"
+    assert captured["data"]["published"] == "true"
+    assert "link" not in captured["data"]
+    assert "message" not in captured["data"]
 
 
 async def test_publish_facebook_page_no_image():
-    """publish_facebook_page_post: link field absent when image_url is None."""
+    """publish_facebook_page_post without image: POST to /{page_id}/feed with message only."""
     from app.integrations.meta import publish_facebook_page_post
 
     post_resp = _make_httpx_response(200, {"id": "post_xyz"})
     captured = {}
 
     async def fake_post(url, data=None, **kwargs):
+        captured["url"] = url
         captured["data"] = data
         return post_resp
 
-    with patch("app.integrations.threads_auth.httpx.AsyncClient") as mock_cls:
+    with patch("httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -909,7 +928,10 @@ async def test_publish_facebook_page_no_image():
 
         await publish_facebook_page_post("page_111", "page_tok", "Hello", None)
 
+    assert "page_111/feed" in captured["url"]
+    assert captured["data"]["message"] == "Hello"
     assert "link" not in captured["data"]
+    assert "url" not in captured["data"]
 
 
 async def test_publish_facebook_page_401():
@@ -1014,18 +1036,19 @@ async def test_dispatch_publish_facebook_page_independence():
 # ── publish_threads_post ──────────────────────────────────────────────────────
 
 async def test_publish_threads_success():
-    """publish_threads_post: container created with media_type=TEXT, published, post_id returned."""
+    """publish_threads_post: container created with media_type=TEXT, polled FINISHED, published, post_id returned."""
     from app.integrations.meta import publish_threads_post
 
     container_resp = _make_httpx_response(200, {"id": "container_th_abc"})
+    status_finished = _make_httpx_response(200, {"status": "FINISHED"})
     publish_resp = _make_httpx_response(200, {"id": "threads_post_xyz"})
 
-    call_count = 0
+    post_call_count = 0
 
     async def fake_post(url, data=None, **kwargs):
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
+        nonlocal post_call_count
+        post_call_count += 1
+        if post_call_count == 1:
             assert data["media_type"] == "TEXT"
             assert data["text"] == "Hello threads"
             return container_resp
@@ -1036,12 +1059,13 @@ async def test_publish_threads_success():
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=fake_post)
+        mock_client.get = AsyncMock(return_value=status_finished)
         mock_cls.return_value = mock_client
 
         post_id = await publish_threads_post("th_444", "user_tok", "Hello threads")
 
     assert post_id == "threads_post_xyz"
-    assert call_count == 2
+    assert post_call_count == 2
 
 
 async def test_publish_threads_401():
@@ -1050,20 +1074,22 @@ async def test_publish_threads_401():
     from app.core.exceptions import PlatformError
 
     container_resp = _make_httpx_response(200, {"id": "container_th_abc"})
+    status_finished = _make_httpx_response(200, {"status": "FINISHED"})
     auth_error = _make_httpx_response(401, {"error": {"message": "Invalid OAuth access token"}})
 
-    call_count = 0
+    post_call_count = 0
 
     async def fake_post(url, data=None, **kwargs):
-        nonlocal call_count
-        call_count += 1
-        return container_resp if call_count == 1 else auth_error
+        nonlocal post_call_count
+        post_call_count += 1
+        return container_resp if post_call_count == 1 else auth_error
 
     with patch("httpx.AsyncClient") as mock_cls, patch("asyncio.sleep", AsyncMock()):
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=fake_post)
+        mock_client.get = AsyncMock(return_value=status_finished)
         mock_cls.return_value = mock_client
 
         with pytest.raises(PlatformError) as exc_info:
@@ -1079,20 +1105,22 @@ async def test_publish_threads_429():
     from app.core.exceptions import PlatformError
 
     container_resp = _make_httpx_response(200, {"id": "container_th_abc"})
+    status_finished = _make_httpx_response(200, {"status": "FINISHED"})
     rate_limit = _make_httpx_response(429, {"error": {"message": "Application request limit reached"}})
 
-    call_count = 0
+    post_call_count = 0
 
     async def fake_post(url, data=None, **kwargs):
-        nonlocal call_count
-        call_count += 1
-        return container_resp if call_count == 1 else rate_limit
+        nonlocal post_call_count
+        post_call_count += 1
+        return container_resp if post_call_count == 1 else rate_limit
 
     with patch("httpx.AsyncClient") as mock_cls, patch("asyncio.sleep", AsyncMock()):
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(side_effect=fake_post)
+        mock_client.get = AsyncMock(return_value=status_finished)
         mock_cls.return_value = mock_client
 
         with pytest.raises(PlatformError) as exc_info:
@@ -1995,3 +2023,236 @@ async def test_meta_oauth_callback_token_exchange_failure_logs_warning():
     warning_msg = mock_logger.warning.call_args[0][1]
     assert "client_secret" not in warning_msg
     assert "a45473be1dc8d4" not in warning_msg
+
+
+# ── Story 21-15: AC 1 -- Facebook /photos endpoint ────────────────────────────
+
+async def test_publish_facebook_page_post_with_image_uses_photos_endpoint():
+    """publish_facebook_page_post with image_url: calls /{page_id}/photos with url/caption/published."""
+    from app.integrations.meta import publish_facebook_page_post
+
+    post_resp = _make_httpx_response(200, {"id": "photos_post_abc"})
+    captured = {}
+
+    async def fake_post(url, data=None, **kwargs):
+        captured["url"] = url
+        captured["data"] = data
+        return post_resp
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=fake_post)
+        mock_cls.return_value = mock_client
+
+        post_id = await publish_facebook_page_post(
+            "page_111", "page_tok", "My caption", "https://example.com/img.jpg"
+        )
+
+    assert post_id == "photos_post_abc"
+    assert "/photos" in captured["url"]
+    assert "page_111/photos" in captured["url"]
+    assert captured["data"]["url"] == "https://example.com/img.jpg"
+    assert captured["data"]["caption"] == "My caption"
+    assert captured["data"]["published"] == "true"
+    assert "link" not in captured["data"]
+    assert "message" not in captured["data"]
+
+
+async def test_publish_facebook_page_post_no_image_uses_feed_endpoint():
+    """publish_facebook_page_post without image_url: calls /{page_id}/feed with message only."""
+    from app.integrations.meta import publish_facebook_page_post
+
+    post_resp = _make_httpx_response(200, {"id": "feed_post_xyz"})
+    captured = {}
+
+    async def fake_post(url, data=None, **kwargs):
+        captured["url"] = url
+        captured["data"] = data
+        return post_resp
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=fake_post)
+        mock_cls.return_value = mock_client
+
+        post_id = await publish_facebook_page_post("page_111", "page_tok", "Text only post")
+
+    assert post_id == "feed_post_xyz"
+    assert "page_111/feed" in captured["url"]
+    assert captured["data"]["message"] == "Text only post"
+    assert "link" not in captured["data"]
+    assert "url" not in captured["data"]
+
+
+# ── Story 21-15: AC 3 -- Threads image support ────────────────────────────────
+
+async def test_publish_threads_post_with_image():
+    """publish_threads_post with image_url: container uses media_type=IMAGE and image_url param."""
+    from app.integrations.meta import publish_threads_post
+
+    container_resp = _make_httpx_response(200, {"id": "th_container_img"})
+    status_finished = _make_httpx_response(200, {"status": "FINISHED"})
+    publish_resp = _make_httpx_response(200, {"id": "th_post_img_xyz"})
+
+    post_call_count = 0
+    container_data_captured = {}
+
+    async def fake_post(url, data=None, **kwargs):
+        nonlocal post_call_count
+        post_call_count += 1
+        if post_call_count == 1:
+            container_data_captured.update(data or {})
+            return container_resp
+        return publish_resp
+
+    with patch("httpx.AsyncClient") as mock_cls, patch("asyncio.sleep", AsyncMock()):
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=fake_post)
+        mock_client.get = AsyncMock(return_value=status_finished)
+        mock_cls.return_value = mock_client
+
+        post_id = await publish_threads_post(
+            "th_444", "user_tok", "Hello with image", image_url="https://example.com/img.jpg"
+        )
+
+    assert post_id == "th_post_img_xyz"
+    assert container_data_captured["media_type"] == "IMAGE"
+    assert container_data_captured["image_url"] == "https://example.com/img.jpg"
+    assert container_data_captured["text"] == "Hello with image"
+
+
+async def test_publish_threads_post_text_only():
+    """publish_threads_post without image_url: container uses media_type=TEXT, no image_url key."""
+    from app.integrations.meta import publish_threads_post
+
+    container_resp = _make_httpx_response(200, {"id": "th_container_text"})
+    status_finished = _make_httpx_response(200, {"status": "FINISHED"})
+    publish_resp = _make_httpx_response(200, {"id": "th_post_text_xyz"})
+
+    post_call_count = 0
+    container_data_captured = {}
+
+    async def fake_post(url, data=None, **kwargs):
+        nonlocal post_call_count
+        post_call_count += 1
+        if post_call_count == 1:
+            container_data_captured.update(data or {})
+            return container_resp
+        return publish_resp
+
+    with patch("httpx.AsyncClient") as mock_cls, patch("asyncio.sleep", AsyncMock()):
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=fake_post)
+        mock_client.get = AsyncMock(return_value=status_finished)
+        mock_cls.return_value = mock_client
+
+        post_id = await publish_threads_post("th_444", "user_tok", "Text only post")
+
+    assert post_id == "th_post_text_xyz"
+    assert container_data_captured["media_type"] == "TEXT"
+    assert "image_url" not in container_data_captured
+
+
+# ── Story 21-15: AC 2 -- X image upload failure returns success_text_only ─────
+
+async def test_dispatch_publish_x_image_fallback_returns_success_text_only():
+    """dispatch_publish: X image upload failure returns 'success_text_only' (not 'success')."""
+    from app.services.publishing import dispatch_publish
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+
+    mock_campaign = MagicMock()
+    mock_campaign.client_id = client_id
+    mock_campaign.x_post = "test tweet"
+    mock_campaign.image_url = "https://example.com/img.jpg"
+    mock_campaign.scheduled_at = None
+    mock_campaign.status = "approved"
+
+    from app.core.security import encrypt_credential
+    x_creds = json.dumps({"access_token": "x_tok", "refresh_token": "x_ref"})
+
+    def make_connection(platform, creds_json):
+        conn = MagicMock()
+        conn.platform = platform
+        conn.encrypted_credentials = encrypt_credential(creds_json)
+        return conn
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=mock_campaign)),
+        patch("app.services.publishing.get_published_platforms_for_campaign", AsyncMock(return_value=set())),
+        patch("app.services.publishing.get_connections_for_client",
+              AsyncMock(return_value=[make_connection("x", x_creds)])),
+        patch("app.services.publishing._refresh_x_token_if_needed",
+              AsyncMock(return_value={"access_token": "x_tok"})),
+        patch("app.services.publishing.twitter_integration.upload_media",
+              AsyncMock(side_effect=Exception("403 Forbidden"))),
+        patch("app.services.publishing.twitter_integration.create_tweet", AsyncMock()),
+        patch("httpx.AsyncClient") as mock_http_cls,
+    ):
+        img_response = MagicMock()
+        img_response.content = b"fake_bytes"
+        img_response.raise_for_status = MagicMock()
+        mock_http = AsyncMock()
+        mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+        mock_http.__aexit__ = AsyncMock(return_value=False)
+        mock_http.get = AsyncMock(return_value=img_response)
+        mock_http_cls.return_value = mock_http
+
+        db = AsyncMock()
+        results = await dispatch_publish(db, campaign_id, job_id, platforms=["x"])
+
+    assert results.get("x") == "success_text_only"
+
+
+async def test_dispatch_publish_for_platform_x_image_fallback_returns_success_text_only():
+    """dispatch_publish_for_platform: X image upload failure returns {'x': 'success_text_only'}."""
+    from app.services.publishing import dispatch_publish_for_platform
+
+    campaign_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+
+    mock_campaign = MagicMock()
+    mock_campaign.client_id = client_id
+    mock_campaign.x_post = "test tweet"
+    mock_campaign.image_url = "https://example.com/img.jpg"
+    mock_campaign.status = "approved"
+
+    from app.core.security import encrypt_credential
+    x_creds = json.dumps({"access_token": "x_tok", "refresh_token": "x_ref"})
+    conn = MagicMock()
+    conn.platform = "x"
+    conn.encrypted_credentials = encrypt_credential(x_creds)
+
+    with (
+        patch("app.services.publishing.get_campaign", AsyncMock(return_value=mock_campaign)),
+        patch("app.services.publishing.get_connection_for_platform", AsyncMock(return_value=conn)),
+        patch("app.services.publishing._refresh_x_token_if_needed",
+              AsyncMock(return_value={"access_token": "x_tok"})),
+        patch("app.services.publishing.twitter_integration.upload_media",
+              AsyncMock(side_effect=Exception("403 Forbidden"))),
+        patch("app.services.publishing.twitter_integration.create_tweet", AsyncMock()),
+        patch("httpx.AsyncClient") as mock_http_cls,
+    ):
+        img_response = MagicMock()
+        img_response.content = b"fake_bytes"
+        img_response.raise_for_status = MagicMock()
+        mock_http = AsyncMock()
+        mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+        mock_http.__aexit__ = AsyncMock(return_value=False)
+        mock_http.get = AsyncMock(return_value=img_response)
+        mock_http_cls.return_value = mock_http
+
+        db = AsyncMock()
+        result = await dispatch_publish_for_platform(db, campaign_id, "x")
+
+    assert result.get("x") == "success_text_only"

@@ -8,6 +8,7 @@ Called ONLY from workers/generate.py and the regenerate endpoint (AR-19).
 
 import asyncio
 import logging
+import random
 import re
 import uuid
 from datetime import datetime, timezone
@@ -97,7 +98,7 @@ async def _generate_with_retry(prompt: str, max_retries: int = 3) -> str | bytes
                 exc,
             )
             if attempt < max_retries - 1:
-                await asyncio.sleep(8 * (2 ** attempt))  # 8s, 16s
+                await asyncio.sleep(8 * (2 ** attempt) * random.uniform(0.8, 1.2))
     raise last_exc  # type: ignore[misc]
 
 
@@ -162,6 +163,10 @@ async def run_image_generation(
         )
         job.status = "complete"
         job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        job.error_details = (
+            "Image generation skipped: you have reached your plan limit for image generations "
+            "this billing cycle."
+        )
         await db.commit()
         return
 
