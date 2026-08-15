@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of 3-27-image-prompt-enrichment (2026-08-15)
+
+- Duplicate social fallback logic in `run_image_generation` and `regenerate_image` — extract `_derive_social_title(campaign)` helper; pre-existing pattern, DRY improvement. [backend/app/services/image.py:198-206, 390-397]
+- Unsanitized user content (target_keyword/audience/excerpt) injected into image prompt — pre-existing pattern across all prompt builders; sanitization is a cross-cutting future hardening concern. [backend/app/services/image.py:80-83]
+- Social fallback blog_title can be up to 200 chars vs `_build_image_alt`'s 125-char cap — long slugs possible in storage paths; no functional failure; pre-existing downstream truncation handles it. [backend/app/services/image.py:202-204]
+- No integration test verifying `target_keyword`/`target_audience`/`content_excerpt` flow end-to-end through `run_image_generation`/`regenerate_image` — covered by `_build_image_prompt` unit tests; low regression risk. [backend/tests/services/test_image.py]
+
 ## Deferred from: code review of 3-26-social-voice-parity-and-prompt-quality (2026-08-15)
 
 - `tone_list` is empty string when BVP `tone=[]` — emits "- Tone: " with blank value in WRITING RULES block; same pre-existing pattern as generate_blog. [generation_prompts.py:127, gemini.py, anthropic_client.py]

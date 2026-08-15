@@ -54,7 +54,13 @@ def _build_image_alt(blog_title: str) -> str:
     return alt[:125]
 
 
-def _build_image_prompt(blog_title: str, brand_voice_profile: dict | None) -> str:
+def _build_image_prompt(
+    blog_title: str,
+    brand_voice_profile: dict | None,
+    target_keyword: str | None = None,
+    target_audience: str | None = None,
+    content_excerpt: str | None = None,
+) -> str:
     tone_sentence = ""
     if brand_voice_profile:
         tone_list = brand_voice_profile.get("tone", [])
@@ -71,8 +77,16 @@ def _build_image_prompt(blog_title: str, brand_voice_profile: dict | None) -> st
             combined = " and ".join(visual_tones)
             tone_sentence = f" The image has a {combined}."
 
+    keyword_sentence = f" The subject of the article is {target_keyword.strip()}." if target_keyword and target_keyword.strip() else ""
+    audience_sentence = f" The intended audience is {target_audience.strip()}." if target_audience and target_audience.strip() else ""
+    excerpt_text = (content_excerpt or "")[:200].strip()
+    excerpt_sentence = f" The article covers: {excerpt_text}." if excerpt_text else ""
+
     return (
         f"A professional editorial image for the article titled '{blog_title}'."
+        f"{keyword_sentence}"
+        f"{audience_sentence}"
+        f"{excerpt_sentence}"
         f"{tone_sentence}"
         " The composition is clean, with no text overlays, watermarks, or logos."
         " Sharp focus, natural lighting."
@@ -181,10 +195,22 @@ async def run_image_generation(
         blog_title_raw = h1_match.group(1).strip() if h1_match else "Untitled"
         blog_title = re.sub(r"<[^>]+>", "", blog_title_raw).strip() or "Untitled"
     else:
-        # social_only campaign: derive image subject from x_post (first line, ≤120 chars)
-        social_text = (campaign.x_post or campaign.linkedin_post or "").strip()
-        blog_title = social_text[:120].split("\n")[0].strip() or "Untitled"
-    prompt = _build_image_prompt(blog_title, brand_voice_profile)
+        # social_only campaign: derive image subject from best available text field
+        linkedin_text = (campaign.linkedin_post or "").strip()
+        brain_dump_text = (campaign.brain_dump or "").strip()
+        if linkedin_text:
+            blog_title = linkedin_text[:200].split("\n")[0].strip() or "Untitled"
+        elif brain_dump_text:
+            blog_title = brain_dump_text[:200].split("\n")[0].strip() or "Untitled"
+        else:
+            blog_title = "Untitled"
+    prompt = _build_image_prompt(
+        blog_title,
+        brand_voice_profile,
+        target_keyword=campaign.target_keyword,
+        target_audience=campaign.target_audience,
+        content_excerpt=campaign.excerpt,
+    )
 
     image_alt = _build_image_alt(blog_title)
     title_slug = _slugify(blog_title)
@@ -354,12 +380,28 @@ async def regenerate_image(
     client = client_result.scalar_one_or_none()
     brand_voice_profile: dict | None = client.brand_voice_profile if client else None
 
-    h1_match = re.search(
-        r"<h1[^>]*>(.*?)</h1>", campaign.blog_html or "", re.IGNORECASE | re.DOTALL
+    if campaign.blog_html:
+        h1_match = re.search(
+            r"<h1[^>]*>(.*?)</h1>", campaign.blog_html, re.IGNORECASE | re.DOTALL
+        )
+        blog_title_raw = h1_match.group(1).strip() if h1_match else "Untitled"
+        blog_title = re.sub(r"<[^>]+>", "", blog_title_raw).strip() or "Untitled"
+    else:
+        linkedin_text = (campaign.linkedin_post or "").strip()
+        brain_dump_text = (campaign.brain_dump or "").strip()
+        if linkedin_text:
+            blog_title = linkedin_text[:200].split("\n")[0].strip() or "Untitled"
+        elif brain_dump_text:
+            blog_title = brain_dump_text[:200].split("\n")[0].strip() or "Untitled"
+        else:
+            blog_title = "Untitled"
+    prompt = _build_image_prompt(
+        blog_title,
+        brand_voice_profile,
+        target_keyword=campaign.target_keyword,
+        target_audience=campaign.target_audience,
+        content_excerpt=campaign.excerpt,
     )
-    blog_title_raw = h1_match.group(1).strip() if h1_match else "Untitled"
-    blog_title = re.sub(r"<[^>]+>", "", blog_title_raw).strip() or "Untitled"
-    prompt = _build_image_prompt(blog_title, brand_voice_profile)
 
     image_alt = _build_image_alt(blog_title)
     title_slug = _slugify(blog_title)

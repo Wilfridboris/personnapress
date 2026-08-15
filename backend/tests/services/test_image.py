@@ -26,6 +26,10 @@ def _make_campaign(client_id=None, image_regen_count=0):
     campaign.blog_html = "<h1>Test Blog Title</h1><p>Body text.</p>"
     campaign.x_post = None
     campaign.linkedin_post = None
+    campaign.brain_dump = None
+    campaign.excerpt = None
+    campaign.target_keyword = None
+    campaign.target_audience = None
     campaign.image_url = None
     campaign.image_alt = None
     campaign.image_regen_count = image_regen_count
@@ -496,10 +500,10 @@ async def test_regen_storage_path_uses_title_slug_with_count(
 @patch("app.services.image.supabase_storage")
 @patch("app.services.image.subscription_service")
 @patch("app.services.image._img")
-async def test_social_only_campaign_uses_x_post_as_image_subject(
+async def test_social_only_campaign_uses_linkedin_as_image_subject(
     mock_img, mock_sub_svc, mock_storage, mock_logs
 ):
-    """social_only campaign (blog_html=None) → image prompt built from x_post, not 'Untitled'."""
+    """social_only campaign (blog_html=None) with linkedin_post → prompt uses linkedin_post, not x_post."""
     from app.services.image import run_image_generation
 
     campaign_id = uuid.uuid4()
@@ -507,7 +511,8 @@ async def test_social_only_campaign_uses_x_post_as_image_subject(
     campaign = _make_campaign()
     campaign.id = campaign_id
     campaign.blog_html = None
-    campaign.x_post = "5 tips for growing your LinkedIn audience without paying for ads"
+    campaign.linkedin_post = "5 strategies for scaling a SaaS business sustainably"
+    campaign.x_post = "X post hook text that should not appear"
     job = _make_job(campaign_id=campaign_id)
     job.id = job_id
     client = _make_client()
@@ -523,7 +528,8 @@ async def test_social_only_campaign_uses_x_post_as_image_subject(
     assert job.status == "complete"
     prompt_used = mock_img.generate_image.call_args[0][0]
     assert "Untitled" not in prompt_used
-    assert "5 tips for growing your LinkedIn audience" in prompt_used
+    assert "5 strategies for scaling a SaaS business sustainably" in prompt_used
+    assert "X post hook text" not in prompt_used
 
 
 @pytest.mark.asyncio
@@ -544,6 +550,7 @@ async def test_social_only_no_posts_falls_back_to_untitled(
     campaign.blog_html = None
     campaign.x_post = None
     campaign.linkedin_post = None
+    campaign.brain_dump = None
     job = _make_job(campaign_id=campaign_id)
     job.id = job_id
     client = _make_client()
@@ -633,3 +640,235 @@ async def test_generate_with_retry_second_retry_uses_doubled_base(mock_img, mock
     assert len(sleep_calls) == 2
     expected_second = 8 * (2 ** 1) * 0.9
     assert abs(sleep_calls[1] - expected_second) < 0.001
+
+
+# ── _build_image_prompt enrichment tests (AC 2-4) ────────────────────────────
+
+def test_build_image_prompt_with_keyword_injects_subject_sentence():
+    """target_keyword provided → 'The subject of the article is ...' present in prompt."""
+    from app.services.image import _build_image_prompt
+
+    result = _build_image_prompt("How to Scale SaaS", None, target_keyword="SaaS scaling")
+
+    assert "The subject of the article is SaaS scaling." in result
+
+
+def test_build_image_prompt_with_audience_injects_audience_sentence():
+    """target_audience provided → 'The intended audience is ...' present in prompt."""
+    from app.services.image import _build_image_prompt
+
+    result = _build_image_prompt("My Post", None, target_audience="startup founders")
+
+    assert "The intended audience is startup founders." in result
+
+
+def test_build_image_prompt_with_long_excerpt_capped_at_200_chars():
+    """content_excerpt > 200 chars → only first 200 chars injected into prompt."""
+    from app.services.image import _build_image_prompt
+
+    long_excerpt = "X" * 300
+    result = _build_image_prompt("My Post", None, content_excerpt=long_excerpt)
+
+    assert "The article covers: " + "X" * 200 + "." in result
+    assert "X" * 201 not in result
+
+
+def test_build_image_prompt_no_enrichment_fields_output_unchanged():
+    """No enrichment args → output identical to pre-story behavior (no extra sentences)."""
+    from app.services.image import _build_image_prompt
+
+    result = _build_image_prompt("My Blog Post", None)
+
+    assert "The subject of the article is" not in result
+    assert "The intended audience is" not in result
+    assert "The article covers:" not in result
+    assert result.startswith("A professional editorial image for the article titled 'My Blog Post'.")
+
+
+# ── Social fallback tests for run_image_generation (AC 6) ────────────────────
+
+@pytest.mark.asyncio
+@patch("app.services.image.generation_logs_repo")
+@patch("app.services.image.supabase_storage")
+@patch("app.services.image.subscription_service")
+@patch("app.services.image._img")
+async def test_social_fallback_linkedin_preferred_over_brain_dump(
+    mock_img, mock_sub_svc, mock_storage, mock_logs
+):
+    """blog_html=None, linkedin_post and brain_dump both set → linkedin_post wins."""
+    from app.services.image import run_image_generation
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    campaign = _make_campaign()
+    campaign.id = campaign_id
+    campaign.blog_html = None
+    campaign.linkedin_post = "LinkedIn post about sustainable growth"
+    campaign.brain_dump = "Raw brain dump content that should not be used"
+    job = _make_job(campaign_id=campaign_id)
+    job.id = job_id
+    client = _make_client()
+    db = _make_db(job, campaign, client)
+
+    mock_sub_svc.check_image_limit = AsyncMock()
+    mock_img.generate_image = AsyncMock(return_value="https://replicate.delivery/image.png")
+    mock_storage.upload_image_from_url = AsyncMock(return_value="https://supabase.co/image.png")
+    mock_logs.create_generation_log = AsyncMock()
+
+    await run_image_generation(campaign_id, job_id, db)
+
+    prompt_used = mock_img.generate_image.call_args[0][0]
+    assert "LinkedIn post about sustainable growth" in prompt_used
+    assert "Raw brain dump content" not in prompt_used
+
+
+@pytest.mark.asyncio
+@patch("app.services.image.generation_logs_repo")
+@patch("app.services.image.supabase_storage")
+@patch("app.services.image.subscription_service")
+@patch("app.services.image._img")
+async def test_social_fallback_brain_dump_used_when_no_linkedin(
+    mock_img, mock_sub_svc, mock_storage, mock_logs
+):
+    """blog_html=None, linkedin_post=None, brain_dump set → brain_dump used as subject."""
+    from app.services.image import run_image_generation
+
+    campaign_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    campaign = _make_campaign()
+    campaign.id = campaign_id
+    campaign.blog_html = None
+    campaign.linkedin_post = None
+    campaign.brain_dump = "Brain dump: tips for remote team productivity"
+    job = _make_job(campaign_id=campaign_id)
+    job.id = job_id
+    client = _make_client()
+    db = _make_db(job, campaign, client)
+
+    mock_sub_svc.check_image_limit = AsyncMock()
+    mock_img.generate_image = AsyncMock(return_value="https://replicate.delivery/image.png")
+    mock_storage.upload_image_from_url = AsyncMock(return_value="https://supabase.co/image.png")
+    mock_logs.create_generation_log = AsyncMock()
+
+    await run_image_generation(campaign_id, job_id, db)
+
+    prompt_used = mock_img.generate_image.call_args[0][0]
+    assert "Brain dump: tips for remote team productivity" in prompt_used
+    assert "Untitled" not in prompt_used
+
+
+# ── regenerate_image social fallback test (AC 7) ─────────────────────────────
+
+@pytest.mark.asyncio
+@patch("app.services.image.generation_logs_repo")
+@patch("app.services.image.supabase_storage")
+@patch("app.services.image.subscription_service")
+@patch("app.services.image._img")
+async def test_regenerate_image_social_fallback_uses_linkedin_not_untitled(
+    mock_img, mock_sub_svc, mock_storage, mock_logs
+):
+    """regenerate_image with blog_html=None → uses linkedin_post as image subject, not 'Untitled'."""
+    from app.services.image import regenerate_image
+
+    campaign_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    campaign = _make_campaign(image_regen_count=1)
+    campaign.id = campaign_id
+    campaign.blog_html = None
+    campaign.linkedin_post = "LinkedIn post for social-only campaign regen"
+    campaign.brain_dump = None
+    job = _make_job()
+    client = _make_client()
+    db = _make_db(job, campaign, client)
+
+    mock_sub_svc.check_image_limit = AsyncMock()
+    mock_img.generate_image = AsyncMock(return_value="https://replicate.delivery/regen.png")
+    mock_storage.upload_image_from_url = AsyncMock(return_value="https://supabase.co/regen.png")
+    mock_logs.create_generation_log = AsyncMock()
+
+    url, image_alt, count = await regenerate_image(campaign_id, user_id, db)
+
+    assert url == "https://supabase.co/regen.png"
+    assert count == 2
+    prompt_used = mock_img.generate_image.call_args[0][0]
+    assert "LinkedIn post for social-only campaign regen" in prompt_used
+    assert "Untitled" not in prompt_used
+
+
+# ── _build_image_prompt combined enrichment ordering test ────────────────────
+
+def test_build_image_prompt_combined_enrichment_sentence_order():
+    """All three enrichment fields set → keyword, audience, excerpt appear in order after title, before composition."""
+    from app.services.image import _build_image_prompt
+
+    result = _build_image_prompt(
+        "Scaling SaaS",
+        None,
+        target_keyword="SaaS scaling",
+        target_audience="startup founders",
+        content_excerpt="Sustainable growth strategies for B2B companies.",
+    )
+
+    title_pos = result.find("Scaling SaaS'.")
+    keyword_pos = result.find("The subject of the article is SaaS scaling.")
+    audience_pos = result.find("The intended audience is startup founders.")
+    excerpt_pos = result.find("The article covers: Sustainable growth strategies")
+    composition_pos = result.find("The composition is clean")
+
+    assert title_pos < keyword_pos < audience_pos < excerpt_pos < composition_pos
+
+
+def test_build_image_prompt_whitespace_only_keyword_suppressed():
+    """Whitespace-only target_keyword → no blank subject sentence injected."""
+    from app.services.image import _build_image_prompt
+
+    result = _build_image_prompt("My Post", None, target_keyword="   ")
+
+    assert "The subject of the article is" not in result
+
+
+def test_build_image_prompt_whitespace_only_audience_suppressed():
+    """Whitespace-only target_audience → no blank audience sentence injected."""
+    from app.services.image import _build_image_prompt
+
+    result = _build_image_prompt("My Post", None, target_audience="\t  ")
+
+    assert "The intended audience is" not in result
+
+
+# ── regenerate_image brain_dump fallback test (AC 7) ─────────────────────────
+
+@pytest.mark.asyncio
+@patch("app.services.image.generation_logs_repo")
+@patch("app.services.image.supabase_storage")
+@patch("app.services.image.subscription_service")
+@patch("app.services.image._img")
+async def test_regenerate_image_social_fallback_uses_brain_dump_when_no_linkedin(
+    mock_img, mock_sub_svc, mock_storage, mock_logs
+):
+    """regenerate_image with blog_html=None, linkedin_post=None → uses brain_dump as image subject."""
+    from app.services.image import regenerate_image
+
+    campaign_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    campaign = _make_campaign(image_regen_count=1)
+    campaign.id = campaign_id
+    campaign.blog_html = None
+    campaign.linkedin_post = None
+    campaign.brain_dump = "Brain dump content about productivity for remote teams"
+    job = _make_job()
+    client = _make_client()
+    db = _make_db(job, campaign, client)
+
+    mock_sub_svc.check_image_limit = AsyncMock()
+    mock_img.generate_image = AsyncMock(return_value="https://replicate.delivery/regen2.png")
+    mock_storage.upload_image_from_url = AsyncMock(return_value="https://supabase.co/regen2.png")
+    mock_logs.create_generation_log = AsyncMock()
+
+    url, image_alt, count = await regenerate_image(campaign_id, user_id, db)
+
+    assert url == "https://supabase.co/regen2.png"
+    assert count == 2
+    prompt_used = mock_img.generate_image.call_args[0][0]
+    assert "Brain dump content about productivity" in prompt_used
+    assert "Untitled" not in prompt_used
