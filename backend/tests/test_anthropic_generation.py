@@ -61,6 +61,9 @@ _VALID_FIDELITY_JSON = json.dumps({
 _VALID_SOCIAL_JSON = json.dumps({
     "x_post": "Check out this blog post about testing!",
     "linkedin_post": "We published a new article. " * 25,  # ~625 chars
+    "instagram_caption": "A" * 200,
+    "facebook_post": "B" * 250,
+    "threads_post": "C" * 100,
 })
 
 
@@ -192,6 +195,7 @@ async def test_check_fidelity_none_bvp_returns_default_without_api_call(mock_cli
         "seo_h2_count": 3,
         "seo_faq_present": True,
         "seo_fluff_detected": False,
+        "authored_passages_preserved": True,
         "tags": [],
     }
 
@@ -217,7 +221,10 @@ async def test_generate_social_truncates_x_post_at_280(mock_client):
     from app.integrations.anthropic_client import generate_social
 
     long_x = "x" * 300
-    data = json.dumps({"x_post": long_x, "linkedin_post": "LinkedIn post " * 40})
+    data = json.dumps({
+        "x_post": long_x, "linkedin_post": "LinkedIn post " * 40,
+        "instagram_caption": "A" * 200, "facebook_post": "B" * 250, "threads_post": "C" * 100,
+    })
     mock_client.messages.create = AsyncMock(
         return_value=_make_anthropic_response(data)
     )
@@ -232,7 +239,10 @@ async def test_generate_social_logs_warning_for_short_linkedin(mock_client, capl
     import logging
     from app.integrations.anthropic_client import generate_social
 
-    short_ln = json.dumps({"x_post": "Short X post here.", "linkedin_post": "Too short."})
+    short_ln = json.dumps({
+        "x_post": "Short X post here.", "linkedin_post": "Too short.",
+        "instagram_caption": "A" * 200, "facebook_post": "B" * 250, "threads_post": "C" * 100,
+    })
     mock_client.messages.create = AsyncMock(
         return_value=_make_anthropic_response(short_ln)
     )
@@ -246,6 +256,9 @@ async def test_generate_social_logs_warning_for_short_linkedin(mock_client, capl
 _VALID_STANDALONE_SOCIAL_JSON = json.dumps({
     "x_post": "I tested 4 Facebook ad setups. One crushed it. Here is what I found.",
     "linkedin_post": "LinkedIn standalone post. " * 55,  # ~1375 chars
+    "instagram_caption": "A" * 200,
+    "facebook_post": "B" * 250,
+    "threads_post": "C" * 100,
 })
 
 _BVP_WITH_STRUCTURE_HINTS = {
@@ -277,7 +290,10 @@ async def test_generate_social_standalone_linkedin_over_2500_truncated(mock_clie
     from app.integrations.anthropic_client import generate_social_standalone
 
     long_ln = "L" * 2600
-    data = json.dumps({"x_post": "Short X post.", "linkedin_post": long_ln})
+    data = json.dumps({
+        "x_post": "Short X post.", "linkedin_post": long_ln,
+        "instagram_caption": "A" * 200, "facebook_post": "B" * 250, "threads_post": "C" * 100,
+    })
     mock_client.messages.create = AsyncMock(
         return_value=_make_anthropic_response(data)
     )
@@ -292,7 +308,10 @@ async def test_generate_social_standalone_linkedin_under_1200_logs_warning(mock_
     import logging
     from app.integrations.anthropic_client import generate_social_standalone
 
-    short_data = json.dumps({"x_post": "Short X post.", "linkedin_post": "Too short for LinkedIn."})
+    short_data = json.dumps({
+        "x_post": "Short X post.", "linkedin_post": "Too short for LinkedIn.",
+        "instagram_caption": "A" * 200, "facebook_post": "B" * 250, "threads_post": "C" * 100,
+    })
     mock_client.messages.create = AsyncMock(
         return_value=_make_anthropic_response(short_data)
     )
@@ -327,6 +346,9 @@ async def test_generate_social_standalone_emdash_stripped_from_both_posts(mock_c
     data_with_emdash = json.dumps({
         "x_post": "Great insight—here is what works.",
         "linkedin_post": ("LinkedIn post with em-dash—example. " * 40),
+        "instagram_caption": "A" * 200,
+        "facebook_post": "B" * 250,
+        "threads_post": "C" * 100,
     })
     mock_client.messages.create = AsyncMock(
         return_value=_make_anthropic_response(data_with_emdash)
@@ -396,6 +418,9 @@ async def test_generate_social_emdash_stripped_from_both_posts(mock_client):
     data_with_emdash = json.dumps({
         "x_post": "Great insight—here is what works.",
         "linkedin_post": ("LinkedIn post with em-dash—example. " * 20),
+        "instagram_caption": "A" * 200,
+        "facebook_post": "B" * 250,
+        "threads_post": "C" * 100,
     })
     mock_client.messages.create = AsyncMock(
         return_value=_make_anthropic_response(data_with_emdash)
@@ -421,3 +446,134 @@ async def test_generate_social_standalone_no_brand_structure_hints_when_bvp_fiel
 
     prompt_text = captured_prompts[0]
     assert "BRAND STRUCTURE HINTS" not in prompt_text
+
+
+# ── Story 3.26: Social voice parity and prompt quality ───────────────────────
+
+_BVP_WITH_VOICE_BRIEF_SOCIAL = {
+    "tone": ["casual", "direct"],
+    "cadence": {"avg_sentence_length": 14},
+    "banned_jargon": ["leverage"],
+    "voice_brief": "Boris writes raw and direct. He never hedges.",
+}
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_uses_max_tokens_4096(mock_client):
+    from app.integrations.anthropic_client import generate_social
+
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(_VALID_SOCIAL_JSON)
+    )
+    await generate_social("brain dump", "Title", _VALID_BVP)
+
+    call_kwargs = mock_client.messages.create.call_args.kwargs
+    assert call_kwargs["max_tokens"] == 4096
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_uses_max_tokens_6144(mock_client):
+    from app.integrations.anthropic_client import generate_social_standalone
+
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(_VALID_STANDALONE_SOCIAL_JSON)
+    )
+    await generate_social_standalone("brain dump", _VALID_BVP)
+
+    call_kwargs = mock_client.messages.create.call_args.kwargs
+    assert call_kwargs["max_tokens"] == 6144
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_injects_threads_voice_section_when_voice_brief_present(mock_client):
+    from app.integrations.anthropic_client import generate_social
+
+    captured_prompts = []
+
+    async def capture_call(*args, **kwargs):
+        captured_prompts.append(kwargs.get("messages", [{}])[0].get("content", ""))
+        return _make_anthropic_response(_VALID_SOCIAL_JSON)
+
+    mock_client.messages.create = AsyncMock(side_effect=capture_call)
+    await generate_social("brain dump", "Title", _BVP_WITH_VOICE_BRIEF_SOCIAL)
+
+    prompt_text = captured_prompts[0]
+    assert "THREADS BRAND VOICE" in prompt_text
+    assert "Boris writes raw and direct" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_hard_truncates_instagram_at_600(mock_client):
+    from app.integrations.anthropic_client import generate_social
+
+    long_ig = "I" * 601
+    data = json.dumps({
+        "x_post": "Short post.", "linkedin_post": "L" * 400,
+        "instagram_caption": long_ig, "facebook_post": "F" * 300, "threads_post": "T" * 100,
+    })
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(data)
+    )
+    result = await generate_social("brain dump", "Title", _VALID_BVP)
+    assert len(result["instagram_caption"]) == 600
+    assert result["instagram_caption"].endswith("…")
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_hard_truncates_facebook_at_800(mock_client):
+    from app.integrations.anthropic_client import generate_social
+
+    long_fb = "F" * 801
+    data = json.dumps({
+        "x_post": "Short post.", "linkedin_post": "L" * 400,
+        "instagram_caption": "I" * 200, "facebook_post": long_fb, "threads_post": "T" * 100,
+    })
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(data)
+    )
+    result = await generate_social("brain dump", "Title", _VALID_BVP)
+    assert len(result["facebook_post"]) == 800
+    assert result["facebook_post"].endswith("…")
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_hard_truncates_instagram_at_600(mock_client):
+    from app.integrations.anthropic_client import generate_social_standalone
+
+    long_ig = "I" * 601
+    data = json.dumps({
+        "x_post": "Short post but at least 70 characters to be valid for standalone.",
+        "linkedin_post": "L" * 1300,
+        "instagram_caption": long_ig, "facebook_post": "F" * 300, "threads_post": "T" * 100,
+    })
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(data)
+    )
+    result = await generate_social_standalone("brain dump", _VALID_BVP)
+    assert len(result["instagram_caption"]) == 600
+    assert result["instagram_caption"].endswith("…")
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_hard_truncates_facebook_at_800(mock_client):
+    from app.integrations.anthropic_client import generate_social_standalone
+
+    long_fb = "F" * 801
+    data = json.dumps({
+        "x_post": "Short post but at least 70 characters to be valid for standalone.",
+        "linkedin_post": "L" * 1300,
+        "instagram_caption": "I" * 200, "facebook_post": long_fb, "threads_post": "T" * 100,
+    })
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(data)
+    )
+    result = await generate_social_standalone("brain dump", _VALID_BVP)
+    assert len(result["facebook_post"]) == 800
+    assert result["facebook_post"].endswith("…")

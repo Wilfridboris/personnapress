@@ -6,6 +6,7 @@ from app.integrations.generation_prompts import (
     _FIDELITY_PROMPT,
     _SOCIAL_PROMPT,
     _SOCIAL_STANDALONE_PROMPT,
+    _build_social_universal_rules,
     _build_standalone_voice_injection,
     _build_template_structure,
     _build_voice_injection,
@@ -74,19 +75,19 @@ class TestBuildVoiceInjection:
     def test_em_dash_in_signature_phrase_replaced(self):
         bvp = {**_BASE_BVP, "signature_phrases": ["test—phrase"]}
         result = _build_voice_injection(bvp)
-        assert "test--phrase" in result
+        assert "test, phrase" in result
         assert "test—phrase" not in result
 
     def test_em_dash_in_voice_anchor_replaced(self):
         bvp = {**_BASE_BVP, "voice_anchor_sentences": ["sentence—with dash"]}
         result = _build_voice_injection(bvp)
-        assert "sentence--with dash" in result
+        assert "sentence, with dash" in result
         assert "sentence—with dash" not in result
 
     def test_em_dash_in_anti_pattern_replaced(self):
         bvp = {**_BASE_BVP, "anti_pattern_example": "example—bad sentence"}
         result = _build_voice_injection(bvp)
-        assert "example--bad sentence" in result
+        assert "example, bad sentence" in result
         assert "example—bad sentence" not in result
 
     def test_signature_phrases_capped_at_10(self):
@@ -213,13 +214,13 @@ class TestBuildStandaloneVoiceInjection:
     def test_em_dash_in_signature_phrase_replaced(self):
         bvp = {"signature_phrases": ["test—phrase"]}
         result = _build_standalone_voice_injection(bvp)
-        assert "test--phrase" in result
+        assert "test, phrase" in result
         assert "test—phrase" not in result
 
     def test_em_dash_in_anti_pattern_replaced(self):
         bvp = {"anti_pattern_example": "bad—example"}
         result = _build_standalone_voice_injection(bvp)
-        assert "bad--example" in result
+        assert "bad, example" in result
         assert "bad—example" not in result
 
     def test_anti_pattern_without_signature_phrases(self):
@@ -405,3 +406,89 @@ class TestBuildTemplateStructure:
         assert "THOUGHT LEADERSHIP" in result
         assert "counter-argument" in result
         assert "Do NOT add a FAQ section" in result
+
+
+# ── _build_social_universal_rules tests: Story 3.26 ──────────────────────────
+
+class TestBuildSocialUniversalRules:
+    def test_returns_banned_jargon_when_present(self):
+        bvp = {"banned_jargon": ["leverage", "synergy"]}
+        result = _build_social_universal_rules(bvp, "professional", "avg sentence length 15 words")
+        assert "BANNED WORDS" in result
+        assert "leverage" in result
+        assert "synergy" in result
+
+    def test_omits_banned_jargon_when_empty(self):
+        bvp = {"banned_jargon": []}
+        result = _build_social_universal_rules(bvp, "professional", "avg sentence length 15 words")
+        assert "BANNED WORDS" not in result
+
+    def test_omits_banned_jargon_when_absent(self):
+        result = _build_social_universal_rules({}, "professional", "avg sentence length 15 words")
+        assert "BANNED WORDS" not in result
+
+    def test_professional_tone_avoids_contractions(self):
+        result = _build_social_universal_rules({}, "professional, authoritative", "avg sentence length 15 words")
+        assert "avoid" in result.lower()
+        assert "Contractions" in result
+
+    def test_casual_tone_uses_contractions(self):
+        result = _build_social_universal_rules({}, "casual, friendly", "avg sentence length 15 words")
+        assert "use naturally" in result.lower() or "use contractions" in result.lower() or "use naturally throughout" in result
+
+    def test_neutral_tone_omits_contractions_rule(self):
+        result = _build_social_universal_rules({}, "clear, direct", "avg sentence length 15 words")
+        assert "Contractions" not in result
+
+    def test_always_includes_dash_ban(self):
+        result = _build_social_universal_rules({}, "professional", "avg sentence length 15 words")
+        assert "em-dash" in result
+        assert "double-dash" in result
+        assert "flows naturally" in result
+
+    def test_always_includes_banned_openers(self):
+        result = _build_social_universal_rules({}, "professional", "avg sentence length 15 words")
+        assert "In today's fast-paced world" in result
+        assert "As we all know" in result
+
+    def test_always_includes_passive_voice_rule(self):
+        result = _build_social_universal_rules({}, "professional", "avg sentence length 15 words")
+        assert "passive voice" in result.lower()
+
+    def test_specificity_rule_injected_when_concrete_numbers(self):
+        bvp = {"specificity_preference": "concrete_numbers"}
+        result = _build_social_universal_rules(bvp, "professional", "avg sentence length 15 words")
+        assert "specific numbers" in result
+
+    def test_specificity_rule_omitted_when_not_concrete_numbers(self):
+        bvp = {"specificity_preference": "general"}
+        result = _build_social_universal_rules(bvp, "professional", "avg sentence length 15 words")
+        assert "specific numbers" not in result
+
+    def test_tone_and_cadence_appear_in_output(self):
+        result = _build_social_universal_rules({}, "direct, authoritative", "avg sentence length 12 words")
+        assert "direct, authoritative" in result
+        assert "avg sentence length 12 words" in result
+
+
+# ── Anti-pattern scope test: Story 3.26 AC 11 ────────────────────────────────
+
+class TestStandaloneVoiceInjectionAntiPatternScope:
+    def test_anti_pattern_appears_before_linkedin_section(self):
+        bvp = {
+            "opening_pattern": "bold_claim",
+            "anti_pattern_example": "The paradigm shift enables us to leverage synergies.",
+        }
+        result = _build_standalone_voice_injection(bvp)
+        assert "ANTI-PATTERN" in result
+        assert "apply to all posts" in result
+        anti_pos = result.index("ANTI-PATTERN")
+        linkedin_pos = result.index("apply to linkedin_post only")
+        assert anti_pos < linkedin_pos
+
+    def test_anti_pattern_without_other_hints_returns_just_anti_block(self):
+        bvp = {"anti_pattern_example": "Plain corporate sentence here."}
+        result = _build_standalone_voice_injection(bvp)
+        assert "ANTI-PATTERN" in result
+        assert "apply to all posts" in result
+        assert "BRAND STRUCTURE HINTS" not in result

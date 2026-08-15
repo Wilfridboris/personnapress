@@ -58,11 +58,11 @@ def _build_voice_injection(bvp: dict) -> str:
         if isinstance(s, str) and s.strip()
     ][:5]
     _raw_anti = bvp.get("anti_pattern_example")
-    anti_pattern = ((_raw_anti if isinstance(_raw_anti, str) else "") or "").strip().replace("—", "--").replace('"', "'")
+    anti_pattern = ((_raw_anti if isinstance(_raw_anti, str) else "") or "").strip().replace("—", ", ").replace('"', "'")
 
     sig_block = ""
     if sig_phrases:
-        phrases_clean = [p.replace("—", "--").replace("\n", " ").replace("\r", "") for p in sig_phrases]
+        phrases_clean = [p.replace("—", ", ").replace("\n", " ").replace("\r", "") for p in sig_phrases]
         sig_bullet_list = "\n".join(f"- {p}" for p in phrases_clean)
         sig_block = (
             "\nSIGNATURE PHRASES (short phrases this writer uses naturally -- weave 2-3 into the post "
@@ -72,7 +72,7 @@ def _build_voice_injection(bvp: dict) -> str:
 
     anchor_block = ""
     if voice_anchors:
-        anchors_clean = [s.replace("—", "--").replace("\n", " ").replace("\r", "") for s in voice_anchors]
+        anchors_clean = [s.replace("—", ", ").replace("\n", " ").replace("\r", "") for s in voice_anchors]
         anchor_bullet_list = "\n".join(f"- {s}" for s in anchors_clean)
         anchor_block = (
             "\nVOICE ANCHORS (verbatim sentences from this writer -- these represent the target register, "
@@ -118,6 +118,47 @@ def _meta_voice_note(bvp: dict) -> str:
     if not words:
         return ""
     return " -- write it in this voice: " + " ".join(words)
+
+
+def _build_social_universal_rules(bvp: dict, tone_list: str, cadence_instruction: str) -> str:
+    """Build the WRITING RULES block injected into both social prompt templates."""
+    lines = [
+        "WRITING RULES (apply to all five posts):",
+        f"- Tone: {tone_list}",
+        f"- Cadence: {cadence_instruction}",
+    ]
+
+    tone_lower = tone_list.lower()
+    casual_tones = {"casual", "friendly", "conversational", "approachable"}
+    formal_tones = {"professional", "formal", "authoritative", "corporate"}
+    if any(t in tone_lower for t in casual_tones):
+        lines.append("- Contractions: use naturally throughout (don't, can't, I've, you'll, it's)")
+    elif any(t in tone_lower for t in formal_tones):
+        lines.append("- Contractions: avoid entirely")
+
+    lines.append("- Never use passive voice when active voice is possible.")
+
+    if bvp.get("specificity_preference") == "concrete_numbers":
+        lines.append(
+            "- All quantifiable claims MUST use specific numbers, not vague phrases like 'many' or 'a lot'"
+        )
+
+    lines.append(
+        "- Never use an em-dash (—) or double-dash (--). "
+        "Rewrite any sentence that would need one so it flows naturally without any dash form."
+    )
+
+    banned_jargon_list = ", ".join(str(j) for j in bvp.get("banned_jargon", []))
+    if banned_jargon_list:
+        lines.append(f"- BANNED WORDS, do not use anywhere in any post: {banned_jargon_list}")
+
+    lines.append(
+        "- BANNED OPENERS, never begin any post with: "
+        '"In today\'s fast-paced world", "In today\'s digital landscape", '
+        '"As we all know", "It\'s no secret that"'
+    )
+
+    return "\n".join(lines)
 
 
 _BLOG_PROMPT = """You are a direct, expert blog writer. Write a blog post that sounds like a human expert, not an AI assistant.
@@ -259,11 +300,13 @@ Return ONLY a valid JSON object (no markdown):
 }}
 {expanded_scoring_section}"""
 
-_SOCIAL_PROMPT = """Based on the brain dump and brand voice, write five platform-native social media posts.
+_SOCIAL_PROMPT = """You are an expert social media copywriter writing platform-native posts that complement a blog article.
 
 BRAND VOICE PROFILE:
 {bvp_json}
-{linkedin_voice_section}{instagram_voice_section}{facebook_voice_section}
+{linkedin_voice_section}{instagram_voice_section}{facebook_voice_section}{threads_voice_section}{bvp_structure_hints}
+{social_universal_rules}
+
 BRAIN DUMP:
 {brain_dump}
 
@@ -279,11 +322,11 @@ BLOG TITLE:
 
 Return ONLY a valid JSON object (no markdown):
 {{
-  "x_post": "<X post text, max 280 characters, tease the blog without duplicating it. No em-dash character (—) anywhere.>",
-  "linkedin_post": "<LinkedIn post, 300-1300 characters. Open with a striking first line about a business failure, success, career shift, or industry observation -- make it impossible to scroll past. Write in scannable format: one sentence per paragraph, clear line breaks between each. Share a framework, step-by-step lesson, or 'what I learned' story that delivers concrete value. Tone: professional yet personal -- expert authority balanced with human vulnerability. End with 3-5 relevant professional hashtags on their own line at the very bottom (format: #hashtag #hashtag). No em-dash character (—) anywhere.>",
-  "instagram_caption": "<Instagram caption, 150-600 characters. The first 2-3 lines are critical -- Instagram truncates after line 3 before the 'More' button, so the hook must land immediately. Open with a single punchy line or relatable personal moment. Use short paragraphs or bullet points separated by blank lines to create visual white space. Include 1-2 emojis placed naturally within the text (not at the end of every line). End with a blank line then 8-15 hashtags: mix 3-5 broad category hashtags with 5-10 highly specific niche hashtags (format: #hashtag #hashtag). Tone: warm, first-person, conversational -- not the LinkedIn professional register. No em-dash character (—) anywhere. No links (they are not clickable on Instagram).>",
-  "facebook_post": "<Facebook post, 200-800 characters. Open with a relatable problem or an emotional hook that makes people stop scrolling. Write 2-4 short paragraphs. End with a direct engagement question ('What's your take?' / 'Has this happened to you?' / 'Drop your answer below.'). Tone: casual and warm, community-focused -- more personal than LinkedIn, less formal. No hashtags needed. Do NOT include any URLs or links in the post body (links hurt Facebook's organic reach; they belong in the first comment, which is handled separately). No em-dash character (—) anywhere.>",
-  "threads_post": "<Threads post, max 500 characters. Start with a bold statement, hot take, or contrarian opinion. Drop all corporate voice -- write like you're typing from your phone, raw and unpolished. No hashtags. No structured formatting. No 'here's what I learned' framing -- just say the thing directly. Can be a one-liner or 2-3 short sentences. No em-dash character (—) anywhere.>"
+  "x_post": "<X post, 70-280 characters. Structure: Hook (first ~70 chars, stops the scroll) then Value (1 core insight from the blog) then Proof (a specific number or outcome from the brain dump if available) then Link-nudge (one short line: 'Full piece linked in bio' or 'Link in first comment' -- write it naturally, not as a promotional pitch). Never use an em-dash (—) or double-dash (--). Rewrite any sentence that would need one so it flows naturally without any dash form.>",
+  "linkedin_post": "<LinkedIn post, 300-1300 characters. Open with a striking first line about a business failure, success, career shift, or industry observation -- make it impossible to scroll past. Write in scannable format: one sentence per paragraph, clear line breaks between each. Share a framework, step-by-step lesson, or 'what I learned' story that delivers concrete value. Tone: professional yet personal -- expert authority balanced with human vulnerability. End with 3-5 relevant professional hashtags on their own line at the very bottom (format: #hashtag #hashtag). Never use an em-dash (—) or double-dash (--). Rewrite any sentence that would need one so it flows naturally without any dash form.>",
+  "instagram_caption": "<Instagram caption, 150-600 characters. The first 2-3 lines are critical -- Instagram truncates after line 3 before the 'More' button, so the hook must land immediately. Open with a single punchy line or relatable personal moment. Use short paragraphs or bullet points separated by blank lines to create visual white space. Include 1-2 emojis placed naturally within the text (not at the end of every line). End with a blank line then 8-15 hashtags: mix 3-5 broad category hashtags with 5-10 highly specific niche hashtags (format: #hashtag #hashtag). Tone: warm, first-person, conversational -- not the LinkedIn professional register. Never use an em-dash (—) or double-dash (--). Rewrite any sentence that would need one so it flows naturally without any dash form. No links (they are not clickable on Instagram).>",
+  "facebook_post": "<Facebook post, 200-800 characters. Open with a relatable problem or an emotional hook that makes people stop scrolling. Write 2-4 short paragraphs. End with a direct engagement question ('What's your take?' / 'Has this happened to you?' / 'Drop your answer below.'). Tone: casual and warm, community-focused -- more personal than LinkedIn, less formal. No hashtags needed. Do NOT include any URLs or links in the post body (links hurt Facebook's organic reach; they belong in the first comment, which is handled separately). Never use an em-dash (—) or double-dash (--). Rewrite any sentence that would need one so it flows naturally without any dash form.>",
+  "threads_post": "<Threads post, max 500 characters. Start with a bold statement, hot take, or contrarian opinion. Drop all corporate voice -- write like you're typing from your phone, raw and unpolished. No hashtags. No structured formatting. No 'here's what I learned' framing -- just say the thing directly. Can be a one-liner or 2-3 short sentences. Never use an em-dash (—) or double-dash (--). Rewrite any sentence that would need one so it flows naturally without any dash form.>"
 }}
 """
 
@@ -292,8 +335,10 @@ These posts stand alone -- there is no blog article to link to or tease.
 
 BRAND VOICE PROFILE:
 {bvp_json}
-{linkedin_voice_section}{instagram_voice_section}{facebook_voice_section}
+{linkedin_voice_section}{instagram_voice_section}{facebook_voice_section}{threads_voice_section}
 {bvp_structure_hints}
+{social_universal_rules}
+
 BRAIN DUMP:
 {brain_dump}
 
@@ -306,11 +351,11 @@ personality signals (humor, self-deprecation, bluntness) from authored passages 
 
 Return ONLY a valid JSON object (no markdown):
 {{
-  "x_post": "<X post, 70-280 characters. Structure: Hook (first ~70 chars, stops the scroll) then Value (1 core insight or 2-3 short bullets) then Proof (a number or outcome from the brain dump if available) then Nudge (simple ask: Save this / Reply with X / Drop a comment). This is the complete thought -- no 'Read the full guide', no link CTA, no em-dash character anywhere.>",
-  "linkedin_post": "<LinkedIn post, 1200-2500 characters. Use blank lines between each section. Structure must follow this order: (1) HOOK lines 1-2: choose the strongest pattern for this content -- bold data claim (I analyzed N things. Here is the pattern.), before/after transformation (X months ago [pain]. Today [outcome]. Here is what changed.), contrarian one-liner (Everyone says X. Here is why that costs you.), personal reveal (I almost [negative outcome]. The problem was not what you think.), timeline/result (In N days we [result]. Here is exactly what changed.), mistake/pain (Most [audience] do X. Here is the cost.). (2) RE-HOOK lines 3-4: one sharp line clarifying who this is for. (3) PROBLEM/STAKES: 3-6 short lines with concrete specifics -- numbers, budget, time, emotional cost -- pulled from the brain dump. (4) STORY/INSIGHT: 5-10 lines with specific details, named tools, outcomes, or data from the brain dump. (5) STEPS/FRAMEWORK: 3-7 bullets, each a clear action or belief shift, not a vague principle. (6) SOFT CTA: 1-2 lines -- a specific question the reader can answer, a comment trigger ('Comment X and I will send it'), or a DM invite. Never close with 'thoughts?' or 'you can too'. No em-dash character anywhere. No 'Read the full guide' or blog link CTA.>",
-  "instagram_caption": "<Instagram caption, 150-600 characters. The first 2-3 lines are critical -- Instagram truncates after line 3 before the 'More' button, so the hook must land immediately. Open with a single punchy line or relatable personal moment. Use short paragraphs or bullet points separated by blank lines to create visual white space. Include 1-2 emojis placed naturally within the text (not at the end of every line). End with a blank line then 8-15 hashtags: mix 3-5 broad category hashtags with 5-10 highly specific niche hashtags (format: #hashtag #hashtag). Tone: warm, first-person, conversational -- not the LinkedIn professional register. No em-dash character anywhere. No links (they are not clickable on Instagram).>",
-  "facebook_post": "<Facebook post, 200-800 characters. Open with a relatable problem or an emotional hook that makes people stop scrolling. Write 2-4 short paragraphs. End with a direct engagement question ('What's your take?' / 'Has this happened to you?' / 'Drop your answer below.'). Tone: casual and warm, community-focused -- more personal than LinkedIn, less formal. No hashtags needed. Do NOT include any URLs or links in the post body (links hurt Facebook's organic reach; they belong in the first comment, which is handled separately). No em-dash character anywhere.>",
-  "threads_post": "<Threads post, max 500 characters. Start with a bold statement, hot take, or contrarian opinion. Drop all corporate voice -- write like you're typing from your phone, raw and unpolished. No hashtags. No structured formatting. No 'here's what I learned' framing -- just say the thing directly. Can be a one-liner or 2-3 short sentences. No em-dash character anywhere.>"
+  "x_post": "<X post, 70-280 characters. Structure: Hook (first ~70 chars, stops the scroll) then Value (1 core insight or 2-3 short bullets) then Proof (a number or outcome from the brain dump if available) then Nudge (simple ask: Save this / Reply with X / Drop a comment). This is the complete thought -- no 'Read the full guide', no link CTA. Never use an em-dash (—) or double-dash (--). Rewrite any sentence that would need one so it flows naturally without any dash form.>",
+  "linkedin_post": "<LinkedIn post, 1200-2500 characters. Use blank lines between each section. Structure must follow this order: (1) HOOK lines 1-2: choose the strongest pattern for this content -- bold data claim (I analyzed N things. Here is the pattern.), before/after transformation (X months ago [pain]. Today [outcome]. Here is what changed.), contrarian one-liner (Everyone says X. Here is why that costs you.), personal reveal (I almost [negative outcome]. The problem was not what you think.), timeline/result (In N days we [result]. Here is exactly what changed.), mistake/pain (Most [audience] do X. Here is the cost.). (2) RE-HOOK lines 3-4: one sharp line clarifying who this is for. (3) PROBLEM/STAKES: 3-6 short lines with concrete specifics -- numbers, budget, time, emotional cost -- pulled from the brain dump. (4) STORY/INSIGHT: 5-10 lines with specific details, named tools, outcomes, or data from the brain dump. (5) STEPS/FRAMEWORK: 3-7 bullets, each a clear action or belief shift, not a vague principle. (6) SOFT CTA: 1-2 lines -- a specific question the reader can answer, a comment trigger ('Comment X and I will send it'), or a DM invite. Never close with 'thoughts?' or 'you can too'. End with 3-5 relevant professional hashtags on their own line at the very bottom (format: #hashtag #hashtag). Never use an em-dash (—) or double-dash (--). Rewrite any sentence that would need one so it flows naturally without any dash form. No 'Read the full guide' or blog link CTA.>",
+  "instagram_caption": "<Instagram caption, 150-600 characters. The first 2-3 lines are critical -- Instagram truncates after line 3 before the 'More' button, so the hook must land immediately. Open with a single punchy line or relatable personal moment. Use short paragraphs or bullet points separated by blank lines to create visual white space. Include 1-2 emojis placed naturally within the text (not at the end of every line). End with a blank line then 8-15 hashtags: mix 3-5 broad category hashtags with 5-10 highly specific niche hashtags (format: #hashtag #hashtag). Tone: warm, first-person, conversational -- not the LinkedIn professional register. Never use an em-dash (—) or double-dash (--). Rewrite any sentence that would need one so it flows naturally without any dash form. No links (they are not clickable on Instagram).>",
+  "facebook_post": "<Facebook post, 200-800 characters. Open with a relatable problem or an emotional hook that makes people stop scrolling. Write 2-4 short paragraphs. End with a direct engagement question ('What's your take?' / 'Has this happened to you?' / 'Drop your answer below.'). Tone: casual and warm, community-focused -- more personal than LinkedIn, less formal. No hashtags needed. Do NOT include any URLs or links in the post body (links hurt Facebook's organic reach; they belong in the first comment, which is handled separately). Never use an em-dash (—) or double-dash (--). Rewrite any sentence that would need one so it flows naturally without any dash form.>",
+  "threads_post": "<Threads post, max 500 characters. Start with a bold statement, hot take, or contrarian opinion. Drop all corporate voice -- write like you're typing from your phone, raw and unpolished. No hashtags. No structured formatting. No 'here's what I learned' framing -- just say the thing directly. Can be a one-liner or 2-3 short sentences. Never use an em-dash (—) or double-dash (--). Rewrite any sentence that would need one so it flows naturally without any dash form.>"
 }}
 """
 
@@ -358,20 +403,27 @@ def _build_standalone_voice_injection(bvp: dict) -> str:
         if isinstance(p, str) and p.strip()
     ][:5]
     _raw_anti = bvp.get("anti_pattern_example")
-    anti_pattern = ((_raw_anti if isinstance(_raw_anti, str) else "") or "").strip().replace("—", "--").replace('"', "'")
+    anti_pattern = ((_raw_anti if isinstance(_raw_anti, str) else "") or "").strip().replace("—", ", ").replace('"', "'")
 
     if sig_phrases:
-        phrases_str = ", ".join(p.replace("—", "--").replace("\n", " ").replace("\r", "") for p in sig_phrases)
+        phrases_str = ", ".join(p.replace("—", ", ").replace("\n", " ").replace("\r", "") for p in sig_phrases)
         hints.append(
             f"- Writer's signature phrases -- use 1-2 naturally in the LinkedIn post (not in x_post): {phrases_str}"
         )
+
+    if not hints and not anti_pattern:
+        return ""
+
+    anti_block = ""
     if anti_pattern:
-        hints.append(f'- ANTI-PATTERN: never produce text like "{anti_pattern}"')
+        anti_block = f'\nANTI-PATTERN (apply to all posts -- never write text like this): "{anti_pattern}"\n'
 
     if not hints:
-        return ""
+        return anti_block
+
     return (
-        "\nBRAND STRUCTURE HINTS (from voice profile -- apply to linkedin_post only):\n"
+        anti_block
+        + "\nBRAND STRUCTURE HINTS (from voice profile -- apply to linkedin_post only):\n"
         + "\n".join(hints)
         + "\n"
     )

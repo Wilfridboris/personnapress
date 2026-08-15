@@ -1,5 +1,15 @@
 # Deferred Work
 
+## Deferred from: code review of 3-26-social-voice-parity-and-prompt-quality (2026-08-15)
+
+- `tone_list` is empty string when BVP `tone=[]` — emits "- Tone: " with blank value in WRITING RULES block; same pre-existing pattern as generate_blog. [generation_prompts.py:127, gemini.py, anthropic_client.py]
+- Voice-brief sentence splitting on `". "` is fragile (abbreviations like "e.g.", sentences ending with `.\n`). By-spec design from dev notes. [gemini.py, anthropic_client.py]
+- `threads_post` truncation is warning-only while IG/FB now hard-truncate — inconsistency; threads_post outside this story's scope. [gemini.py, anthropic_client.py]
+- `--` literal in Threads voice section label and other prompt structural text — pervasive pre-existing pattern throughout prompts; project rule targets generated copy. [generation_prompts.py, gemini.py]
+- `avg_sentence_length=0` silently replaced by 15 via `or 15` fallback — same pre-existing pattern as generate_blog. [gemini.py, anthropic_client.py]
+- `_sanitize_json_str` in gemini.py still uses `replace("—","--")` for JSON safety net — pre-existing, not in this story's scope. [gemini.py]
+- Contractions `if/elif` picks casual instruction on mixed-tone BVP (e.g., "professional, friendly") — same design as blog generation, by-design ordering. [generation_prompts.py]
+
 ## Deferred from: code review of 21-16-platform-native-social-content (2026-08-14)
 
 - `facebook_post` length inconsistency: prompt instructs LLM to write 200-800 chars but validator warns at 200-1000 — internal spec contradiction; implementation chose AC value (200-1000). Update prompt text from "200-800" to "200-1000" if alignment is desired. [gemini.py, anthropic_client.py, generation_prompts.py]

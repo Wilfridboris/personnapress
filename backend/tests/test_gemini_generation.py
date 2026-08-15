@@ -47,6 +47,9 @@ _VALID_FIDELITY_JSON = json.dumps({
 _VALID_SOCIAL_JSON = json.dumps({
     "x_post": "Check out this blog post about testing!",
     "linkedin_post": "We published a new article. " * 25,  # ~625 chars
+    "instagram_caption": "A" * 200,
+    "facebook_post": "B" * 250,
+    "threads_post": "C" * 100,
 })
 
 
@@ -351,6 +354,7 @@ async def test_check_fidelity_returns_7_key_bypass_when_no_bvp():
         "seo_h2_count": 3,
         "seo_faq_present": True,
         "seo_fluff_detected": False,
+        "authored_passages_preserved": True,
         "tags": [],
     }
 
@@ -598,7 +602,10 @@ async def test_generate_social_truncates_x_post_at_280(mock_client):
     from app.integrations.gemini import generate_social
 
     long_x = "x" * 300
-    data = json.dumps({"x_post": long_x, "linkedin_post": "LinkedIn post " * 40})
+    data = json.dumps({
+        "x_post": long_x, "linkedin_post": "LinkedIn post " * 40,
+        "instagram_caption": "A" * 200, "facebook_post": "B" * 250, "threads_post": "C" * 100,
+    })
     mock_client.aio.models.generate_content = _mock_aio_generate(data)
     result = await generate_social("brain dump", "Title", _VALID_BVP)
     assert len(result["x_post"]) == 280
@@ -1135,6 +1142,9 @@ async def test_check_fidelity_expanded_scoring_prompt_includes_advisory_instruct
 _VALID_STANDALONE_SOCIAL_JSON = json.dumps({
     "x_post": "I tested 4 Facebook ad setups. One crushed it. Here is what I found.",
     "linkedin_post": "LinkedIn standalone post. " * 55,  # ~1375 chars
+    "instagram_caption": "A" * 200,
+    "facebook_post": "B" * 250,
+    "threads_post": "C" * 100,
 })
 
 _BVP_WITH_STRUCTURE_HINTS = {
@@ -1164,7 +1174,13 @@ async def test_generate_social_standalone_linkedin_over_2500_truncated(mock_clie
     from app.integrations.gemini import generate_social_standalone
 
     long_ln = "L" * 2600
-    data = json.dumps({"x_post": "Short X post.", "linkedin_post": long_ln})
+    data = json.dumps({
+        "x_post": "Short X post that meets the minimum length requirement for standalone.",
+        "linkedin_post": long_ln,
+        "instagram_caption": "I" * 200,
+        "facebook_post": "F" * 300,
+        "threads_post": "T" * 100,
+    })
     mock_client.aio.models.generate_content = _mock_aio_generate(data)
     result = await generate_social_standalone("brain dump", _VALID_BVP)
     assert len(result["linkedin_post"]) == 2500
@@ -1177,7 +1193,13 @@ async def test_generate_social_standalone_linkedin_under_1200_logs_warning(mock_
     import logging
     from app.integrations.gemini import generate_social_standalone
 
-    short_data = json.dumps({"x_post": "Short X post.", "linkedin_post": "Too short for LinkedIn."})
+    short_data = json.dumps({
+        "x_post": "Short X post that meets the minimum length requirement for standalone.",
+        "linkedin_post": "Too short for LinkedIn.",
+        "instagram_caption": "I" * 200,
+        "facebook_post": "F" * 300,
+        "threads_post": "T" * 100,
+    })
     mock_client.aio.models.generate_content = _mock_aio_generate(short_data)
     with caplog.at_level(logging.WARNING, logger="app.integrations.gemini"):
         await generate_social_standalone("brain dump", _VALID_BVP)
@@ -1208,8 +1230,11 @@ async def test_generate_social_standalone_emdash_stripped_from_both_posts(mock_c
     from app.integrations.gemini import generate_social_standalone
 
     data_with_emdash = json.dumps({
-        "x_post": "Great insight—here is what works.",
+        "x_post": "Great insight—here is what works, and this is long enough for standalone.",
         "linkedin_post": ("LinkedIn post with em-dash—example. " * 40),
+        "instagram_caption": "Instagram caption without dash.",
+        "facebook_post": "Facebook post without dash.",
+        "threads_post": "Threads post without dash.",
     })
     mock_client.aio.models.generate_content = _mock_aio_generate(data_with_emdash)
     result = await generate_social_standalone("brain dump", _VALID_BVP)
@@ -1275,6 +1300,9 @@ async def test_generate_social_emdash_stripped_from_both_posts(mock_client):
     data_with_emdash = json.dumps({
         "x_post": "Great insight—here is what works.",
         "linkedin_post": ("LinkedIn post with em-dash—example. " * 20),
+        "instagram_caption": "A" * 200,
+        "facebook_post": "B" * 250,
+        "threads_post": "C" * 100,
     })
     mock_client.aio.models.generate_content = _mock_aio_generate(data_with_emdash)
     result = await generate_social("brain dump", "Blog Title", _VALID_BVP)
@@ -1298,3 +1326,126 @@ async def test_generate_social_standalone_no_brand_structure_hints_when_bvp_fiel
 
     prompt_text = captured_prompt[0]
     assert "BRAND STRUCTURE HINTS" not in prompt_text
+
+
+# ── Story 3.26: Social voice parity and prompt quality ───────────────────────
+
+_BVP_WITH_VOICE_BRIEF_SOCIAL = {
+    "tone": ["casual", "direct"],
+    "cadence": {"avg_sentence_length": 14},
+    "banned_jargon": ["leverage", "synergy"],
+    "voice_brief": "Boris writes raw and direct. He never hedges.",
+}
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_social_injects_threads_voice_section_when_voice_brief_present(mock_client):
+    from app.integrations.gemini import generate_social
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_SOCIAL_JSON)
+
+    mock_client.aio.models.generate_content = capture
+    await generate_social("brain dump", "Title", _BVP_WITH_VOICE_BRIEF_SOCIAL)
+
+    prompt_text = captured_prompt[0]
+    assert "THREADS BRAND VOICE" in prompt_text
+    assert "Boris writes raw and direct" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_social_no_threads_voice_section_when_no_voice_brief(mock_client):
+    from app.integrations.gemini import generate_social
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response(_VALID_SOCIAL_JSON)
+
+    mock_client.aio.models.generate_content = capture
+    await generate_social("brain dump", "Title", _VALID_BVP)
+
+    prompt_text = captured_prompt[0]
+    assert "THREADS BRAND VOICE" not in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_social_hard_truncates_instagram_at_600(mock_client):
+    from app.integrations.gemini import generate_social
+
+    long_ig = "I" * 601
+    data = json.dumps({
+        "x_post": "Short post.",
+        "linkedin_post": "L" * 400,
+        "instagram_caption": long_ig,
+        "facebook_post": "F" * 300,
+        "threads_post": "T" * 100,
+    })
+    mock_client.aio.models.generate_content = _mock_aio_generate(data)
+    result = await generate_social("brain dump", "Title", _VALID_BVP)
+    assert len(result["instagram_caption"]) == 600
+    assert result["instagram_caption"].endswith("…")
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_social_hard_truncates_facebook_at_800(mock_client):
+    from app.integrations.gemini import generate_social
+
+    long_fb = "F" * 801
+    data = json.dumps({
+        "x_post": "Short post.",
+        "linkedin_post": "L" * 400,
+        "instagram_caption": "I" * 200,
+        "facebook_post": long_fb,
+        "threads_post": "T" * 100,
+    })
+    mock_client.aio.models.generate_content = _mock_aio_generate(data)
+    result = await generate_social("brain dump", "Title", _VALID_BVP)
+    assert len(result["facebook_post"]) == 800
+    assert result["facebook_post"].endswith("…")
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_social_standalone_hard_truncates_instagram_at_600(mock_client):
+    from app.integrations.gemini import generate_social_standalone
+
+    long_ig = "I" * 601
+    data = json.dumps({
+        "x_post": "Short post but at least 70 characters to be valid for standalone.",
+        "linkedin_post": "L" * 1300,
+        "instagram_caption": long_ig,
+        "facebook_post": "F" * 300,
+        "threads_post": "T" * 100,
+    })
+    mock_client.aio.models.generate_content = _mock_aio_generate(data)
+    result = await generate_social_standalone("brain dump", _VALID_BVP)
+    assert len(result["instagram_caption"]) == 600
+    assert result["instagram_caption"].endswith("…")
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_social_standalone_hard_truncates_facebook_at_800(mock_client):
+    from app.integrations.gemini import generate_social_standalone
+
+    long_fb = "F" * 801
+    data = json.dumps({
+        "x_post": "Short post but at least 70 characters to be valid for standalone.",
+        "linkedin_post": "L" * 1300,
+        "instagram_caption": "I" * 200,
+        "facebook_post": long_fb,
+        "threads_post": "T" * 100,
+    })
+    mock_client.aio.models.generate_content = _mock_aio_generate(data)
+    result = await generate_social_standalone("brain dump", _VALID_BVP)
+    assert len(result["facebook_post"]) == 800
+    assert result["facebook_post"].endswith("…")

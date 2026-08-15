@@ -19,6 +19,7 @@ from app.integrations.generation_prompts import (
     _SOCIAL_PROMPT,
     _SOCIAL_STANDALONE_PROMPT,
     _build_seo_section,
+    _build_social_universal_rules,
     _build_standalone_voice_injection,
     _build_template_structure,
     _build_voice_injection,
@@ -283,8 +284,21 @@ async def generate_social(
     if brand_voice_profile:
         bvp_without_voice = {k: v for k, v in brand_voice_profile.items() if k != "voice_brief"}
         bvp_json = json.dumps(bvp_without_voice)
+        tone_list = ", ".join(str(t) for t in brand_voice_profile.get("tone", []))
+        cadence = brand_voice_profile.get("cadence") or {}
+        avg_sentence_length = cadence.get("avg_sentence_length") or 15
+        variation_pattern = str(cadence.get("variation_pattern") or "").strip()
+        paragraph_structure = str(cadence.get("paragraph_structure") or "").strip()
+        cadence_parts = [f"avg sentence length {avg_sentence_length} words"]
+        if variation_pattern:
+            cadence_parts.append(f'sentence variation: "{variation_pattern}"')
+        if paragraph_structure:
+            cadence_parts.append(f'paragraph structure: "{paragraph_structure}"')
+        cadence_instruction = "; ".join(cadence_parts)
     else:
         bvp_json = _DEFAULT_VOICE
+        tone_list = "professional, clear, authoritative"
+        cadence_instruction = "avg sentence length 15 words"
 
     voice_brief = (brand_voice_profile or {}).get("voice_brief") or ""
     if voice_brief:
@@ -300,21 +314,39 @@ async def generate_social(
             "\nFACEBOOK BRAND VOICE (apply to facebook_post only):\n"
             f"{voice_brief}\n"
         )
+        sentences = [s.strip() for s in voice_brief.split(". ") if s.strip()]
+        brief_excerpt = ". ".join(sentences[:2])
+        if brief_excerpt and not brief_excerpt.endswith("."):
+            brief_excerpt += "."
+        threads_voice_section = (
+            "\nTHREADS BRAND VOICE (apply to threads_post only -- keep it raw and unpolished; "
+            "voice is for register, not formality):\n"
+            f"{brief_excerpt}\n"
+        )
     else:
         linkedin_voice_section = ""
         instagram_voice_section = ""
         facebook_voice_section = ""
+        threads_voice_section = ""
+
+    bvp_structure_hints = _build_standalone_voice_injection(brand_voice_profile or {})
+    social_universal_rules = _build_social_universal_rules(
+        brand_voice_profile or {}, tone_list, cadence_instruction
+    )
 
     prompt = _SOCIAL_PROMPT.format(
         bvp_json=bvp_json,
         linkedin_voice_section=linkedin_voice_section,
         instagram_voice_section=instagram_voice_section,
         facebook_voice_section=facebook_voice_section,
+        threads_voice_section=threads_voice_section,
+        bvp_structure_hints=bvp_structure_hints,
+        social_universal_rules=social_universal_rules,
         brain_dump=brain_dump,
         blog_title=blog_title,
     )
 
-    raw = _strip_fences((await _call(prompt, max_tokens=2048)).strip())
+    raw = _strip_fences((await _call(prompt, max_tokens=4096)).strip())
 
     try:
         data = json.loads(raw)
@@ -356,18 +388,28 @@ async def generate_social(
         )
 
     ig_len = len(data["instagram_caption"])
-    if not (150 <= ig_len <= 600):
+    if ig_len < 150:
         logger.warning(
-            "generate_social: instagram_caption length %d outside expected 150-600 range",
+            "generate_social: instagram_caption length %d is below expected 150 chars",
             ig_len,
         )
+    elif ig_len > 600:
+        logger.warning(
+            "generate_social: instagram_caption exceeded 600 chars (%d), truncating", ig_len,
+        )
+        data["instagram_caption"] = data["instagram_caption"][:599] + "…"
 
     fb_len = len(data["facebook_post"])
-    if not (200 <= fb_len <= 1000):
+    if fb_len < 200:
         logger.warning(
-            "generate_social: facebook_post length %d outside expected 200-1000 range",
+            "generate_social: facebook_post length %d is below expected 200 chars",
             fb_len,
         )
+    elif fb_len > 800:
+        logger.warning(
+            "generate_social: facebook_post exceeded 800 chars (%d), truncating", fb_len,
+        )
+        data["facebook_post"] = data["facebook_post"][:799] + "…"
 
     if len(data["threads_post"]) > 500:
         logger.warning(
@@ -394,8 +436,21 @@ async def generate_social_standalone(
     if brand_voice_profile:
         bvp_without_voice = {k: v for k, v in brand_voice_profile.items() if k != "voice_brief"}
         bvp_json = json.dumps(bvp_without_voice)
+        tone_list = ", ".join(str(t) for t in brand_voice_profile.get("tone", []))
+        cadence = brand_voice_profile.get("cadence") or {}
+        avg_sentence_length = cadence.get("avg_sentence_length") or 15
+        variation_pattern = str(cadence.get("variation_pattern") or "").strip()
+        paragraph_structure = str(cadence.get("paragraph_structure") or "").strip()
+        cadence_parts = [f"avg sentence length {avg_sentence_length} words"]
+        if variation_pattern:
+            cadence_parts.append(f'sentence variation: "{variation_pattern}"')
+        if paragraph_structure:
+            cadence_parts.append(f'paragraph structure: "{paragraph_structure}"')
+        cadence_instruction = "; ".join(cadence_parts)
     else:
         bvp_json = _DEFAULT_VOICE
+        tone_list = "professional, clear, authoritative"
+        cadence_instruction = "avg sentence length 15 words"
 
     voice_brief = (brand_voice_profile or {}).get("voice_brief") or ""
     if voice_brief:
@@ -411,23 +466,38 @@ async def generate_social_standalone(
             "\nFACEBOOK BRAND VOICE (apply to facebook_post only):\n"
             f"{voice_brief}\n"
         )
+        sentences = [s.strip() for s in voice_brief.split(". ") if s.strip()]
+        brief_excerpt = ". ".join(sentences[:2])
+        if brief_excerpt and not brief_excerpt.endswith("."):
+            brief_excerpt += "."
+        threads_voice_section = (
+            "\nTHREADS BRAND VOICE (apply to threads_post only -- keep it raw and unpolished; "
+            "voice is for register, not formality):\n"
+            f"{brief_excerpt}\n"
+        )
     else:
         linkedin_voice_section = ""
         instagram_voice_section = ""
         facebook_voice_section = ""
+        threads_voice_section = ""
 
     bvp_structure_hints = _build_standalone_voice_injection(brand_voice_profile or {})
+    social_universal_rules = _build_social_universal_rules(
+        brand_voice_profile or {}, tone_list, cadence_instruction
+    )
 
     prompt = _SOCIAL_STANDALONE_PROMPT.format(
         bvp_json=bvp_json,
         linkedin_voice_section=linkedin_voice_section,
         instagram_voice_section=instagram_voice_section,
         facebook_voice_section=facebook_voice_section,
+        threads_voice_section=threads_voice_section,
         bvp_structure_hints=bvp_structure_hints,
+        social_universal_rules=social_universal_rules,
         brain_dump=brain_dump,
     )
 
-    raw = _strip_fences((await _call(prompt, max_tokens=2048)).strip())
+    raw = _strip_fences((await _call(prompt, max_tokens=6144)).strip())
 
     try:
         data = json.loads(raw)
@@ -469,18 +539,28 @@ async def generate_social_standalone(
         )
 
     ig_len = len(data["instagram_caption"])
-    if not (150 <= ig_len <= 600):
+    if ig_len < 150:
         logger.warning(
-            "generate_social_standalone: instagram_caption length %d outside expected 150-600 range",
+            "generate_social_standalone: instagram_caption length %d is below expected 150 chars",
             ig_len,
         )
+    elif ig_len > 600:
+        logger.warning(
+            "generate_social_standalone: instagram_caption exceeded 600 chars (%d), truncating", ig_len,
+        )
+        data["instagram_caption"] = data["instagram_caption"][:599] + "…"
 
     fb_len = len(data["facebook_post"])
-    if not (200 <= fb_len <= 1000):
+    if fb_len < 200:
         logger.warning(
-            "generate_social_standalone: facebook_post length %d outside expected 200-1000 range",
+            "generate_social_standalone: facebook_post length %d is below expected 200 chars",
             fb_len,
         )
+    elif fb_len > 800:
+        logger.warning(
+            "generate_social_standalone: facebook_post exceeded 800 chars (%d), truncating", fb_len,
+        )
+        data["facebook_post"] = data["facebook_post"][:799] + "…"
 
     if len(data["threads_post"]) > 500:
         logger.warning(
