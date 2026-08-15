@@ -75,7 +75,10 @@ def _build_image_prompt(blog_title: str, brand_voice_profile: dict | None) -> st
         f"A professional editorial image for the article titled '{blog_title}'."
         f"{tone_sentence}"
         " The composition is clean, with no text overlays, watermarks, or logos."
-        " Sharp focus, natural lighting, suitable as a 16:9 hero banner."
+        " Sharp focus, natural lighting."
+        " Center the main subject in the frame with generous safe margins on all sides."
+        " The composition should work equally well cropped to any aspect ratio."
+        " Square format (1:1)."
     )
 
 

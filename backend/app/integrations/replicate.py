@@ -20,7 +20,7 @@ _IS_FLUX = _MODEL.startswith("black-forest-labs/")
 _client = replicate.Client(api_token=settings.REPLICATE_API_TOKEN)
 
 
-async def generate_image(prompt: str, width: int = 1200, height: int = 630) -> str:
+async def generate_image(prompt: str, width: int = 1080, height: int = 1080) -> str:
     """Call the configured Replicate model and return the temporary image URL.
 
     Args:
@@ -51,7 +51,7 @@ async def generate_image(prompt: str, width: int = 1200, height: int = 630) -> s
         # Nano Banana Pro (and other non-FLUX Replicate models)
         input_payload = {
             "prompt": prompt,
-            "aspect_ratio": "16:9",
+            "aspect_ratio": "1:1",
             "output_format": "png",
         }
 

@@ -273,11 +273,34 @@ def test_build_image_prompt_no_brand_voice_natural_sentences():
     assert result.startswith("A professional editorial image for the article titled")
     assert "5 Ways to Scale Your SaaS Business" in result
     assert "no text overlays, watermarks, or logos" in result
-    assert "16:9 hero banner" in result
+    assert "16:9 hero banner" not in result
     assert "photograph" not in result
     assert not result.startswith("corporate editorial style,")
     assert "photorealistic" not in result
     assert "high resolution" not in result
+
+
+def test_build_image_prompt_does_not_contain_16_9_reference():
+    """Prompt must not contain '16:9', 'hero banner', 'wide', or 'landscape'."""
+    from app.services.image import _build_image_prompt
+
+    result = _build_image_prompt("Any Blog Title", {"tone": ["professional"]})
+
+    assert "16:9" not in result
+    assert "hero banner" not in result
+    assert "wide" not in result.lower()
+    assert "landscape" not in result.lower()
+
+
+def test_build_image_prompt_contains_centered_subject_instruction():
+    """Prompt must instruct centered subject with safe margins and square format."""
+    from app.services.image import _build_image_prompt
+
+    result = _build_image_prompt("Any Blog Title", None)
+
+    assert "Center the main subject in the frame" in result
+    assert "safe margins on all sides" in result
+    assert "Square format (1:1)" in result
 
 
 def test_build_image_prompt_professional_tone_appears_as_sentence():

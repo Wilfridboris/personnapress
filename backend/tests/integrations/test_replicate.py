@@ -20,14 +20,14 @@ def _make_prediction(prediction_id="pred_abc123", status="succeeded", output=Non
 @pytest.mark.parametrize(
     "model,expected_aspect_ratio,expect_width_height",
     [
-        ("google/nano-banana-pro", "16:9", False),
+        ("google/nano-banana-pro", "1:1", False),
         ("black-forest-labs/flux-1.1-pro", "custom", True),
     ],
 )
 async def test_generate_image_input_schema_by_model(
     model, expected_aspect_ratio, expect_width_height
 ):
-    """Model family determines input schema: Nano Banana → 16:9; FLUX → custom + dimensions."""
+    """Model family determines input schema: Nano Banana → 1:1; FLUX → custom + 1080x1080."""
     captured_input: dict = {}
 
     prediction = _make_prediction(output="https://replicate.delivery/test.png")
@@ -61,11 +61,72 @@ async def test_generate_image_input_schema_by_model(
     if expect_width_height:
         assert "width" in captured_input
         assert "height" in captured_input
-        assert captured_input["width"] == 1200
-        assert captured_input["height"] == 630
+        assert captured_input["width"] == 1080
+        assert captured_input["height"] == 1080
     else:
         assert "width" not in captured_input
         assert "height" not in captured_input
+
+
+@pytest.mark.asyncio
+async def test_generate_image_default_dimensions_are_square():
+    """FLUX branch: default call uses width=1080, height=1080 (square)."""
+    captured_input: dict = {}
+
+    prediction = _make_prediction(output="https://replicate.delivery/test.png")
+
+    async def fake_async_create(model=None, input=None, **kwargs):
+        captured_input.update(input or {})
+        return prediction
+
+    fake_predictions = MagicMock()
+    fake_predictions.async_create = fake_async_create
+
+    fake_client = MagicMock()
+    fake_client.predictions = fake_predictions
+
+    with (
+        patch("app.integrations.replicate._client", fake_client),
+        patch("app.integrations.replicate._MODEL", "black-forest-labs/flux-1.1-pro"),
+        patch("app.integrations.replicate._IS_FLUX", True),
+    ):
+        from app.integrations.replicate import generate_image
+
+        await generate_image("Test prompt")
+
+    assert captured_input["width"] == 1080
+    assert captured_input["height"] == 1080
+
+
+@pytest.mark.asyncio
+async def test_generate_image_non_flux_uses_1_1_aspect_ratio():
+    """Non-FLUX branch: aspect_ratio is '1:1', no width/height keys in payload."""
+    captured_input: dict = {}
+
+    prediction = _make_prediction(output="https://replicate.delivery/test.png")
+
+    async def fake_async_create(model=None, input=None, **kwargs):
+        captured_input.update(input or {})
+        return prediction
+
+    fake_predictions = MagicMock()
+    fake_predictions.async_create = fake_async_create
+
+    fake_client = MagicMock()
+    fake_client.predictions = fake_predictions
+
+    with (
+        patch("app.integrations.replicate._client", fake_client),
+        patch("app.integrations.replicate._MODEL", "google/nano-banana-pro"),
+        patch("app.integrations.replicate._IS_FLUX", False),
+    ):
+        from app.integrations.replicate import generate_image
+
+        await generate_image("Test prompt")
+
+    assert captured_input["aspect_ratio"] == "1:1"
+    assert "width" not in captured_input
+    assert "height" not in captured_input
 
 
 @pytest.mark.asyncio

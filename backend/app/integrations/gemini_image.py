@@ -17,7 +17,7 @@ _client = genai.Client(api_key=settings.GEMINI_API_KEY)
 _MODEL = settings.IMAGE_MODEL  # e.g. "imagen-3.0-generate-001"
 
 
-async def generate_image(prompt: str, width: int = 1200, height: int = 630) -> bytes:
+async def generate_image(prompt: str, width: int = 1080, height: int = 1080) -> bytes:
     """Generate image via Gemini Imagen API. Returns raw PNG bytes.
 
     NOTE: width/height are unused — Gemini controls dimensions via aspect_ratio only.
@@ -31,7 +31,7 @@ async def generate_image(prompt: str, width: int = 1200, height: int = 630) -> b
         prompt=prompt,
         config=types.GenerateImagesConfig(
             numberOfImages=1,
-            aspectRatio="16:9",
+            aspectRatio="1:1",
             outputMimeType="image/png",
         ),
     )
