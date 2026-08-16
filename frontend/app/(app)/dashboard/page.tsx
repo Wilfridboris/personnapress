@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default async function DashboardPage() {
   return (
     <>
-      <header className="mb-10 flex items-start justify-between gap-4">
+      <header className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="font-display text-3xl font-bold text-ink mb-1">Dashboard</h1>
           <p className="text-sm text-graphite font-mono">Your content pipeline at a glance.</p>

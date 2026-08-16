@@ -89,12 +89,12 @@ export function CampaignList({ basePath = "/dashboard" }: { basePath?: string })
       {isLoading && (
         <div className="border border-border divide-y divide-border" aria-label="Loading campaigns">
           {Array.from({ length: 20 }).map((_, i) => (
-            <div key={i} className="flex items-center justify-between p-5">
+            <div key={i} className="flex flex-col gap-2 p-5 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex-1 space-y-2">
                 <Skeleton className="h-4 w-3/5" />
                 <Skeleton className="h-3 w-1/4" />
               </div>
-              <div className="flex items-center gap-4 ml-4">
+              <div className="flex items-center gap-4 sm:ml-4">
                 <Skeleton className="h-5 w-24" />
                 <Skeleton className="h-3 w-20" />
               </div>
@@ -132,14 +132,14 @@ export function CampaignList({ basePath = "/dashboard" }: { basePath?: string })
             return (
               <div
                 key={campaign.id}
-                className="flex items-center justify-between p-5 hover:bg-ink/5 transition-colors cursor-pointer group"
+                className="flex flex-col gap-2 p-5 hover:bg-ink/5 transition-colors cursor-pointer group sm:flex-row sm:items-center sm:justify-between"
                 onClick={() => router.push(`/campaigns/${campaign.id}`)}
               >
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-ink text-sm truncate mb-1">{title}</p>
                   <p className="text-xs text-graphite font-mono">{formatDate(campaign.created_at)}</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 ml-4 shrink-0" onClick={(e) => e.stopPropagation()}>
+                <div className="flex flex-wrap items-center gap-2 sm:ml-4" onClick={(e) => e.stopPropagation()}>
                   {(campaign.generation_job_status === "pending" || campaign.generation_job_status === "in_progress") ? (
                     <span
                       role="status"
