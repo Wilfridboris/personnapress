@@ -25,18 +25,18 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.personnapress.co
 
 export const metadata: Metadata = {
   title: {
-    absolute: "PersonnaPress | Official Site - AI Blog Writer That Sounds Like You",
+    absolute: "PersonnaPress | Official Site - The AI Content Platform That Publishes in Your Brand Voice",
   },
   description:
-    "PersonnaPress is an AI blog writer that learns your voice and turns your notes into SEO-ranked blog posts and social campaigns. Schedule and publish to WordPress, Webflow, X, and LinkedIn — without sounding like AI.",
+    "PersonnaPress is an AI content platform that extracts your brand voice and turns your ideas into SEO-ranked blog posts and social campaigns — published automatically to WordPress, Webflow, LinkedIn, X, and more.",
   metadataBase: new URL(APP_URL),
   alternates: {
     canonical: APP_URL,
   },
   openGraph: {
-    title: "PersonnaPress | Official Site - AI Blog Writer That Sounds Like You",
+    title: "PersonnaPress | Official Site - The AI Content Platform That Publishes in Your Brand Voice",
     description:
-      "Turn your notes into ranked blog posts and social campaigns in your own voice. Schedule and publish everywhere.",
+      "Turn raw ideas into on-brand blog posts, social campaigns, and featured images — published to all your platforms in under 90 seconds.",
     url: APP_URL,
     type: "website",
     images: [
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
         url: "/images/PersonnaPress-opengraph.png",
         width: 1200,
         height: 630,
-        alt: "PersonnaPress - AI Blog Writer That Sounds Like You",
+        alt: "PersonnaPress - The AI Content Platform That Publishes in Your Brand Voice",
       },
     ],
   },
@@ -56,7 +56,7 @@ const schemaWebsite = {
   name: "PersonnaPress",
   url: APP_URL,
   description:
-    "An AI blog writer and content engine that turns brain dumps into SEO-ranked blog posts and social campaigns in your authentic voice.",
+    "An AI content platform that extracts your brand voice and generates SEO-ranked blog posts, social campaigns, and featured images in your authentic style. Published to WordPress, Webflow, LinkedIn, and X.",
 };
 
 const schemaSoftwareApp = {
@@ -67,7 +67,7 @@ const schemaSoftwareApp = {
   operatingSystem: "Web",
   url: APP_URL,
   description:
-    "PersonnaPress is an AI blog writer and social media scheduler that learns your writing voice from existing content, then turns raw brain dumps into SEO-structured blog posts, social campaigns, and featured images. Schedule and publish across WordPress, Webflow, X, and LinkedIn. No AI fluff — content sounds like you, not a robot.",
+    "PersonnaPress is an AI-powered content platform that extracts your brand voice from existing content, then turns raw ideas into SEO-structured blog posts, social campaigns, and featured images — all published to WordPress, Webflow, LinkedIn, and X in your authentic voice. Human approval required before any publish.",
   offers: {
     "@type": "Offer",
     price: "0",
@@ -217,6 +217,7 @@ const KEY_FEATURES = [
     title: "Voice Profile",
     description:
       "PersonnaPress scrapes your website and past writing to extract your tone, cadence, and banned phrases into a living Brand Voice Profile applied to every campaign.",
+    href: "/brand-voice-generator",
   },
   {
     icon: Eraser,
@@ -393,9 +394,9 @@ export default function LandingPage() {
         <section className="max-w-6xl mx-auto px-6 pt-12 md:pt-24 pb-16 md:pb-20">
           <div className="max-w-3xl">
             <h1 className="font-display text-6xl lg:text-7xl font-bold text-ink leading-tight tracking-tight text-balance mb-8">
-              The AI Blog Writer{" "}
+              The AI Content Platform{" "}
               <span className="relative">
-                That Sounds Like You.
+                That Publishes in Your Brand Voice.
                 <span
                   className="absolute -bottom-1 left-0 w-full h-0.5 bg-highlight"
                   aria-hidden="true"
@@ -403,9 +404,9 @@ export default function LandingPage() {
               </span>
             </h1>
             <p className="text-xl text-graphite leading-relaxed text-pretty mb-10 max-w-xl">
-              Drop in a quick voice memo or brain dump. PersonnaPress learns your
-              tone, removes the AI fluff, and turns your notes into published,
-              ranked articles in seconds.
+              PersonnaPress learns your voice from existing content, then turns raw
+              ideas into SEO-structured blog posts, social campaigns, and featured
+              images, published to all your platforms in under 90 seconds.
             </p>
             <div className="flex items-center gap-4">
               <Link
@@ -495,7 +496,7 @@ export default function LandingPage() {
             </h2>
           </header>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-px border border-border bg-border">
-            {KEY_FEATURES.map(({ icon: Icon, title, description }) => (
+            {KEY_FEATURES.map(({ icon: Icon, title, description, href }) => (
               <article key={title} className="bg-paper p-8 group hover:bg-highlight transition-colors">
                 <Icon className="size-5 text-graphite mb-6 group-hover:text-ink transition-colors" aria-hidden="true" />
                 <h3 className="font-display text-xl font-bold text-ink mb-3 text-balance">
@@ -504,6 +505,15 @@ export default function LandingPage() {
                 <p className="text-sm text-graphite leading-relaxed text-pretty">
                   {description}
                 </p>
+                {href && (
+                  <Link
+                    href={href}
+                    className="mt-3 inline-flex items-center gap-1 font-mono text-xs text-ink underline underline-offset-2 hover:text-graphite transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+                  >
+                    Learn how brand voice extraction works
+                    <ArrowRight className="size-3" aria-hidden="true" />
+                  </Link>
+                )}
               </article>
             ))}
           </div>

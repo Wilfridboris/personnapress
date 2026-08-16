@@ -1,5 +1,16 @@
 # Deferred Work
 
+## Deferred from: code review of 23-2-homepage-keyword-pivot (2026-08-15)
+
+- Meta description length ~215 chars exceeds Google's ~155-160 char SERP display limit [frontend/app/page.tsx:31] — Google rewrites descriptions; target keywords benefit from full copy
+- Page title 90 chars exceeds ~60-char SERP display limit [frontend/app/page.tsx:28] — spec-mandated (AC 1); intentional keyword length trade-off
+- OG `og:image:alt` contains brand tagline copy, not an image description [frontend/app/page.tsx:47] — pre-existing pattern before this story
+- `schemaWebsite.description` ends with a sentence fragment ("Published to WordPress, Webflow, LinkedIn, and X.") [frontend/app/page.tsx:59] — minor grammar in JSON-LD; not user-facing
+- Feature card link text "Learn how brand voice extraction works" is hardcoded for all `href` entries [frontend/app/page.tsx:513] — extend type with `linkText?: string` when a second card needs a link
+- `{href && ...}` guard silently suppresses `href=""` [frontend/app/page.tsx:508] — theoretical; no current KEY_FEATURES entry has `href: ""`
+- External URL passed to Next.js `<Link>` would be routed client-side [frontend/app/page.tsx:509] — theoretical; all current hrefs are internal paths
+- `key={title}` in KEY_FEATURES map would collide on duplicate titles [frontend/app/page.tsx:499] — pre-existing pattern
+
 ## Deferred from: code review of 23-1-brand-voice-generator-feature-page (2026-08-15)
 
 - `FaqAccordion` `aria-controls` references non-existent DOM id when panel is closed — pre-existing bug in `frontend/app/_components/FaqAccordion.tsx:25,37`; fix requires always-rendering the panel with `hidden` instead of conditional render
