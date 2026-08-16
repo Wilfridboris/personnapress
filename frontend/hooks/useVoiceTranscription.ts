@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { jobsApi } from "@/lib/api";
 import type { Job } from "@/lib/types";
@@ -26,6 +26,7 @@ export interface UseVoiceTranscriptionReturn {
   isSupported: boolean;
   startRecording: () => Promise<void>;
   stopRecording: () => void;
+  analyserNodeRef: React.RefObject<AnalyserNode | null>;
 }
 
 export function useVoiceTranscription({
@@ -41,6 +42,8 @@ export function useVoiceTranscription({
   const streamRef = useRef<MediaStream | null>(null);
   const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
+  const analyserNodeRef = useRef<AnalyserNode | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     setIsSupported(
@@ -102,6 +105,14 @@ export function useVoiceTranscription({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
+      const audioCtx = new AudioContext();
+      if (audioCtx.state === "suspended") await audioCtx.resume();
+      audioCtxRef.current = audioCtx;
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      audioCtx.createMediaStreamSource(stream).connect(analyser);
+      analyserNodeRef.current = analyser;
+
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : "audio/mp4";
@@ -119,6 +130,10 @@ export function useVoiceTranscription({
       recorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: mimeType });
         streamRef.current?.getTracks().forEach((t) => t.stop());
+        analyserNodeRef.current?.disconnect();
+        analyserNodeRef.current = null;
+        void audioCtxRef.current?.close();
+        audioCtxRef.current = null;
         streamRef.current = null;
 
         if (!isMountedRef.current) return;
@@ -172,6 +187,10 @@ export function useVoiceTranscription({
       recorder.start(100);
       setStatus("recording");
     } catch (err: unknown) {
+      analyserNodeRef.current?.disconnect();
+      analyserNodeRef.current = null;
+      void audioCtxRef.current?.close();
+      audioCtxRef.current = null;
       const name = err instanceof Error ? err.name : "";
       if (name === "NotAllowedError" || name === "PermissionDeniedError") {
         setError("Microphone access denied.");
@@ -191,5 +210,5 @@ export function useVoiceTranscription({
     }
   }
 
-  return { status, error, isSupported, startRecording, stopRecording };
+  return { status, error, isSupported, startRecording, stopRecording, analyserNodeRef };
 }

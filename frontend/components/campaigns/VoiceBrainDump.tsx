@@ -2,13 +2,14 @@
 
 import { Loader2, Mic, RotateCcw, Square } from "lucide-react";
 import { useVoiceTranscription } from "@/hooks/useVoiceTranscription";
+import { WaveformBars } from "@/components/campaigns/WaveformBars";
 
 interface VoiceBrainDumpProps {
   onTranscript: (text: string) => void;
 }
 
 export function VoiceBrainDump({ onTranscript }: VoiceBrainDumpProps) {
-  const { status, error, isSupported, startRecording, stopRecording } =
+  const { status, error, isSupported, startRecording, stopRecording, analyserNodeRef } =
     useVoiceTranscription({ onTranscript });
 
   if (!isSupported) {
@@ -31,12 +32,9 @@ export function VoiceBrainDump({ onTranscript }: VoiceBrainDumpProps) {
           <Square size={14} aria-hidden="true" />
           <span>Stop recording</span>
         </button>
-        <span role="status" aria-live="polite" aria-atomic="true">
-          <span
-            className="inline-block size-2 rounded-full bg-danger animate-[voice-pulse_1.4s_ease-in-out_infinite] motion-reduce:animate-none"
-            aria-hidden="true"
-          />
-          <span className="text-[11px] font-mono text-graphite ml-1.5">
+        <span role="status" aria-live="polite" aria-atomic="true" className="flex items-center gap-2">
+          <WaveformBars analyserNode={analyserNodeRef.current} />
+          <span className="text-[11px] font-mono text-graphite">
             Recording...
           </span>
         </span>

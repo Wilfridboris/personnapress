@@ -16,6 +16,7 @@ vi.mock("@/hooks/useVoiceTranscription", () => ({
     isSupported: mockIsSupported,
     startRecording: mockStartRecording,
     stopRecording: mockStopRecording,
+    analyserNodeRef: { current: null },
   }),
 }));
 
@@ -157,6 +158,36 @@ describe("VoiceBrainDump", () => {
       expect(
         screen.getByText("Transcription failed. Try again."),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe("waveform visualizer", () => {
+    it("renders waveform bars in recording state", () => {
+      mockStatus = "recording";
+      const { container } = renderComponent();
+      const waveform = container.querySelector('[data-testid="voice-waveform"]');
+      expect(waveform).toBeInTheDocument();
+      expect(waveform!.children).toHaveLength(6);
+    });
+
+    it("waveform bars absent in non-recording states", () => {
+      const states = ["idle", "uploading", "transcribing", "complete", "error"] as const;
+      for (const s of states) {
+        mockStatus = s;
+        const { container, unmount } = renderComponent();
+        expect(
+          container.querySelector('[data-testid="voice-waveform"]'),
+        ).not.toBeInTheDocument();
+        unmount();
+      }
+    });
+
+    it("recording state has no pulse dot", () => {
+      mockStatus = "recording";
+      const { container } = renderComponent();
+      expect(
+        container.querySelector('.animate-\\[voice-pulse\\]'),
+      ).not.toBeInTheDocument();
     });
   });
 
