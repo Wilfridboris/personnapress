@@ -22,7 +22,7 @@ _MIME_TO_EXT = {
 }
 
 
-async def transcribe(content: bytes, mime_type: str, language: str = "fr") -> str:
+async def transcribe(content: bytes, mime_type: str, language: str = "en") -> str:
     """Transcribe audio bytes via OpenAI Whisper and return the transcript string.
 
     Raises an exception on non-2xx response or network error.
