@@ -1,5 +1,14 @@
 # Deferred Work
 
+## Deferred from: code review of 9-3-frontend-voice-capture-component (2026-08-16)
+
+- `onTranscript` not stabilized with `useCallback` before being passed as hook dependency [useVoiceTranscription.ts:81] — guards prevent double-invocation today; memoize if parent re-renders become a perf concern
+- No client-side max recording duration or file-size guard before upload [useVoiceTranscription.ts] — backend enforces 10MB with 413 + error message; add a client-side timer stop (e.g. 5 min) to avoid unbounded recordings
+- Tests use mutable module-level `let` variables for mock state [VoiceBrainDump.test.tsx] — Vitest runs serially; beforeEach resets; refactor to `vi.mocked` factory pattern if test isolation issues emerge
+- TERMINAL set string values tied to backend Job.status enum [useVoiceTranscription.ts:16] — must stay in sync with `"complete"`/`"failed"` values from 9-2; enforce via shared type import when Job.status becomes a typed union
+- Query cache accumulates entries per jobId without explicit eviction [useVoiceTranscription.ts:50] — TanStack Query gcTime (default 5 min) handles cleanup; add `gcTime: 30_000` if session has many transcription jobs
+- Browser supports neither audio/webm nor audio/mp4 MIME type [useVoiceTranscription.ts:91-93] — no modern browser lacks both in 2026; guard with empty-string mimeType + MediaRecorder constructor try/catch if Firefox ESR becomes a target
+
 ## Deferred from: code review of 9-2-backend-transcription-api (2026-08-15)
 
 - Voice rate limit falls back to a shared IP bucket when JWT decode fails; behind a proxy without trusted forwarded-IP config (`ProxyHeadersMiddleware`/`X-Forwarded-For`) this collapses all users into one 5/hour bucket [routers/voice.py] — infra-wide concern, verify forwarded-IP handling globally

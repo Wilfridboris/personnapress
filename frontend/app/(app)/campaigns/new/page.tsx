@@ -12,6 +12,7 @@ import { campaignsApi, publishingApi, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { LengthSelector, type TargetLength } from "@/components/campaigns/LengthSelector";
 import { TemplateSelector, type ArticleTemplate } from "@/components/campaigns/TemplateSelector";
+import { VoiceBrainDump } from "@/components/campaigns/VoiceBrainDump";
 
 const VALID_ARTICLE_TEMPLATES: ArticleTemplate[] = ["standard", "how-to", "listicle", "thought-leadership"];
 
@@ -486,6 +487,18 @@ export default function NewCampaignPage() {
       </fieldset>
 
       <div className="space-y-2 mb-4">
+        <VoiceBrainDump
+          onTranscript={(t) => {
+            const clamped = t.slice(0, MAX_CHARS);
+            setBrainDump(clamped);
+            setTimeout(() => {
+              if (textareaRef.current) {
+                resizeTextarea(textareaRef.current, MAX_TEXTAREA_HEIGHT);
+                textareaRef.current.setSelectionRange(clamped.length, clamped.length);
+              }
+            }, 0);
+          }}
+        />
         <textarea
           ref={textareaRef}
           value={brainDump}

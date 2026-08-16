@@ -243,6 +243,7 @@ export interface Job {
   completed_at: string | null;
   attempt_count: number;
   error_details: string | null;
+  result?: Record<string, unknown> | null;
   created_at: string;
 }
 
