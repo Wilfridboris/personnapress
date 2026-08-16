@@ -216,6 +216,7 @@ class Job(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     campaign_id: Optional[uuid.UUID] = Field(default=None, foreign_key="campaigns.id", index=True)
     client_id: Optional[uuid.UUID] = Field(default=None, foreign_key="clients.id", index=True)
+    user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id", index=True)
     job_type: str
     status: str
     scheduled_at: Optional[datetime] = None
@@ -223,6 +224,7 @@ class Job(SQLModel, table=True):
     completed_at: Optional[datetime] = None
     attempt_count: int = Field(default=0)
     error_details: Optional[str] = None
+    result: Optional[dict] = Field(default=None, sa_column=Column(JSONB, nullable=True))
     created_at: datetime = Field(default_factory=utcnow)
 
 

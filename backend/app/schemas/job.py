@@ -16,6 +16,7 @@ class JobResponse(BaseModel):
     completed_at: Optional[datetime] = None
     attempt_count: int
     error_details: Optional[str] = None
+    result: Optional[dict] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

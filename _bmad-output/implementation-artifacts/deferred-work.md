@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 9-2-backend-transcription-api (2026-08-15)
+
+- Voice rate limit falls back to a shared IP bucket when JWT decode fails; behind a proxy without trusted forwarded-IP config (`ProxyHeadersMiddleware`/`X-Forwarded-For`) this collapses all users into one 5/hour bucket [routers/voice.py] — infra-wide concern, verify forwarded-IP handling globally
+- No reaper for transcription (or any) jobs left orphaned in `pending`/`in_progress` when the final commit fails or the process dies between `db.commit()` and `add_task` [routers/voice.py, workers/transcribe.py] — frontend polls indefinitely; systemic across all job types
+- Non-atomic `pending`→`in_progress` transition (read-then-write) allows a theoretical double-dispatch race if the same job_id runs twice [workers/transcribe.py] — matches the existing `workers/generate.py` pattern; fix with a conditional `UPDATE ... WHERE status='pending' RETURNING`
+
 ## Deferred from: code review of 23-2-homepage-keyword-pivot (2026-08-15)
 
 - Meta description length ~215 chars exceeds Google's ~155-160 char SERP display limit [frontend/app/page.tsx:31] — Google rewrites descriptions; target keywords benefit from full copy

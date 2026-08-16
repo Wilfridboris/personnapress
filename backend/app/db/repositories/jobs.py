@@ -15,8 +15,15 @@ async def create_job(
     status: str,
     campaign_id: Optional[uuid.UUID] = None,
     client_id: Optional[uuid.UUID] = None,
+    user_id: Optional[uuid.UUID] = None,
 ) -> Job:
-    job = Job(job_type=job_type, status=status, campaign_id=campaign_id, client_id=client_id)
+    job = Job(
+        job_type=job_type,
+        status=status,
+        campaign_id=campaign_id,
+        client_id=client_id,
+        user_id=user_id,
+    )
     session.add(job)
     await session.flush()
     await session.refresh(job)

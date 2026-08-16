@@ -56,6 +56,11 @@ async def get_job(
             client = client_result.scalar_one_or_none()
             if not client or client.user_id != user_id:
                 raise _not_found
+    elif job.user_id is not None:
+        # User-owned jobs (e.g. transcription) carry no client_id/campaign_id.
+        # Enforce direct ownership so results are not readable across accounts.
+        if job.user_id != user_id:
+            raise _not_found
 
     return JobResponse(
         id=job.id,
@@ -68,5 +73,6 @@ async def get_job(
         completed_at=job.completed_at,
         attempt_count=job.attempt_count,
         error_details=job.error_details,
+        result=job.result,
         created_at=job.created_at,
     )

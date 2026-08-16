@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     REPLICATE_API_TOKEN: str = ""
     IMAGE_PROVIDER: str = "replicate"  # "replicate" | "gemini"
     IMAGE_MODEL: str = "google/nano-banana-pro"
+    GROQ_API_KEY: str = ""
 
     SENTRY_DSN: str = ""
     RESEND_API_KEY: str = ""
