@@ -206,7 +206,7 @@ async def test_run_transcription_writes_result_on_success():
 
     with patch("app.workers.transcribe.AsyncSessionLocal", return_value=db):
         with patch("app.workers.transcribe.get_job", new=AsyncMock(return_value=mock_job)):
-            with patch("app.workers.transcribe.groq_audio.transcribe", new=AsyncMock(return_value="Hello world")):
+            with patch("app.workers.transcribe.openai_audio.transcribe", new=AsyncMock(return_value="Hello world")):
                 await run_transcription(job_id=job_id, audio_bytes=b"audio", mime_type="audio/webm")
 
     assert mock_job.result == {"transcript": "Hello world"}
@@ -233,19 +233,19 @@ async def test_run_transcription_retries_then_fails_on_retryable_error():
     db.commit = AsyncMock()
 
     retryable = httpx.HTTPStatusError("500", request=MagicMock(), response=MagicMock(status_code=500))
-    groq = AsyncMock(side_effect=retryable)
+    mock_transcribe = AsyncMock(side_effect=retryable)
 
     with patch("app.workers.transcribe.asyncio.sleep", new=AsyncMock()) as mock_sleep:
         with patch("app.workers.transcribe.AsyncSessionLocal", return_value=db):
             with patch("app.workers.transcribe.get_job", new=AsyncMock(return_value=job)):
-                with patch("app.workers.transcribe.groq_audio.transcribe", new=groq):
+                with patch("app.workers.transcribe.openai_audio.transcribe", new=mock_transcribe):
                     await run_transcription(job_id=job_id, audio_bytes=b"audio", mime_type="audio/webm")
 
     assert job.status == "failed"
     assert job.result is None
     assert job.attempt_count == 3
     assert "Transcription failed" in job.error_details
-    assert groq.await_count == 3
+    assert mock_transcribe.await_count == 3
     # Backoff sleeps between the 3 attempts (not after the last one).
     assert mock_sleep.await_count == 2
 
@@ -269,24 +269,24 @@ async def test_run_transcription_does_not_retry_non_retryable_error():
     db.commit = AsyncMock()
 
     non_retryable = httpx.HTTPStatusError("401", request=MagicMock(), response=MagicMock(status_code=401))
-    groq = AsyncMock(side_effect=non_retryable)
+    mock_transcribe = AsyncMock(side_effect=non_retryable)
 
     with patch("app.workers.transcribe.asyncio.sleep", new=AsyncMock()):
         with patch("app.workers.transcribe.AsyncSessionLocal", return_value=db):
             with patch("app.workers.transcribe.get_job", new=AsyncMock(return_value=job)):
-                with patch("app.workers.transcribe.groq_audio.transcribe", new=groq):
+                with patch("app.workers.transcribe.openai_audio.transcribe", new=mock_transcribe):
                     await run_transcription(job_id=job_id, audio_bytes=b"audio", mime_type="audio/webm")
 
     assert job.status == "failed"
     assert job.result is None
     assert job.attempt_count == 1
-    assert groq.await_count == 1
+    assert mock_transcribe.await_count == 1
 
 
-# ── AC 4: groq_audio raises on non-2xx ───────────────────────────────────────
+# ── AC 4: openai_audio raises on non-2xx ─────────────────────────────────────
 
-async def test_groq_audio_transcribe_raises_on_non_2xx():
-    from app.integrations.groq_audio import transcribe
+async def test_openai_audio_transcribe_raises_on_non_2xx():
+    from app.integrations.openai_audio import transcribe
     import httpx
 
     mock_response = MagicMock()
@@ -294,7 +294,7 @@ async def test_groq_audio_transcribe_raises_on_non_2xx():
         "500", request=MagicMock(), response=MagicMock()
     )
 
-    with patch("app.integrations.groq_audio.httpx.AsyncClient") as mock_client_cls:
+    with patch("app.integrations.openai_audio.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -305,16 +305,16 @@ async def test_groq_audio_transcribe_raises_on_non_2xx():
             await transcribe(b"audio", "audio/webm")
 
 
-# ── AC 4: groq_audio returns transcript text on success ──────────────────────
+# ── AC 4: openai_audio returns transcript text on success ────────────────────
 
-async def test_groq_audio_transcribe_returns_text():
-    from app.integrations.groq_audio import transcribe
+async def test_openai_audio_transcribe_returns_text():
+    from app.integrations.openai_audio import transcribe
 
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
     mock_response.json.return_value = {"text": "Transcribed content here"}
 
-    with patch("app.integrations.groq_audio.httpx.AsyncClient") as mock_client_cls:
+    with patch("app.integrations.openai_audio.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -338,9 +338,9 @@ def test_job_response_includes_result_field():
         status="complete",
         attempt_count=1,
         created_at=datetime.datetime.utcnow(),
-        result={"transcript": "Hello from Groq"},
+        result={"transcript": "Hello from OpenAI"},
     )
-    assert response.result == {"transcript": "Hello from Groq"}
+    assert response.result == {"transcript": "Hello from OpenAI"}
 
 
 def test_job_response_result_defaults_to_none():

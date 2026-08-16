@@ -1,7 +1,7 @@
 """Transcription worker.
 
 Receives (job_id, audio_bytes, mime_type) from the router's BackgroundTask,
-calls Groq Whisper, and writes the transcript to job.result.
+calls OpenAI Whisper, and writes the transcript to job.result.
 Creates its own DB session (the request-scoped session is closed before
 BackgroundTasks execute -- same pattern as workers/generate.py).
 """
@@ -16,12 +16,12 @@ import sentry_sdk
 
 from app.db.connection import AsyncSessionLocal
 from app.db.repositories.jobs import get_job
-from app.integrations import groq_audio
+from app.integrations import openai_audio
 
 logger = logging.getLogger(__name__)
 
 _MAX_ATTEMPTS = 3
-# Groq 429 (rate limit) and 5xx (server) errors are transient. 4xx client errors
+# OpenAI 429 (rate limit) and 5xx (server) errors are transient. 4xx client errors
 # (bad key, unsupported format) and response-parse errors are not worth retrying.
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
@@ -31,7 +31,7 @@ def _utcnow() -> datetime:
 
 
 def _is_retryable(exc: Exception) -> bool:
-    """Return True only for transient Groq failures (429/5xx) and network errors."""
+    """Return True only for transient OpenAI failures (429/5xx) and network errors."""
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code in _RETRYABLE_STATUS
     return isinstance(exc, httpx.RequestError)
@@ -62,7 +62,7 @@ async def run_transcription(job_id: uuid.UUID, audio_bytes: bytes, mime_type: st
                 for attempt in range(_MAX_ATTEMPTS):
                     attempts = attempt + 1
                     try:
-                        transcript = await groq_audio.transcribe(audio_bytes, mime_type)
+                        transcript = await openai_audio.transcribe(audio_bytes, mime_type)
                         break
                     except Exception as exc:
                         last_error = exc

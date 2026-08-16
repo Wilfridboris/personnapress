@@ -1,5 +1,17 @@
 # Deferred Work
 
+## Deferred from: code review of 9-4-switch-transcription-to-openai-whisper (2026-08-16)
+
+- No guard for empty `OPENAI_API_KEY` at startup — 401 from OpenAI surfaces as generic auth failure with no operator hint [backend/app/integrations/openai_audio.py] — pre-existing pattern from groq_audio.py; consider a startup validator if key-misconfiguration errors recur
+- `raise_for_status()` and `.json()` called outside `async with` block — works due to httpx in-memory buffering; fragile if streaming ever enabled [backend/app/integrations/openai_audio.py:27-28] — pre-existing; refactor both to inside the block as cleanup
+- HTTP 529 (Overloaded) not in `_RETRYABLE_STATUS` — OpenAI returns 529 on capacity limits; currently treated as non-retryable [backend/app/workers/transcribe.py] — pre-existing; add 529 when OpenAI capacity events become a problem
+- No test for `response.json()` raising JSONDecodeError on non-JSON 200 body [backend/tests/routers/test_voice.py] — pre-existing; add test if this failure mode is observed in production logs
+- Empty string `text` bypasses None-guard and stores empty transcript as valid result [backend/app/integrations/openai_audio.py:28-30] — pre-existing; add `if not text:` guard if silent empty transcripts are reported
+- Empty audio bytes or null mime_type → non-retryable 400 with no informative error [backend/app/integrations/openai_audio.py] — caller responsibility; pre-existing
+- No test for non-string `text` type (integer/boolean returned by malformed OpenAI response) [backend/tests/routers/test_voice.py] — pre-existing edge case
+- Hardcoded `_OPENAI_TRANSCRIPTION_URL` — no env override for pointing at mock server during integration tests [backend/app/integrations/openai_audio.py:11] — pre-existing pattern
+- `.env.example` comment embeds model name `gpt-4o-mini-transcribe` and lacks quota/pricing notes [backend/.env.example:56] — minor doc gap; update comment if model name changes
+
 ## Deferred from: code review of 9-3-frontend-voice-capture-component (2026-08-16)
 
 - `onTranscript` not stabilized with `useCallback` before being passed as hook dependency [useVoiceTranscription.ts:81] — guards prevent double-invocation today; memoize if parent re-renders become a perf concern
