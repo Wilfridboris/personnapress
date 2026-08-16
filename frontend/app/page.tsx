@@ -25,7 +25,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.personnapress.co
 
 export const metadata: Metadata = {
   title: {
-    absolute: "PersonnaPress | Official Site - The AI Content Platform That Publishes in Your Brand Voice",
+    absolute: "PersonnaPress | Official Site - AI Content Platform",
   },
   description:
     "PersonnaPress is an AI content platform that extracts your brand voice and turns your ideas into SEO-ranked blog posts and social campaigns — published automatically to WordPress, Webflow, LinkedIn, X, and more.",
