@@ -8,9 +8,11 @@ inputDocuments:
   - '_bmad-output/planning-artifacts/architecture.md'
   - '_bmad-output/planning-artifacts/ux-designs/ux-PersonnaPress-2026-06-14/DESIGN.md'
   - '_bmad-output/planning-artifacts/ux-designs/ux-PersonnaPress-2026-06-14/EXPERIENCE.md'
+  - '_bmad-output/planning-artifacts/architecture/architecture-PersonnaPress-voice-braindump-2026-08-15/ARCHITECTURE-SPINE.md'
 project_name: PersonnaPress
 user_name: Boris
 date: '2026-06-14'
+phase2_date: '2026-08-15'
 ---
 
 # PersonnaPress - Epic Breakdown
@@ -2580,3 +2582,235 @@ So that the page ranks for platform-category keywords and accurately represents 
 
 7. **Given** `frontend/components/marketing/PublicHeader.tsx`, **When** this story ships, **Then** the `NAV_LINKS` array remains unchanged — no nav edits are needed in this story (brand voice generator is linked from the footer and from the homepage feature card, which is sufficient for internal linking without cluttering the main nav).
 
+---
+
+## PHASE 2: Voice-to-text Brain Dump
+
+*Added: 2026-08-15 | Source: `_bmad-output/planning-artifacts/architecture/architecture-PersonnaPress-voice-braindump-2026-08-15/ARCHITECTURE-SPINE.md`*
+
+*Note: The PRD deferred voice-to-text to v2 without assigning numbered FRs. Functional requirements below are derived from the Architecture Spine invariants (AD-V1 through AD-V6) and capability map. They carry the same weight as PRD FRs for story creation purposes.*
+
+---
+
+### Phase 2 Requirements Inventory
+
+#### Voice-to-text Functional Requirements
+
+VFR-1: Authenticated user can initiate audio recording via a mic button on the Brain Dump input surface. Recording uses the browser MediaRecorder API and captures audio in the native MIME type: `audio/webm;codecs=opus` (Chrome/Firefox/Edge) or `audio/mp4` (Safari). User can start and stop recording, and see a recording state indicator while the mic is active. The Web Speech API must not be used under any circumstances. (Derives from AD-V5)
+
+VFR-2: When the user stops recording, the frontend uploads the audio blob as a multipart POST to `POST /api/v1/voice/transcribe` with the blob's native MIME type. The endpoint validates `Content-Length` before reading the body — any upload exceeding 10,485,760 bytes (10 MB) is rejected with HTTP 413 (`AUDIO_TOO_LARGE`). MIME types not in the allowed list (`audio/webm`, `audio/webm;codecs=opus`, `audio/mp4`, `audio/mpeg`, `audio/wav`) are rejected with HTTP 415 (`AUDIO_FORMAT_UNSUPPORTED`). A rate limit of 5 transcription requests/hour/user (keyed on JWT `user_id` via slowapi) returns HTTP 429 (`TRANSCRIPTION_RATE_LIMITED`). All limits are in addition to the inherited global 10 req/min/user limit. (Derives from AD-V6)
+
+VFR-3: The transcription endpoint creates a `jobs` row with `job_type='transcription'` and `status='pending'` before dispatching a BackgroundTask, then immediately returns HTTP 202 with `{"job_id": "..."}`. The job record must be created before BackgroundTask dispatch (inherited job-durability pattern). (Derives from AD-V2)
+
+VFR-4: The transcription BackgroundTask sends the audio bytes in-process via `await httpx.post(...)` to the Groq API (`POST https://api.groq.com/openai/v1/audio/transcriptions`, model `whisper-large-v3-turbo`, auth: `Authorization: Bearer {GROQ_API_KEY}`). Audio bytes are never written to disk, Supabase Storage, or any database column — they are discarded immediately after the httpx call completes. On success, the transcript string is written to `jobs.result` as `{"transcript": "..."}` and `jobs.status` is set to `'complete'`. On failure, `jobs.error_details` is set and `jobs.status` is set to `'failed'`. All inference happens on Groq's infrastructure — no STT model may be loaded on the Droplet. (Derives from AD-V1, AD-V2, AD-V3)
+
+VFR-5: The frontend polls `GET /api/v1/jobs/{job_id}` at 2-second intervals (via `useJobStatus`, existing pattern) while job status is `pending` or `in_progress`. When status reaches `'complete'`, the frontend reads `result.transcript` and populates the existing `BrainDumpInput` textarea. The user may review and edit the transcript. Campaign creation proceeds via the unchanged `POST /api/v1/campaigns`. No new campaign field is created. (Derives from AD-V4)
+
+VFR-6: When a transcription job reaches `status='failed'`, the frontend replaces the progress indicator with a specific error message (derived from `jobs.error_details`) and a "Try again" control that allows a new recording attempt without navigating away from the Brain Dump surface. (Derives from AD-V2 error path)
+
+#### Voice-to-text Non-Functional Requirements
+
+VNFR-1: All speech-to-text inference is delegated exclusively to the Groq API via httpx. No STT model (Whisper, faster-whisper, or any other) may be installed or loaded on the Droplet. (AD-V1)
+
+VNFR-2: Audio bytes must never be persisted at any point in the pipeline — not to disk, Supabase Storage, or any database column. Groq's own transient handling of audio as part of its service delivery is not a violation of this rule. (AD-V3)
+
+VNFR-3: The transcription BackgroundTask must use non-blocking `await httpx.post(...)` so the event loop is not stalled during Groq API calls. RAM profile: each concurrent upload holds approximately 10 MB during the upload/send phase only; bytes are released once the httpx send completes. 5/hour/user rate limit provides the natural concurrency ceiling.
+
+VNFR-4: Groq LPU processes audio at approximately 10–30 seconds regardless of recording length (recordings up to ~15 minutes). The 202/job/poll pattern prevents the client HTTP connection from timing out during transcription. (AD-V2)
+
+VNFR-5: Transcription rate limit: 5 requests/hour/user enforced via slowapi, keyed on `user_id` from JWT, in addition to the inherited global 10 req/min/user limit. `[ASSUMPTION: 5/hour — revisit post-launch based on usage data]` (AD-V6)
+
+VNFR-6: `POST /api/v1/voice/transcribe` requires authentication via the inherited `get_current_user` JWT dependency — same as all other protected routes.
+
+#### Voice-to-text Additional Requirements (Architecture)
+
+VAR-1: New route file `backend/app/routers/voice.py` — prefix `/api/v1/voice`; handles `POST /api/v1/voice/transcribe` with size validation (before body read), MIME type validation, slowapi rate limit decorator, `get_current_user` dependency, job creation, and BackgroundTask dispatch. Router delegates to service — no business logic in the router.
+
+VAR-2: New integration file `backend/app/integrations/groq_audio.py` — single async function `transcribe(content: bytes, mime_type: str) -> str`. All Groq audio API calls must originate ONLY from this function; no other module may call the Groq audio endpoint directly.
+
+VAR-3: New service file `backend/app/services/voice.py` — validates MIME type against the allowed list, creates the `jobs` record (`type='transcription'`, `status='pending'`), and dispatches the BackgroundTask. Service is the only layer that creates the job record.
+
+VAR-4: New worker file `backend/app/workers/transcribe.py` — BackgroundTask entry point: fetches job record, sets `status='in_progress'`, calls `groq_audio.transcribe()`, on success writes `jobs.result = {"transcript": "..."}` and sets `status='complete'`, on failure sets `jobs.error_details` and `status='failed'`.
+
+VAR-5: New frontend component `frontend/components/campaigns/VoiceBrainDump.tsx` — renders a mic button (Paper Style secondary icon button: transparent fill, 1px Ink border, no shadow at rest); on click starts MediaRecorder; shows a pulsing recording indicator (JetBrains Mono label "Recording..." with a pulsing dot) while recording; on stop, uploads blob and shows "Transcribing..." label; calls `onTranscript(transcript: string)` callback when complete; shows error message + "Try again" button on failure.
+
+VAR-6: Update `frontend/components/campaigns/BrainDumpInput.tsx` — gains an optional `onVoiceTranscript?: (transcript: string) => void` prop; when provided, renders `<VoiceBrainDump onTranscript={...} />` inline beside or below the textarea label; when a transcript arrives, the textarea value is set to the transcript string and the cursor is positioned at the end.
+
+VAR-7: New frontend hook `frontend/hooks/useVoiceTranscription.ts` — wraps the full voice pipeline (MediaRecorder → `POST /api/v1/voice/transcribe` → `useJobStatus` polling); exposes: `{ transcript: string | null, status: 'idle' | 'recording' | 'uploading' | 'transcribing' | 'complete' | 'error', error: string | null, startRecording: () => void, stopRecording: () => void }`. Polling uses `refetchInterval: 2000` while status is `pending` or `in_progress`, stops on terminal state (same pattern as `useJobStatus` in Epic 3).
+
+VAR-8: New environment variable `GROQ_API_KEY` — added to `backend/app/core/config.py` as a required `str` field and documented in `backend/.env.example`. Droplet-only; never referenced in frontend code or Supabase. Groq free tier provides ~7,200 audio-seconds/day.
+
+VAR-9: DB migration — run `alembic revision --autogenerate -m "add_result_to_jobs"` via Alembic CLI (never hand-write the revision ID). Migration body: `ALTER TABLE jobs ADD COLUMN result JSONB`. This is the ONLY schema change in this entire feature.
+
+VAR-10: Update `backend/app/models/job.py` — add `result: Optional[dict] = Field(default=None, sa_column=Column(JSONB, nullable=True))`.
+
+VAR-11: Standard error codes for this feature: `AUDIO_TOO_LARGE` (HTTP 413), `AUDIO_FORMAT_UNSUPPORTED` (HTTP 415), `TRANSCRIPTION_FAILED` (HTTP 503), `TRANSCRIPTION_RATE_LIMITED` (HTTP 429). All use the inherited error shape: `{"error": {"code": "...", "message": "...", "detail": {}}}`.
+
+VAR-12: No new Python packages required — Groq REST API is called directly via `httpx` (already in `requirements.txt`). No new npm packages required — `MediaRecorder` is a browser built-in. No install steps needed beyond `GROQ_API_KEY`.
+
+VAR-13: Architecture paradigm: Stateless I/O Proxy. The voice pipeline is a pure adapter (audio in → text out) that rejoins the existing pipeline at the `BrainDumpInput` textarea boundary. No new campaign field, no new job type beyond `'transcription'`, no new state machine, no new campaign status.
+
+#### VFR Coverage Map (Preliminary)
+
+```
+VFR-1: Epic 9 — Story 9.2 (Frontend: MediaRecorder capture, mic button, recording state indicator)
+VFR-2: Epic 9 — Story 9.1 (Backend: /api/v1/voice/transcribe — size cap, MIME validation, rate limit)
+VFR-3: Epic 9 — Story 9.1 (Backend: job creation + 202 response pattern)
+VFR-4: Epic 9 — Story 9.1 (Backend: BackgroundTask worker — Groq call, result write, no audio persistence)
+VFR-5: Epic 9 — Story 9.2 (Frontend: job polling + transcript → textarea handoff)
+VFR-6: Epic 9 — Story 9.2 (Frontend: error state + Try again control)
+```
+
+Coverage: 6/6 VFRs — no gaps.
+
+---
+
+### Phase 2 Epic List
+
+#### Epic 9: Voice-to-text Brain Dump
+
+An authenticated user can record a voice Brain Dump using their browser's built-in microphone. The audio is uploaded to the backend, transcribed by the Groq Whisper API (external inference, never stored on the Droplet), and the transcript is delivered to the existing `BrainDumpInput` textarea — ready to review, edit, and submit. Campaign creation proceeds via the unchanged `POST /api/v1/campaigns` pipeline. Zero new campaign fields or state machines.
+
+**VFRs covered:** VFR-1, VFR-2, VFR-3, VFR-4, VFR-5, VFR-6
+
+**Stories:**
+- Story 9.1 — Backend Transcription API: DB migration + model update + Groq integration + service + worker + router + config
+- Story 9.2 — Frontend Voice Capture: `VoiceBrainDump.tsx` + `useVoiceTranscription.ts` hook + `BrainDumpInput.tsx` update
+
+<!-- Epic 9 Stories begin below -->
+
+## Epic 9: Voice-to-text Brain Dump (Phase 2)
+
+An authenticated user can record a voice Brain Dump using their browser's built-in microphone. The audio is uploaded to the backend, transcribed by the Groq Whisper API (external inference, never stored on the Droplet), and the transcript is delivered to the existing `BrainDumpInput` textarea — ready to review, edit, and submit. Campaign creation proceeds via the unchanged `POST /api/v1/campaigns` pipeline. Zero new campaign fields or state machines.
+
+### Story 9.1: Backend Transcription API
+
+As a developer,
+I want the complete backend transcription infrastructure in place — DB migration, Groq integration, service, BackgroundTask worker, and FastAPI route,
+So that audio files submitted by the frontend are securely transcribed by Groq's API and results are retrievable via the existing job polling endpoint.
+
+**Acceptance Criteria:**
+
+**Given** `alembic revision --autogenerate -m "add_result_to_jobs"` is run and the migration is applied,
+**When** the `jobs` table is inspected,
+**Then** it has a new nullable `result JSONB` column; the migration file was generated by the Alembic CLI (no hand-written revision ID per project convention).
+**And** `backend/app/models/job.py` contains `result: Optional[dict] = Field(default=None, sa_column=Column(JSONB, nullable=True))`.
+
+**Given** `backend/app/core/config.py` and `backend/.env.example` are reviewed,
+**When** both files are opened,
+**Then** `GROQ_API_KEY: str` is present as a required field in the Settings class, and the `.env.example` entry is documented with a comment explaining its purpose (Groq audio transcription, Droplet-only, free tier ~7,200 audio-seconds/day).
+
+**Given** `backend/app/integrations/groq_audio.py` is called with valid audio bytes and a supported MIME type,
+**When** `await transcribe(content: bytes, mime_type: str) -> str` executes,
+**Then** it POSTs to `https://api.groq.com/openai/v1/audio/transcriptions` via httpx with `Authorization: Bearer {GROQ_API_KEY}` and model `whisper-large-v3-turbo`; it returns the transcript string on success; it raises a typed exception on Groq API failure.
+**And** no other module in the codebase calls the Groq audio endpoint directly — all Groq audio calls originate exclusively from this function.
+
+**Given** `backend/app/services/voice.py` receives audio bytes with an unsupported MIME type (e.g., `audio/ogg`),
+**When** the service validates the type,
+**Then** it returns HTTP 415 with error body `{"error": {"code": "AUDIO_FORMAT_UNSUPPORTED", "message": "...", "detail": {}}}` before creating any job record.
+**And** for a supported MIME type, it creates a `jobs` row with `job_type='transcription'` and `status='pending'` before dispatching the BackgroundTask (job-durability rule: record created before dispatch).
+
+**Given** `backend/app/workers/transcribe.py` BackgroundTask is dispatched with a `job_id`,
+**When** it executes,
+**Then** it fetches the job record, sets `status='in_progress'` and `started_at=now()`, then calls `await groq_audio.transcribe(audio_bytes, mime_type)`.
+**And** on success: `jobs.result` is set to `{"transcript": "..."}`, `status='complete'`, `completed_at=now()`.
+**And** on failure: if the Groq API returns a 5xx or 429 error, the worker retries up to 3 consecutive attempts (consistent with the parent generation worker pattern in `workers/generate.py`); after 3 failed attempts, `jobs.error_details` is set to a descriptive message and `status='failed'`.
+**And** audio bytes are released from memory after the httpx call completes — they are never written to disk, Supabase Storage, or any database column at any point in the worker execution (AD-V3).
+
+**Given** an authenticated user sends a valid multipart `POST /api/v1/voice/transcribe` with `Content-Length ≤ 10,485,760` and a supported MIME type,
+**When** the route in `backend/app/routers/voice.py` processes it,
+**Then** it validates the `Content-Length` header before reading the body; calls the service (which creates the job and dispatches the BackgroundTask); returns HTTP 202 with `{"job_id": "..."}`.
+
+**Given** any request to `POST /api/v1/voice/transcribe` with `Content-Length > 10,485,760` (10 MB),
+**When** the route receives it,
+**Then** it returns HTTP 413 with `{"error": {"code": "AUDIO_TOO_LARGE", "message": "...", "detail": {}}}` before reading the request body.
+
+**Given** a user has sent 5 transcription requests in the current hour and sends a 6th,
+**When** the slowapi rate limit decorator on `POST /api/v1/voice/transcribe` triggers,
+**Then** it returns HTTP 429 with `{"error": {"code": "TRANSCRIPTION_RATE_LIMITED", "message": "...", "detail": {}}}`.
+
+**Given** an unauthenticated request is sent to `POST /api/v1/voice/transcribe`,
+**When** the `get_current_user` dependency runs,
+**Then** HTTP 401 is returned (inherited — no new auth logic needed).
+
+**Given** `backend/app/main.py` is reviewed,
+**When** the router list is inspected,
+**Then** `routers/voice.py` is included with prefix `/api/v1/voice`.
+
+**Given** `requirements.txt` is reviewed,
+**When** it is opened,
+**Then** no new packages have been added — Groq is called via the existing `httpx` dependency.
+
+---
+
+### Story 9.2: Frontend Voice Capture Component
+
+As an authenticated user,
+I want a microphone button on the Brain Dump input that lets me record my idea, receive the transcript in the textarea, and review it before generating a campaign,
+So that I can capture a Brain Dump by speaking in situations where typing is impractical or slower.
+
+**Acceptance Criteria:**
+
+**Given** `frontend/app/globals.css` is reviewed,
+**When** the CSS is opened,
+**Then** a `@keyframes voice-pulse` animation is defined: `0%, 100% { opacity: 1; } 50% { opacity: 0.15; }` — used by the recording state pulsing indicator.
+
+**Given** `frontend/hooks/useVoiceTranscription.ts` is reviewed,
+**When** the hook is called with `{ onTranscript }`,
+**Then** it exposes `{ status, error, transcript, startRecording, stopRecording }` where `status` is one of `'idle' | 'recording' | 'uploading' | 'transcribing' | 'complete' | 'error'`.
+**And** `startRecording` calls `navigator.mediaDevices.getUserMedia({ audio: true })`, creates a `MediaRecorder` with `audio/webm;codecs=opus` (Chrome/Firefox/Edge) or `audio/mp4` (Safari fallback), starts recording in 100ms chunks, and sets `status='recording'`; on permission denial it sets `error` and `status='error'` without throwing.
+**And** `stopRecording` stops the recorder, assembles the blob from collected chunks, releases the microphone (`stream.getTracks().forEach(t => t.stop())`), sets `status='uploading'`, POSTs the blob as multipart to `/api/v1/voice/transcribe` with `credentials: 'include'`, and on 202 response sets the returned `job_id` and `status='transcribing'`; on network or HTTP error it sets `error` and `status='error'`.
+**And** the hook calls `useJobStatus(jobId)` (always, with `null` when no active job) with `refetchInterval: 2000` while job status is `pending` or `in_progress`; when status reaches `'complete'`, `result.transcript` is passed to `onTranscript`, `status` transitions to `'complete'`, then resets to `'idle'` after 1200ms; when status reaches `'failed'`, `jobs.error_details` is set as `error` and `status='error'`.
+**And** no other logic in the codebase manages MediaRecorder or the voice upload flow — this hook is the sole owner.
+
+**Given** the browser does not support `MediaRecorder` or `navigator.mediaDevices.getUserMedia`,
+**When** `VoiceBrainDump` mounts (checked after hydration via `useEffect`),
+**Then** the mic button is hidden entirely and a single line renders: `text-[11px] font-mono text-graphite tracking-[0.06em]` reading "Microphone access unavailable. Type your Brain Dump below." — no console errors thrown.
+
+**Given** `VoiceBrainDump` is in the `idle` or `complete` state,
+**When** it renders,
+**Then** a "Record" button is shown: `inline-flex items-center gap-2 px-3 h-11 min-w-[44px] border border-ink rounded-none bg-transparent text-[11px] font-mono text-ink uppercase tracking-[0.08em] hover:bg-ink hover:text-paper transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1`; it contains the `Mic` Lucide icon (`size-3.5`, `aria-hidden="true"`) and the label text "Record"; `aria-label="Record voice Brain Dump"` is present; the status `aria-live` span is empty.
+
+**Given** the user clicks "Record" and grants microphone permission,
+**When** `status` transitions to `'recording'`,
+**Then** the button switches to a "Stop recording" control styled as the inverted secondary variant: `border border-ink rounded-none bg-ink text-paper hover:bg-transparent hover:text-ink transition-colors duration-150`; it contains the `Square` Lucide icon and the text "Stop recording"; `aria-label="Stop recording"`.
+**And** the `role="status" aria-live="polite" aria-atomic="true"` span renders: a pulsing dot (`inline-block size-2 rounded-full bg-danger animate-[voice-pulse_1.4s_ease-in-out_infinite] motion-reduce:animate-none aria-hidden="true"`) followed by `text-graphite` text "Recording...".
+**And** with `prefers-reduced-motion` enabled, the `motion-reduce:animate-none` class removes the pulse — the danger dot remains at full opacity and "Recording..." remains legible.
+
+**Given** the user clicks "Stop recording",
+**When** `status` transitions to `'uploading'`,
+**Then** the button renders disabled: `border border-border rounded-none bg-transparent text-graphite opacity-60 cursor-not-allowed`; contains the `Loader2` Lucide icon with `animate-spin` and text "Uploading"; `aria-label="Uploading audio, please wait"`; the status span reads "Uploading..." in `text-graphite`.
+**And** when `status` transitions to `'transcribing'`, the same disabled button style applies with text "Transcribing" and `aria-label="Transcribing audio, please wait"`; the status span reads "Transcribing..." in `text-graphite`.
+
+**Given** the transcription job reaches `status='complete'`,
+**When** the hook calls `onTranscript(transcript)`,
+**Then** the component resets to idle state after 1200ms; the `BrainDumpInput` textarea value is populated with the transcript string and the character counter below the textarea updates to reflect the new length.
+
+**Given** the transcription job reaches `status='failed'` or any upload error occurs,
+**When** `status='error'`,
+**Then** a "Try again" button renders with the same secondary idle style (`border border-ink rounded-none bg-transparent text-ink hover:bg-ink hover:text-paper`); contains the `RotateCcw` Lucide icon and text "Try again"; `aria-label="Try recording again"`.
+**And** the status span renders the specific error string from the `error` state in `text-danger text-[11px] font-mono`; if `error` is null, falls back to "Transcription failed. Try again."
+**And** clicking "Try again" calls `startRecording` — no page navigation occurs.
+
+**Given** `frontend/components/campaigns/BrainDumpInput.tsx` is reviewed,
+**When** an optional `onVoiceTranscript?: (transcript: string) => void` prop is provided,
+**Then** `<VoiceBrainDump onTranscript={onVoiceTranscript} />` renders above the textarea (between the label and the `<textarea>` element); when the prop is absent, `VoiceBrainDump` is not rendered and the existing layout is unchanged.
+**And** when `onTranscript` fires, the textarea controlled value is set to the transcript string and the cursor is positioned at the end of the text, overwriting any prior content; the character counter updates accordingly.
+
+**Given** the Brain Dump page (`/dashboard/new`) renders,
+**When** `BrainDumpInput` is mounted,
+**Then** `onVoiceTranscript` is wired to the page's brain dump state setter — the voice feature is active on the primary content creation surface.
+
+**Given** all interactive elements in the component are measured at any breakpoint (desktop ≥1024px, tablet 768–1023px, mobile <768px),
+**When** rendered,
+**Then** every button meets minimum 44×44px touch target (`h-11 min-w-[44px]`); all buttons have `focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1` focus indicators; the `flex items-center gap-3 min-h-[44px]` row reflows naturally without horizontal overflow at all breakpoints.
+
+**Given** all copy in `VoiceBrainDump.tsx` is reviewed,
+**When** every string is checked,
+**Then** no exclamation marks are present; no em-dashes or double-dashes appear in any user-visible string; all error messages name the issue specifically rather than using generic phrases such as "Something went wrong."
+
+**Given** `package.json` is reviewed after this story ships,
+**When** it is opened,
+**Then** no new packages have been added — `MediaRecorder` is a browser built-in, polling uses the existing `useJobStatus` hook, icons use the existing Lucide React dependency.
+
+---
