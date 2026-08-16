@@ -22,7 +22,7 @@ _MIME_TO_EXT = {
 }
 
 
-async def transcribe(content: bytes, mime_type: str, language: str = "en") -> str:
+async def transcribe(content: bytes, mime_type: str) -> str:
     """Transcribe audio bytes via OpenAI Whisper and return the transcript string.
 
     Raises an exception on non-2xx response or network error.
@@ -35,7 +35,7 @@ async def transcribe(content: bytes, mime_type: str, language: str = "en") -> st
         response = await client.post(
             _OPENAI_TRANSCRIPTION_URL,
             headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
-            data={"model": _MODEL, "language": language},
+            data={"model": _MODEL},
             files={"file": (filename, content, base_mime)},
         )
     response.raise_for_status()
