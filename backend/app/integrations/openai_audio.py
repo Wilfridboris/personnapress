@@ -4,13 +4,9 @@ All OpenAI audio API calls originate exclusively from this module.
 Audio bytes are passed in-memory and never written to disk or storage.
 """
 
-import logging
-
 import httpx
 
 from app.core.config import settings
-
-logger = logging.getLogger(__name__)
 
 _OPENAI_TRANSCRIPTION_URL = "https://api.openai.com/v1/audio/transcriptions"
 _MODEL = "gpt-4o-mini-transcribe"
@@ -26,7 +22,7 @@ _MIME_TO_EXT = {
 }
 
 
-async def transcribe(content: bytes, mime_type: str) -> str:
+async def transcribe(content: bytes, mime_type: str, language: str = "fr") -> str:
     """Transcribe audio bytes via OpenAI Whisper and return the transcript string.
 
     Raises an exception on non-2xx response or network error.
@@ -35,18 +31,15 @@ async def transcribe(content: bytes, mime_type: str) -> str:
     # Browsers send "audio/webm;codecs=opus"; OpenAI only knows "audio/webm".
     base_mime = mime_type.split(";")[0].strip()
     filename = _MIME_TO_EXT.get(base_mime, "audio.webm")
-    logger.info("openai_audio.transcribe: bytes=%d mime=%r base_mime=%r filename=%r", len(content), mime_type, base_mime, filename)
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(
             _OPENAI_TRANSCRIPTION_URL,
             headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
-            data={"model": _MODEL},
+            data={"model": _MODEL, "language": language},
             files={"file": (filename, content, base_mime)},
         )
     response.raise_for_status()
-    body = response.json()
-    logger.info("openai_audio.transcribe: response=%r", body)
-    text = body.get("text")
+    text = response.json().get("text")
     if text is None:
         raise ValueError("OpenAI transcription response did not include a 'text' field.")
     return text
