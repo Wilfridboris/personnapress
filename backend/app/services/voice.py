@@ -46,7 +46,6 @@ async def create_transcription_job(
     if full_mime not in _SUPPORTED_MIME_TYPES and mime_type not in _SUPPORTED_MIME_TYPES:
         raise HTTPException(status_code=415, detail=_AUDIO_FORMAT_UNSUPPORTED)
 
-    # Use the full content_type for Groq (preserves codec info)
     effective_mime = full_mime if full_mime in _SUPPORTED_MIME_TYPES else mime_type
 
     job = await create_job(

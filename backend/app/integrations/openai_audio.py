@@ -27,13 +27,16 @@ async def transcribe(content: bytes, mime_type: str) -> str:
 
     Raises an exception on non-2xx response or network error.
     """
-    filename = _MIME_TO_EXT.get(mime_type, "audio.webm")
+    # Strip codec suffix so OpenAI recognises the base type.
+    # Browsers send "audio/webm;codecs=opus"; OpenAI only knows "audio/webm".
+    base_mime = mime_type.split(";")[0].strip()
+    filename = _MIME_TO_EXT.get(base_mime, "audio.webm")
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(
             _OPENAI_TRANSCRIPTION_URL,
             headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
             data={"model": _MODEL},
-            files={"file": (filename, content, mime_type)},
+            files={"file": (filename, content, base_mime)},
         )
     response.raise_for_status()
     text = response.json().get("text")
