@@ -52,6 +52,7 @@ personapress.db
 # =========================
 # Misc
 # =========================
+.mcp.json
 .DS_Store
 .claude/settings.local.json
 *.pem

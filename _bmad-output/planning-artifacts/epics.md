@@ -2420,3 +2420,163 @@ So that the entire app is usable on a 375px screen without sideways scrolling.
 
 5. **Given** desktop viewport (>= `md`), **When** Calendar and Roadmap render, **Then** the existing monthly calendar grid and WeekGrid multi-column views are pixel-unchanged with no regressions.
 
+---
+
+## Epic 23: SEO Content Pages
+
+**Goal:** Build the Brand Voice Generator feature landing page and update the homepage's primary keyword positioning to capture the two highest-ROI organic search opportunities: "brand voice generator" (KD 31, direct differentiator, blaze.ai at #1 with weak brand-voice focus) and "ai powered content creation platform" (6,600 sv, KD 33). No backend changes. Both stories are pure frontend / Next.js App Router work.
+
+---
+
+### Story 23.1: Brand Voice Generator Feature Landing Page
+
+As a marketer or content creator searching for a "brand voice generator",
+I want to land on a dedicated PersonnaPress feature page at `/brand-voice-generator` that explains what brand voice extraction is and how PersonnaPress automates it,
+So that I understand PersonnaPress's core differentiator and convert to a free trial.
+
+**Acceptance Criteria:**
+
+1. **Given** the route `/brand-voice-generator`, **When** built, **Then** the page file lives at `frontend/app/(public)/brand-voice-generator/page.tsx`, declares `export const dynamic = "force-static"`, and renders within the existing `(public)` layout (which already supplies `PublicHeader`, `PublicFooter`, and `min-h-screen bg-paper`). The page must NOT re-import `PublicHeader` or `PublicFooter` — the layout handles them.
+
+2. **Given** metadata, **When** `generateMetadata()` runs, **Then** it returns:
+   - `title: { absolute: "Brand Voice Generator | PersonnaPress - Extract Your Voice, Keep It Everywhere" }`
+   - `description`: `"PersonnaPress extracts your brand voice from existing content and applies it to every blog post and social update — automatically. No manual style guide required."` (≤160 chars)
+   - `alternates.canonical`: `${APP_URL}/brand-voice-generator`
+   - `openGraph.title`: `"Brand Voice Generator | PersonnaPress - Extract Your Voice, Keep It Everywhere"`
+   - `openGraph.description`: same as meta description
+   - `openGraph.type`: `"website"`
+   - `openGraph.url`: `${APP_URL}/brand-voice-generator`
+   - `openGraph.images`: `[{ url: "/images/PersonnaPress-opengraph.png", width: 1200, height: 630, alt: "PersonnaPress brand voice generator: extract your voice, keep it everywhere" }]`
+   - `twitter.card`: `"summary_large_image"`
+
+3. **Given** structured data, **When** the page renders, **Then** it injects two JSON-LD blocks via `<script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />` (same pattern as `frontend/app/page.tsx`):
+   - `SoftwareApplication` schema: `name: "PersonnaPress"`, `applicationCategory: "BusinessApplication"`, `operatingSystem: "Web"`, `url: APP_URL`, `description: "AI brand voice generator that extracts your tone, cadence, and banned phrases from existing content and applies them to every blog post and social update it generates."`, `offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "14-day free trial, no credit card required" }`, `featureList: ["Brand voice extraction from website content", "20-dimension Brand Voice Profile", "Tone, cadence, and banned jargon detection", "AI blog post generation in your voice", "Social post generation matching your style", "Voice fidelity scoring per campaign"]`
+   - `FAQPage` schema: `mainEntity` array of 5 Q&A objects matching the exact questions and answers defined in the FAQ section AC (AC 7 below).
+
+4. **Given** the hero section, **When** the page renders, **Then** the exact structure is:
+   ```
+   <section className="max-w-6xl mx-auto px-6 pt-12 md:pt-20 pb-16 md:pb-20">
+     <div className="max-w-3xl">
+       <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-6">Brand Voice Generator</p>
+       <h1 className="font-display text-5xl lg:text-6xl font-bold text-ink leading-tight tracking-tight text-balance mb-6">
+         Extract Your Voice,{" "}
+         <span className="relative">
+           Keep It Everywhere.
+           <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-highlight" aria-hidden="true" />
+         </span>
+       </h1>
+       <p className="text-xl text-graphite leading-relaxed text-pretty mb-10 max-w-xl">
+         PersonnaPress reads your website and writing samples, then distills your tone, cadence, and banned phrases into a living Brand Voice Profile applied to every blog post and social update it generates.
+       </p>
+       <div className="flex items-center gap-4 flex-wrap">
+         <Link href="/register" className="inline-flex items-center gap-2 bg-ink text-paper font-medium px-8 py-4 shadow-brutal hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
+           Start Free Trial <ArrowRight className="size-4" aria-hidden="true" />
+         </Link>
+         <a href="#how-it-works" className="text-sm text-graphite underline underline-offset-4 hover:text-ink transition-colors">
+           See how it works
+         </a>
+       </div>
+       <p className="font-mono text-xs text-graphite mt-4">14-day free trial. No credit card required.</p>
+     </div>
+   </section>
+   ```
+   Followed by `<div className="border-t border-border" />`.
+
+5. **Given** the "How it works" section, **When** the page renders, **Then** it uses `id="how-it-works"` and the same 3-column `grid gap-px border border-border bg-border` / `bg-paper group hover:bg-highlight transition-colors` card grid pattern as the homepage. Three steps:
+   - Step `01`, icon `Globe`: title "Point it at your content", description "Paste your website URL or upload writing samples. PersonnaPress scrapes your blog posts and public pages automatically — no copy-paste required."
+   - Step `02`, icon `Cpu`: title "Voice extracted in 90 seconds", description "AI analysis identifies your tone, cadence, banned phrases, and 17 other voice dimensions. You review and edit every field in the Brand Voice Profile before confirming."
+   - Step `03`, icon `Send`: title "Every post sounds like you", description "All generated blog posts, X posts, and LinkedIn posts are calibrated to your profile. Voice fidelity is scored after every campaign. Re-run extraction anytime."
+   Each card uses `font-mono text-xs text-graphite` for the step number (top-left), Lucide icon top-right, `font-display text-xl font-bold text-ink mb-3 text-balance` for the title, `text-sm text-graphite leading-relaxed text-pretty` for the description.
+
+6. **Given** the comparison section, **When** the page renders, **Then** it shows a semantic `<table>` (not a CSS grid — required for AI citation accuracy). Header row:
+   - Col 1: "What you get" (`font-mono text-xs text-graphite tracking-widest uppercase`)
+   - Col 2: "Manual brand guide" (`font-display font-bold text-ink`)
+   - Col 3: "PersonnaPress" (`font-display font-bold text-ink`) — this header cell has `bg-highlight` background
+   Six data rows (use `scope="row"` on the label cell; `scope="col"` on header cells):
+   | Label | Manual | PersonnaPress |
+   |---|---|---|
+   | Setup time | Days to weeks | Under 10 minutes |
+   | Stays current | Manual updates required | Re-run extraction anytime |
+   | Applies to every post | Only if your team follows the guide | Automatic — no manual effort |
+   | Catches AI-sounding phrases | Manual editing required | Built-in fluff detection and removal |
+   | Consistent across platforms | Varies by author and channel | Same voice on blog, X, and LinkedIn |
+   | Generates content | No — it is a document, not a tool | Full campaign in under 90 seconds |
+   The PersonnaPress column cells have `bg-highlight/30` background. Table is wrapped in `<div className="border border-border overflow-x-auto">` for mobile. Section header uses the standard eyebrow + H2 pattern with text "The Difference" (eyebrow) and "Brand voice guide vs. PersonnaPress" (H2).
+
+7. **Given** the FAQ section, **When** the page renders, **Then** it uses the existing `FaqAccordion` component (imported from `@/app/_components/FaqAccordion`) with exactly these 5 items — the answers must be verbatim (they are the AEO targets):
+   - Q: "What is a brand voice generator?" / A: "A brand voice generator is a tool that analyzes existing content to identify consistent patterns in tone, sentence structure, word choice, and vocabulary, then applies those patterns to new content. PersonnaPress goes beyond typical brand voice generators by extracting 20 distinct voice dimensions — including tonal descriptors, sentence cadence, signature phrases, and banned jargon — into a structured Brand Voice Profile that is automatically applied to every blog post, X post, and LinkedIn post the platform generates."
+   - Q: "What is the difference between brand voice and tone of voice?" / A: "Brand voice is the consistent personality and character that defines how a brand communicates across all content — it does not change. Tone of voice is how that brand personality adapts in specific contexts: more formal in a whitepaper, friendlier in social media captions, empathetic in a support email. PersonnaPress captures both: the Brand Voice Profile stores your permanent character (tonal descriptors, sentence cadence, banned phrases), while the platform adjusts delivery by content type — a blog post receives different calibration than an X post — while remaining within your voice."
+   - Q: "How does PersonnaPress extract my brand voice automatically?" / A: "PersonnaPress runs in three steps. First, you provide source content — paste your website URL (PersonnaPress scrapes your blog posts and public pages automatically) or upload writing samples directly (PDF, Word, or plain text). Second, a voice extraction model analyzes the collected text to identify tonal descriptors, sentence cadence, signature phrases, and banned jargon across 20 dimensions. Third, the results populate a Brand Voice Profile you review and edit field by field before confirming. The entire process takes under 10 minutes."
+   - Q: "Can AI actually write in my brand voice without sounding generic?" / A: "Yes — when the AI is trained on your specific content first. Generic AI tools produce generic-sounding output because they have no prior knowledge of your voice. PersonnaPress requires brand voice extraction before generating anything, and all generation is calibrated to your Brand Voice Profile throughout. A voice fidelity score is calculated after each campaign to flag any tonal deviations. Readers familiar with your writing consistently recognize PersonnaPress-generated posts as authentic to their voice."
+   - Q: "How long does brand voice setup take in PersonnaPress?" / A: "Under 10 minutes. Paste your website URL and PersonnaPress scrapes your content automatically in about 60 to 90 seconds. Alternatively, upload writing samples directly. Voice extraction runs in another 60 to 90 seconds and produces a full Brand Voice Profile. You review and edit every field before confirming — most users make no changes. Once confirmed, the profile applies immediately to every campaign you generate."
+   Section header: eyebrow "FAQ", H2 "Brand voice questions answered".
+
+8. **Given** the footer CTA section, **When** the page renders, **Then** it uses the same `border border-ink p-12 shadow-brutal` box pattern as the homepage trial CTA. Exact copy: eyebrow "Get Started", H2 "Set up your brand voice in 10 minutes.", body "Paste your website URL. PersonnaPress does the rest. Every post you generate after that sounds like you.", mono note "No credit card required. Cancel anytime.", CTA button linking to `/register` with text "Start Your Free Trial" and `ArrowRight` icon.
+
+9. **Given** site plumbing, **When** the page ships, **Then**:
+   - `frontend/app/sitemap.ts`: add an entry `{ url: "${BASE_URL}/brand-voice-generator", lastModified: new Date(), changeFrequency: "monthly", priority: 0.9 }` inserted after the `/about` entry.
+   - `frontend/components/marketing/PublicFooter.tsx`: add `<Link href="/brand-voice-generator">Brand Voice Generator</Link>` in the Product column, directly above the "GitHub Publisher" link, using the same `font-mono text-xs text-graphite hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1` class.
+   - `frontend/app/robots.ts`: no change needed — `/brand-voice-generator` is covered by `allow: "/"`.
+
+10. **Given** accessibility, **When** the page is assessed, **Then**:
+    - Single H1 per page. No heading hierarchy skips (H1 → H2 → no H3 skip).
+    - `text-balance` on all headings. `text-pretty` on all paragraphs.
+    - All `<Link>` and `<a>` interactive elements have `focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2`.
+    - The `<table>` has `scope="col"` on header cells and `scope="row"` on the label column cells.
+    - Lucide icons in section cards have `aria-hidden="true"`.
+    - The highlighter underline `<span>` in H1 has `aria-hidden="true"`.
+    - Hover animations use CSS only (`hover:bg-highlight transition-colors`, `hover:translate-x-1 hover:translate-y-1 transition-all`) — no Framer Motion on this page.
+
+---
+
+### Story 23.2: Homepage Keyword Pivot
+
+As a potential customer searching for an "AI content platform" or "AI marketing tools",
+I want the PersonnaPress homepage to immediately communicate that it is a full AI content platform (not just an AI blog writer),
+So that the page ranks for platform-category keywords and accurately represents the full product scope.
+
+**Acceptance Criteria:**
+
+1. **Given** the homepage metadata, **When** `export const metadata` is inspected, **Then**:
+   - `title.absolute` → `"PersonnaPress | Official Site - The AI Content Platform That Publishes in Your Brand Voice"` (keeps "Official Site" trust signal; replaces "AI Blog Writer")
+   - `description` → `"PersonnaPress is an AI content platform that extracts your brand voice and turns your ideas into SEO-ranked blog posts and social campaigns — published automatically to WordPress, Webflow, LinkedIn, X, and more."` (≤160 chars; targets "ai content platform" + "ai marketing tools" cluster)
+   - `openGraph.title` → `"PersonnaPress | Official Site - The AI Content Platform That Publishes in Your Brand Voice"`
+   - `openGraph.description` → `"Turn raw ideas into on-brand blog posts, social campaigns, and featured images — published to all your platforms in under 90 seconds."`
+   - `openGraph.images[0].alt` → `"PersonnaPress - The AI Content Platform That Publishes in Your Brand Voice"`
+   - All other metadata fields (`metadataBase`, `alternates.canonical`, `openGraph.url`, `openGraph.type`) remain unchanged.
+
+2. **Given** the JSON-LD schemas, **When** the page renders, **Then**:
+   - `schemaWebsite.description` → `"An AI content platform that extracts your brand voice and generates SEO-ranked blog posts, social campaigns, and featured images in your authentic style. Published to WordPress, Webflow, LinkedIn, and X."`
+   - `schemaSoftwareApp.description` → `"PersonnaPress is an AI-powered content platform that extracts your brand voice from existing content, then turns raw ideas into SEO-structured blog posts, social campaigns, and featured images — all published to WordPress, Webflow, LinkedIn, and X in your authentic voice. Human approval required before any publish."`
+   - `schemaOrganization` — no change.
+   - `schemaFaq` — no change.
+   - All other schema fields remain unchanged.
+
+3. **Given** the hero section, **When** the page renders, **Then** these exact changes are applied within `<section className="max-w-6xl mx-auto px-6 pt-12 md:pt-24 pb-16 md:pb-20">`:
+   - H1 changes from "The AI Blog Writer / That Sounds Like You." to:
+     ```
+     <h1 className="font-display text-6xl lg:text-7xl font-bold text-ink leading-tight tracking-tight text-balance mb-8">
+       The AI Content Platform{" "}
+       <span className="relative">
+         That Publishes in Your Brand Voice.
+         <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-highlight" aria-hidden="true" />
+       </span>
+     </h1>
+     ```
+   - Subhead paragraph changes from "Drop in a quick voice memo or brain dump..." to:
+     ```
+     <p className="text-xl text-graphite leading-relaxed text-pretty mb-10 max-w-xl">
+       PersonnaPress learns your voice from existing content, then turns raw ideas into SEO-structured blog posts, social campaigns, and featured images — published to all your platforms in under 90 seconds.
+     </p>
+     ```
+   - The primary CTA Link (`href="/dashboard"`, text "Create My First Post") and secondary anchor (`href="#workflow"`, text "See how it works") and mono note ("14-day free trial. No credit card required.") remain exactly as-is.
+   - No other changes to the hero section.
+
+4. **Given** the Key Features section, **When** the "Voice Profile" feature card renders, **Then** a `<Link>` with text "Learn how brand voice extraction works" and an `ArrowRight` icon (size-3, `ml-0.5`) is added after the description paragraph, linking to `/brand-voice-generator` and styled `text-xs font-mono text-ink underline underline-offset-2 hover:text-graphite transition-colors inline-flex items-center gap-1`. This provides an internal link from the homepage to the new pillar page.
+
+5. **Given** every other section of the homepage (Problem Statement, Who It's For, Workflow, Before/After, Platforms, Trial CTA, Pricing, FAQ), **When** the page renders after this story is applied, **Then** all copy, classes, data arrays, and structure are pixel-identical to the current state — zero changes made to any of these sections.
+
+6. **Given** `frontend/app/sitemap.ts`, **When** this story ships, **Then** the homepage entry (`url: BASE_URL, priority: 1`) remains unchanged — no sitemap edits are needed.
+
+7. **Given** `frontend/components/marketing/PublicHeader.tsx`, **When** this story ships, **Then** the `NAV_LINKS` array remains unchanged — no nav edits are needed in this story (brand voice generator is linked from the footer and from the homepage feature card, which is sufficient for internal linking without cluttering the main nav).
+
