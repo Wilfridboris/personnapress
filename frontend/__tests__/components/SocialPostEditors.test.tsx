@@ -32,6 +32,12 @@ function renderEditors(overrides?: Partial<React.ComponentProps<typeof SocialPos
 describe("SocialPostEditors", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // JSDOM does not implement CSS.supports — stub it to return false so JS fallback runs
+    Object.defineProperty(globalThis, "CSS", {
+      value: { supports: vi.fn().mockReturnValue(false) },
+      writable: true,
+      configurable: true,
+    });
   });
 
   it("renders X counter as '0 / 280' on init with empty post", () => {
@@ -74,16 +80,18 @@ describe("SocialPostEditors", () => {
     expect(counter.className).toContain("text-danger");
   });
 
-  it("Save button is hidden when not dirty", () => {
+  it("Save button is visible but disabled when not dirty", () => {
     renderEditors();
-    expect(screen.queryByRole("button", { name: /save social posts/i })).not.toBeInTheDocument();
+    const btn = screen.getByRole("button", { name: /save social posts/i });
+    expect(btn).toBeInTheDocument();
+    expect(btn).toBeDisabled();
   });
 
-  it("Save button appears after typing", () => {
+  it("Save button becomes enabled after typing", () => {
     renderEditors();
     const textarea = screen.getByLabelText("X post content");
     fireEvent.change(textarea, { target: { value: "new content" } });
-    expect(screen.getByRole("button", { name: /save social posts/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save social posts/i })).toBeEnabled();
   });
 
   it("Save calls campaignsApi.patch with all five fields", async () => {

@@ -37,6 +37,7 @@ interface SocialPostEditorsProps {
 }
 
 export interface SocialPostEditorsHandle {
+  isDirty: boolean;
   getCurrentValues: () => {
     x_post: string;
     linkedin_post: string;
@@ -92,6 +93,7 @@ export const SocialPostEditors = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
+      isDirty,
       getCurrentValues: () => ({
         x_post: xPost,
         linkedin_post: linkedinPost,
@@ -100,7 +102,7 @@ export const SocialPostEditors = forwardRef<
         threads_post: threadsPost,
       }),
     }),
-    [xPost, linkedinPost, instagramCaption, facebookPost, threadsPost],
+    [isDirty, xPost, linkedinPost, instagramCaption, facebookPost, threadsPost],
   );
 
   const xCount = xPost.length;
@@ -159,6 +161,27 @@ export const SocialPostEditors = forwardRef<
 
   return (
     <div ref={containerRef} className="space-y-8">
+      {/* Save button -- shown at top whenever editable so it's always visible */}
+      {!readOnly && (
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isSaving || !isDirty}
+          className="inline-flex items-center gap-2 px-4 py-2 border border-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {isSaving ? (
+            <>
+              <span
+                className="inline-block w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"
+                aria-hidden="true"
+              />
+              Saving...
+            </>
+          ) : (
+            "Save social posts"
+          )}
+        </button>
+      )}
       {imageUrl && (
         <div className="border border-border overflow-hidden aspect-video w-full">
           <img
@@ -362,27 +385,6 @@ export const SocialPostEditors = forwardRef<
         </div>
       )}
 
-      {/* Save button -- only shown when editable and dirty */}
-      {!readOnly && isDirty && (
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={isSaving}
-          className="inline-flex items-center gap-2 px-4 py-2 border border-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {isSaving ? (
-            <>
-              <span
-                className="inline-block w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"
-                aria-hidden="true"
-              />
-              Saving...
-            </>
-          ) : (
-            "Save social posts"
-          )}
-        </button>
-      )}
     </div>
   );
 });
