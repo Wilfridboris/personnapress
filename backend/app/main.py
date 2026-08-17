@@ -12,7 +12,7 @@ from starlette.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.rate_limit import limiter
-from app.routers import articles, auth, campaigns, clients, files, health, images, jobs, publishing, roadmaps, subscriptions, voice, webhooks
+from app.routers import analytics, articles, auth, campaigns, clients, files, health, images, jobs, publishing, roadmaps, subscriptions, voice, webhooks
 from app.routers.public_articles import public_app
 from app.scheduler.scheduler import scheduler
 
@@ -76,6 +76,7 @@ app.include_router(webhooks.router, prefix=API_PREFIX)
 app.include_router(articles.router, prefix=API_PREFIX)
 app.include_router(roadmaps.router, prefix=API_PREFIX)
 app.include_router(voice.router, prefix=API_PREFIX)
+app.include_router(analytics.router, prefix=API_PREFIX)
 
 # public_app is a fully isolated sub-application: it has its own CORS, rate limiter,
 # and exception handlers. Middleware added to `app` does NOT apply to /public routes.

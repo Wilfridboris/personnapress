@@ -494,3 +494,17 @@
 - raw column declared nullable=True in migration [backend/alembic/versions/20260817_1355_444913f949d4_add_post_metrics.py] — _safe_json always returns a dict so None never occurs in practice; minor schema inconsistency
 - Decrypted creds held across await suspension point in _process_batch [backend/app/workers/analytics.py] — standard pattern; low risk; revisit if Sentry frame-locals scrubbing policy tightens
 - No unique constraint on post_metrics [backend/alembic/versions/20260817_1355_444913f949d4_add_post_metrics.py] — append-only by design per AD-A3; compaction/deduplication is explicitly deferred to a later story per spec
+
+## Deferred from: code review of 24-3-meta-analytics-dashboard-tab (2026-08-17)
+
+- Two sequential DB round-trips for best_post lookup [backend/app/services/analytics.py:get_client_summary] — performance optimization only; best_post subquery could be collapsed into the main CTE; defer until latency measurements show this is a bottleneck
+- No pagination on /posts endpoint [backend/app/routers/analytics.py, backend/app/services/analytics.py] — all Meta published posts fetched for a client; acceptable at current volume; add limit/cursor when user base grows
+- conftest.py sys.modules patch has no yield cleanup [backend/tests/routers/conftest.py] — low risk with asyncio_mode=auto; if integration tests ever import real slowapi in the same session, revisit with a session-scoped autouse fixture
+- Error response double-nested via HTTPException detail dict [backend/app/routers/analytics.py] — pre-existing project pattern across all routers; revisit if frontend error-parsing is standardized
+- formatRelativeTime timezone risk if DB column is non-timestamptz [frontend/app/(app)/analytics/AnalyticsDashboard.tsx] — asyncpg returns aware datetimes for TIMESTAMPTZ columns; low real-world risk; revisit if DB schema migrates away from timestamptz
+- brain_dump truncation used as campaign_title [backend/app/services/analytics.py] — existing project convention; no dedicated campaign title field exists; address in future campaign data model refactor
+- React Query keys deviate from spec shorthand [frontend/hooks/usePostMetrics.ts] — implementation uses ["analytics", clientId, "summary"] vs spec's shorthand; implementation keys are more specific; no practical impact
+- Stale data briefly visible when switching active client [frontend/app/(app)/analytics/AnalyticsDashboard.tsx] — pre-existing TanStack Query behavior on queryKey change; use placeholderData if transition needs to be explicit
+- Non-deterministic tiebreak when two posts share max engagements [backend/app/services/analytics.py] — cosmetic; add secondary ORDER BY published_post_id to best_post subquery if determinism is required
+- INNER JOIN silently drops published posts whose campaign was deleted [backend/app/services/analytics.py] — campaigns are never deleted (data retention story 7-3 only anonymizes users); revisit if soft-delete of campaigns is introduced
+- DISTINCT ON captured_at tiebreak non-deterministic for same-timestamp rows [backend/app/services/analytics.py] — vanishingly rare; add secondary ORDER BY id if dedup issues arise

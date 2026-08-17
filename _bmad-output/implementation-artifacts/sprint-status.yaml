@@ -342,7 +342,7 @@ development_status:
   23-2-homepage-keyword-pivot: done
 
   # Epic 24: Post Analytics -- Meta (Facebook, Instagram, Threads). Per architecture-PersonnaPress-post-analytics-2026-08-16 spine.
-  epic-24: in-progress
+  epic-24: done
   24-1-published-post-record-and-platform-post-id-capture: done
   24-2-meta-metrics-collection-pipeline: done
-  24-3-meta-analytics-dashboard-tab: ready-for-dev
+  24-3-meta-analytics-dashboard-tab: done
