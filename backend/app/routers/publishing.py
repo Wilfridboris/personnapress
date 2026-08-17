@@ -1472,6 +1472,7 @@ async def schedule_campaign_publish(
             args=[str(job.id), str(campaign_id), body.platforms or []],
             id=str(job.id),
             replace_existing=True,
+            misfire_grace_time=3600,
         )
     except Exception as exc:
         raise HTTPException(
@@ -1584,6 +1585,8 @@ async def reschedule_campaign_publish(
             str(job.id),
             trigger=DateTrigger(run_date=scheduled_at_utc),
         )
+        # reschedule_job only updates the trigger; preserve the grace window explicitly.
+        scheduler.modify_job(str(job.id), misfire_grace_time=3600)
     except JobLookupError:
         # If APScheduler lost the job, re-register it to avoid orphan DB row.
         scheduler.add_job(
@@ -1592,6 +1595,7 @@ async def reschedule_campaign_publish(
             args=[str(job.id), str(campaign_id), platforms_to_use],
             id=str(job.id),
             replace_existing=True,
+            misfire_grace_time=3600,
         )
 
     job.scheduled_at = scheduled_at_utc

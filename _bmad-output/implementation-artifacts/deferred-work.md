@@ -12,6 +12,14 @@
 - platform column free-text with no enum constraint [backend/app/db/repositories/models.py] — project-wide pattern for platform strings; enforce via a Check constraint or Literal type if analytics queries start producing silent mismatches
 - UPSERT silently overwrites platform_post_id on re-publish, losing publish history [backend/app/db/repositories/published_posts.py] — by design per AC #7; if audit history of re-publishes is needed, add a superseded_at column or an append-only log table in a future story
 
+## Deferred from: spec-fix-scheduled-publish-misfire (2026-08-17)
+
+- `run_publish` receives string UUIDs from APScheduler but declares `UUID` typed params — `scheduler.add_job` is called with `str(job.id)` and `str(campaign_id)`; APScheduler pickles/unpickles these as strings; `run_publish(job_id: UUID, campaign_id: UUID, ...)` gets strings at runtime; downstream `get_job(session, job_id)` may silently return `None` if asyncpg rejects the string UUID comparison [backend/app/routers/publishing.py:1472, backend/app/workers/publish.py:114] — pre-existing; fix by converting to `uuid.UUID(str(job.id))` in args or adding UUID conversion at top of `run_publish` like `run_publish_headless` does
+- `reschedule_campaign_publish` has no `except Exception` wrapper around `scheduler.reschedule_job` — any non-`JobLookupError` (e.g. jobstore connection failure) propagates as a raw 500 with no cleanup, unlike the schedule endpoint which returns `SCHEDULER_ERROR` [backend/app/routers/publishing.py:1584] — pre-existing
+- `cancel_scheduled_publish` response claims `status: "approved"` but never writes that status to the DB campaign row — if the campaign was already published (job fired before cancel arrived), the response is wrong [backend/app/routers/publishing.py:1525] — pre-existing
+- `check_trial_not_expired` missing from `reschedule_campaign_publish` — trial-expired users can extend a scheduled post to a new future time [backend/app/routers/publishing.py:1528] — pre-existing, low severity
+- `ALREADY_SCHEDULED` guard at POST `/publish/schedule` cannot detect APScheduler orphan state — if APScheduler dropped the job due to misfire but `campaign.scheduled_at` is still set, the user cannot re-schedule without first cancelling; no self-healing path exists [backend/app/routers/publishing.py:1445] — pre-existing; fix by checking `scheduler.get_job(str(job.id))` in the schedule endpoint and clearing the orphan if the DB job row and APScheduler job are out of sync
+
 ## Deferred from: code review of 9-4-switch-transcription-to-openai-whisper (2026-08-16)
 
 - No guard for empty `OPENAI_API_KEY` at startup — 401 from OpenAI surfaces as generic auth failure with no operator hint [backend/app/integrations/openai_audio.py] — pre-existing pattern from groq_audio.py; consider a startup validator if key-misconfiguration errors recur
