@@ -481,3 +481,16 @@
 - URL inside Markdown link syntax `[text](https://...)` double-counted by regex and potentially double-linked in output -- brain dump is plain text; very edge case. [both frontend files]
 - `{brain_dump}` format-string injection if user inserts `}` in content -- pre-existing pattern across all prompt placeholders in this file. [generation_prompts.py]
 - No upper bound on link count displayed in UI indicator -- "47 links detected" is technically correct but may warrant a warning for very large counts in a future story. [both frontend files]
+
+## Deferred from: code review of 24-2-meta-metrics-collection-pipeline (2026-08-17)
+
+- Stuck in_progress jobs on process restart [backend/app/workers/analytics.py:metrics_poll] — pre-existing pattern across all workers; no watchdog or heartbeat; revisit if job monitoring is added project-wide
+- Cutoff timezone stripping — `cutoff.replace(tzinfo=None)` before DB bind [backend/app/workers/analytics.py:_select_due_meta_posts] — consistent with project's naive-UTC DB columns; revisit if schema migrates to timestamptz
+- Session sharing across multiple db.commit() calls in a single sweep [backend/app/workers/analytics.py] — pre-existing pattern in cleanup/reengagement workers; works correctly with SQLAlchemy async
+- Zero engagement collapses to None for IG/Threads when all sub-metrics are 0 [backend/app/integrations/meta_metrics.py] — design decision; dashboard (24-3) can treat None as zero-or-unknown
+- Credential KeyError caught by outer try/except rather than structured unavailable_reason [backend/app/integrations/meta_metrics.py:_fetch_facebook/_fetch_threads] — exception is logged and handled; lower priority than adding explicit key guards
+- SELECT * + PostMetric(**dict(r)) breaks on schema drift [backend/app/db/repositories/post_metrics.py:latest_per_post/series] — forward-looking concern; fix by naming columns explicitly when schema stabilises
+- PublishedPost.published_at naive in returned objects from _select_due_meta_posts [backend/app/workers/analytics.py] — field not used downstream in meta_metrics.fetch; revisit if downstream consumers need tz-aware datetimes
+- raw column declared nullable=True in migration [backend/alembic/versions/20260817_1355_444913f949d4_add_post_metrics.py] — _safe_json always returns a dict so None never occurs in practice; minor schema inconsistency
+- Decrypted creds held across await suspension point in _process_batch [backend/app/workers/analytics.py] — standard pattern; low risk; revisit if Sentry frame-locals scrubbing policy tightens
+- No unique constraint on post_metrics [backend/alembic/versions/20260817_1355_444913f949d4_add_post_metrics.py] — append-only by design per AD-A3; compaction/deduplication is explicitly deferred to a later story per spec

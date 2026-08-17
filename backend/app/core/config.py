@@ -72,5 +72,9 @@ class Settings(BaseSettings):
     # Set to true after LinkedIn grants MDP approval for r_organization_admin + w_organization_social scopes.
     LINKEDIN_ORG_POSTING_ENABLED: bool = False
 
+    # Post analytics feature flag (Epic 24). Controls whether metrics_poll is registered.
+    # Enabled by default for Meta (free reads). Disable to pause harvesting during incidents.
+    ANALYTICS_ENABLED: bool = True
+
 
 settings = Settings()
