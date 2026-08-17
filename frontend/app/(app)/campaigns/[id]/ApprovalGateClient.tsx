@@ -73,6 +73,7 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
   };
 
   const [displayStatus, setDisplayStatus] = useState<CampaignStatus>(campaign.status);
+  const [isEditing, setIsEditing] = useState(false);
 
   // Sync to server ground truth for terminal states so router.refresh() propagates
   // without requiring a full page reload (e.g. failed publish, successful retry).
@@ -84,6 +85,7 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
 
   const statusConfig = STATUS_CONFIG[displayStatus] ?? { label: displayStatus, className: "bg-border text-graphite" };
   const isPending = displayStatus === "pending_approval" && campaign.status === "pending_approval";
+  const isEditableApproved = displayStatus === "approved" && campaign.status !== "published";
   const rawBlogHtml = campaign.blog_html ?? null;
   const isRoadmapSocialPost = !!campaign.roadmap_id && campaign.blog_html === null;
   const isSocialOnly = campaign.campaign_type === "social_only";
@@ -100,6 +102,15 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
           <div className="flex items-center gap-2 shrink-0 mt-1">
             {displayStatus === "approved" && campaign.github_pr_url && (
               <StatusBadge status="pr_open" />
+            )}
+            {isEditableApproved && (
+              <button
+                type="button"
+                onClick={() => setIsEditing((v) => !v)}
+                className="inline-flex items-center px-3 py-1 text-xs font-mono uppercase tracking-wider border border-ink bg-paper text-ink shadow-[2px_2px_0px_#111111] hover:bg-ink hover:text-paper transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+              >
+                {isEditing ? "Done editing" : "Edit"}
+              </button>
             )}
             <span className={`text-xs font-mono border px-3 py-1 ${statusConfig.className}`}>
               {statusConfig.label}
@@ -169,7 +180,7 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
                 </h2>
               </div>
               {rawBlogHtml ? (
-                (isPending && !campaign.article_id) ? (
+                ((isPending || isEditing) && !campaign.article_id) ? (
                   <BlogEditor
                     ref={blogEditorRef}
                     initialHtml={rawBlogHtml}
@@ -214,10 +225,10 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
                 initialInstagramCaption={campaign.instagram_caption ?? null}
                 initialFacebookPost={campaign.facebook_post ?? null}
                 initialThreadsPost={campaign.threads_post ?? null}
-                readOnly={!isPending}
+                readOnly={!isPending && !isEditing}
                 showXSection={hideBlogSection ? !!campaign.x_post : true}
                 showLinkedInSection={hideBlogSection ? !!campaign.linkedin_post : true}
-                metaContext={isPending ? metaContext : undefined}
+                metaContext={(isPending || isEditing) ? metaContext : undefined}
                 imageUrl={isRoadmapSocialPost ? (campaign.image_url ?? null) : null}
               />
             </div>

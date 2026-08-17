@@ -280,10 +280,10 @@ async def patch_campaign(
     if not client or client.user_id != user_id:
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
 
-    if campaign.status != "pending_approval":
+    if campaign.status not in ("pending_approval", "approved"):
         raise HTTPException(
             status_code=400,
-            detail={"error": {"code": "INVALID_STATUS_FOR_EDIT", "message": "Campaign content can only be edited while pending approval.", "detail": {}}},
+            detail={"error": {"code": "INVALID_STATUS_FOR_EDIT", "message": "Campaign content can only be edited while pending or approved.", "detail": {}}},
         )
 
     patch_data = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in _PATCHABLE_FIELDS}

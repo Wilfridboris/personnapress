@@ -1525,6 +1525,82 @@ async def cancel_scheduled_publish(
     return {"campaign_id": str(campaign_id), "status": "approved"}
 
 
+@router.put("/campaigns/{campaign_id}/publish/schedule", status_code=200)
+async def reschedule_campaign_publish(
+    campaign_id: uuid.UUID,
+    body: ScheduleRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = _parse_user_id(current_user)
+
+    campaign = await get_campaign(db, campaign_id)
+    if not campaign:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
+        )
+
+    client = await get_client(db, campaign.client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Campaign not found.", "detail": {}}},
+        )
+
+    if campaign.status != "approved" or campaign.scheduled_at is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "NOT_SCHEDULED", "message": "Campaign is not currently scheduled.", "detail": {}}},
+        )
+
+    scheduled_at_utc = body.scheduled_at.astimezone(timezone.utc).replace(tzinfo=None)
+    if scheduled_at_utc <= datetime.now(timezone.utc).replace(tzinfo=None):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "SCHEDULED_TIME_IN_PAST", "message": "Scheduled time must be in the future.", "detail": {}}},
+        )
+
+    job = await get_scheduled_job(db, campaign_id)
+    if not job:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "No scheduled publish job found.", "detail": {}}},
+        )
+
+    # Preserve the platforms filter from the original job args.
+    # APScheduler stores args as a list: [job_id, campaign_id, platforms]
+    try:
+        existing_job = scheduler.get_job(str(job.id))
+        existing_platforms = existing_job.args[2] if existing_job and len(existing_job.args) > 2 else []
+    except Exception:
+        logger.warning("reschedule: could not read existing job args for job %s; falling back to request platforms", job.id)
+        existing_platforms = body.platforms or []
+
+    platforms_to_use = body.platforms if body.platforms is not None else existing_platforms
+
+    try:
+        scheduler.reschedule_job(
+            str(job.id),
+            trigger=DateTrigger(run_date=scheduled_at_utc),
+        )
+    except JobLookupError:
+        # If APScheduler lost the job, re-register it to avoid orphan DB row.
+        scheduler.add_job(
+            run_publish,
+            trigger=DateTrigger(run_date=scheduled_at_utc),
+            args=[str(job.id), str(campaign_id), platforms_to_use],
+            id=str(job.id),
+            replace_existing=True,
+        )
+
+    job.scheduled_at = scheduled_at_utc
+    await update_campaign_scheduled_at(db, campaign_id, scheduled_at_utc)
+    await db.commit()
+
+    return {"job_id": str(job.id), "scheduled_at": scheduled_at_utc.isoformat() + "Z"}
+
+
 class RetryRequest(BaseModel):
     platform: str  # "wordpress" | "webflow" | "x" | "linkedin"
 

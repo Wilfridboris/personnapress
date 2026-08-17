@@ -160,6 +160,158 @@ function DestinationChip({
   );
 }
 
+function getLocalDateTimeString(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function computePresets(): { label: string; value: string }[] {
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const tomorrow9am = new Date(tomorrow);
+  tomorrow9am.setHours(9, 0, 0, 0);
+
+  const tomorrow1pm = new Date(tomorrow);
+  tomorrow1pm.setHours(13, 0, 0, 0);
+
+  // Next Saturday (if today is Saturday, next week's Saturday)
+  const saturday = new Date(now);
+  const dayOfWeek = saturday.getDay();
+  const daysUntilSat = dayOfWeek === 6 ? 7 : (6 - dayOfWeek);
+  saturday.setDate(saturday.getDate() + daysUntilSat);
+  saturday.setHours(9, 0, 0, 0);
+
+  // Next Monday — skip to the following Monday when today is Sunday (tomorrow IS Monday,
+  // which would duplicate the "Tomorrow 9 AM" preset)
+  const monday = new Date(now);
+  const daysUntilMon = dayOfWeek === 1 ? 7 : dayOfWeek === 0 ? 8 : (1 - dayOfWeek + 7) % 7;
+  monday.setDate(monday.getDate() + daysUntilMon);
+  monday.setHours(9, 0, 0, 0);
+
+  return [
+    { label: "Tomorrow 9 AM", value: getLocalDateTimeString(tomorrow9am) },
+    { label: "Tomorrow 1 PM", value: getLocalDateTimeString(tomorrow1pm) },
+    { label: "This weekend", value: getLocalDateTimeString(saturday) },
+    { label: "Next Monday 9 AM", value: getLocalDateTimeString(monday) },
+  ];
+}
+
+function SchedulePicker({
+  value,
+  onChange,
+  onConfirm,
+  onCancel,
+  confirmLabel,
+  isSubmitting,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirmLabel: string;
+  isSubmitting: boolean;
+}) {
+  const [showCustom, setShowCustom] = useState(false);
+  const presets = useMemo(() => computePresets(), []);
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const isPastTime = Boolean(value && new Date(value) <= new Date());
+
+  return (
+    <div className="px-6 pt-3 pb-4 border-t border-border space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {presets.map((p) => (
+          <button
+            key={p.label}
+            type="button"
+            onClick={() => { onChange(p.value); setShowCustom(false); }}
+            className={cn(
+              "px-3 py-1.5 text-xs font-mono border transition-colors rounded-none",
+              "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2",
+              value === p.value && !showCustom
+                ? "bg-highlighter border-ink shadow-[2px_2px_0px_#111111] text-ink"
+                : "bg-paper border-border text-graphite hover:border-ink hover:text-ink",
+            )}
+          >
+            {p.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setShowCustom(true)}
+          className={cn(
+            "px-3 py-1.5 text-xs font-mono border transition-colors rounded-none",
+            "focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2",
+            showCustom
+              ? "bg-highlighter border-ink shadow-[2px_2px_0px_#111111] text-ink"
+              : "bg-paper border-border text-graphite hover:border-ink hover:text-ink",
+          )}
+        >
+          Custom
+        </button>
+      </div>
+      {showCustom && (
+        <div>
+          <label
+            htmlFor="schedule-datetime"
+            className="block text-xs font-medium uppercase tracking-[0.06em] text-graphite mb-1"
+          >
+            Schedule date &amp; time
+          </label>
+          <input
+            id="schedule-datetime"
+            type="datetime-local"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="border-b border-ink focus:border-b-2 outline-none bg-transparent py-2 text-sm text-ink w-full"
+          />
+        </div>
+      )}
+      {value && !isPastTime && (
+        <p className="text-xs font-medium text-ink">
+          Will publish:{" "}
+          {new Intl.DateTimeFormat("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+            timeZoneName: "short",
+          }).format(new Date(value))}
+        </p>
+      )}
+      <p className="text-xs text-graphite">Schedules in {userTimezone}</p>
+      {isPastTime && (
+        <p className="text-xs text-danger" role="alert">
+          Scheduled time must be in the future.
+        </p>
+      )}
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={!value || isPastTime || isSubmitting}
+          className="px-5 py-2.5 bg-ink text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white hover:text-ink hover:border hover:border-ink transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none"
+        >
+          {isSubmitting ? (
+            <span className="inline-block size-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+          ) : confirmLabel}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors rounded-none"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 interface ApprovalPanelProps {
   campaign: Campaign;
   blogEditorRef?: RefObject<BlogEditorHandle | null>;
@@ -186,6 +338,9 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
   const [scheduledAt, setScheduledAt] = useState<string>("");
   const [isScheduling, setIsScheduling] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [showReschedulePicker, setShowReschedulePicker] = useState(false);
+  const [rescheduleAt, setRescheduleAt] = useState<string>("");
+  const [isRescheduling, setIsRescheduling] = useState(false);
   const [showRepublishControls, setShowRepublishControls] = useState(false);
   const [publishedPlatforms, setPublishedPlatforms] = useState<string[]>([]);
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
@@ -489,8 +644,6 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
     }
   }, [campaign.id, publishMode, addToast, showUpgradePrompt]);
 
-  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const isPastTime = Boolean(scheduledAt && new Date(scheduledAt) <= new Date());
   const nothingSelected = selectedPlatforms.size === 0;
   const allPlatformsSelected =
     availablePlatforms.length > 0 && availablePlatforms.every((p) => selectedPlatforms.has(p));
@@ -564,6 +717,20 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
       setIsCancelling(false);
     }
   }, [campaign.id, router, addToast]);
+
+  const handleConfirmReschedule = useCallback(async () => {
+    setIsRescheduling(true);
+    try {
+      const isoAt = new Date(rescheduleAt).toISOString();
+      await campaignsApi.reschedule(campaign.id, isoAt);
+      setShowReschedulePicker(false);
+      router.refresh();
+    } catch (err) {
+      addToast(err instanceof APIError ? err.message : "Rescheduling failed.", "error");
+    } finally {
+      setIsRescheduling(false);
+    }
+  }, [campaign.id, rescheduleAt, router, addToast]);
 
   // Poll regular publish job every 2s while in-flight
   useEffect(() => {
@@ -653,34 +820,63 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
 
     if (isScheduled) {
       return (
-        <div className="fixed bottom-0 left-0 md:left-14 lg:left-[240px] right-0 z-10 bg-paper border-t border-border px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-sm text-graphite">
-            <span className="font-medium text-ink">Scheduled</span>
-            {" "}
-            <span>
-              {new Intl.DateTimeFormat("en-US", {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-                year: "numeric",
-                hour: "numeric",
-                minute: "2-digit",
-                timeZoneName: "short",
-              }).format(new Date(
-                campaign.scheduled_at!.endsWith("Z") || campaign.scheduled_at!.includes("+")
-                  ? campaign.scheduled_at!
-                  : campaign.scheduled_at! + "Z"
-              ))}
-            </span>
-          </p>
-          <button
-            type="button"
-            onClick={handleCancelSchedule}
-            disabled={isCancelling}
-            className="text-sm text-graphite underline hover:text-ink disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isCancelling ? "Cancelling…" : "Cancel schedule"}
-          </button>
+        <div className="fixed bottom-0 left-0 md:left-14 lg:left-[240px] right-0 z-10 bg-paper border-t border-border">
+          <div className="px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm text-graphite">
+              <span className="font-medium text-ink">Scheduled</span>
+              {" "}
+              <span>
+                {new Intl.DateTimeFormat("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                  timeZoneName: "short",
+                }).format(new Date(
+                  campaign.scheduled_at!.endsWith("Z") || campaign.scheduled_at!.includes("+")
+                    ? campaign.scheduled_at!
+                    : campaign.scheduled_at! + "Z"
+                ))}
+              </span>
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const willOpen = !showReschedulePicker;
+                  setShowReschedulePicker((v) => !v);
+                  if (willOpen) {
+                    const raw = campaign.scheduled_at!;
+                    const iso = raw.endsWith("Z") || raw.includes("+") ? raw : raw + "Z";
+                    setRescheduleAt(getLocalDateTimeString(new Date(iso)));
+                  }
+                }}
+                className="inline-flex items-center px-4 py-2 text-sm font-mono border border-ink bg-paper text-ink shadow-[2px_2px_0px_#111111] hover:bg-ink hover:text-paper transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 min-h-[44px]"
+              >
+                Reschedule
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelSchedule}
+                disabled={isCancelling}
+                className="text-sm text-graphite underline hover:text-ink disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isCancelling ? "Cancelling..." : "Cancel schedule"}
+              </button>
+            </div>
+          </div>
+          {showReschedulePicker && (
+            <SchedulePicker
+              value={rescheduleAt}
+              onChange={setRescheduleAt}
+              onConfirm={handleConfirmReschedule}
+              onCancel={() => setShowReschedulePicker(false)}
+              confirmLabel="Confirm reschedule"
+              isSubmitting={isRescheduling}
+            />
+          )}
         </div>
       );
     }
@@ -839,65 +1035,14 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
 
         {/* Schedule picker */}
         {showSchedulePicker && (
-          <div className="px-6 pt-0 pb-4 border-t border-border space-y-3">
-            <div>
-              <label
-                htmlFor="schedule-datetime"
-                className="block text-xs font-medium uppercase tracking-[0.06em] text-graphite mb-1"
-              >
-                Schedule date &amp; time
-              </label>
-              <input
-                id="schedule-datetime"
-                type="datetime-local"
-                value={scheduledAt}
-                onChange={(e) => setScheduledAt(e.target.value)}
-                className="border-b border-ink focus:border-b-2 outline-none bg-transparent py-2 text-sm text-ink w-full"
-              />
-            </div>
-            {scheduledAt && !isPastTime && (
-              <p className="text-xs font-medium text-ink">
-                Will publish:{" "}
-                {new Intl.DateTimeFormat("en-US", {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                  timeZoneName: "short",
-                }).format(new Date(scheduledAt))}
-              </p>
-            )}
-            <p className="text-xs text-graphite">Schedules in {userTimezone}</p>
-            {isPastTime && (
-              <p className="text-xs text-danger" role="alert">
-                Scheduled time must be in the future.
-              </p>
-            )}
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={handleConfirmSchedule}
-                disabled={!scheduledAt || isPastTime || isScheduling}
-                className="px-5 py-2.5 bg-ink text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white hover:text-ink hover:border hover:border-ink transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none"
-              >
-                {isScheduling ? (
-                  <span className="inline-block size-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
-                ) : (
-                  "Confirm schedule"
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowSchedulePicker(false)}
-                className="px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors rounded-none"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+          <SchedulePicker
+            value={scheduledAt}
+            onChange={setScheduledAt}
+            onConfirm={handleConfirmSchedule}
+            onCancel={() => setShowSchedulePicker(false)}
+            confirmLabel="Confirm schedule"
+            isSubmitting={isScheduling}
+          />
         )}
 
         {/* GitHub pre-publish confirmation panel */}
@@ -1391,49 +1536,15 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
             )}
 
             {showSchedulePicker && (
-              <div className="mt-4 pt-3 border-t border-border space-y-3">
-                <div>
-                  <label
-                    htmlFor="schedule-datetime-republish"
-                    className="block text-xs font-medium uppercase tracking-[0.06em] text-graphite mb-1"
-                  >
-                    Schedule date &amp; time
-                  </label>
-                  <input
-                    id="schedule-datetime-republish"
-                    type="datetime-local"
-                    value={scheduledAt}
-                    onChange={(e) => setScheduledAt(e.target.value)}
-                    className="border-b border-ink focus:border-b-2 outline-none bg-transparent py-2 text-sm text-ink w-full"
-                  />
-                </div>
-                <p className="text-xs text-graphite">Schedules in {userTimezone}</p>
-                {isPastTime && (
-                  <p className="text-xs text-danger" role="alert">
-                    Scheduled time must be in the future.
-                  </p>
-                )}
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={handleConfirmSchedule}
-                    disabled={!scheduledAt || isPastTime || isScheduling}
-                    className="px-5 py-2.5 bg-ink text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white hover:text-ink hover:border hover:border-ink transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 rounded-none"
-                  >
-                    {isScheduling ? (
-                      <span className="inline-block size-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
-                    ) : (
-                      "Confirm schedule"
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowSchedulePicker(false)}
-                    className="px-5 py-2.5 border border-ink text-ink text-sm font-medium hover:bg-ink hover:text-white transition-colors rounded-none"
-                  >
-                    Cancel
-                  </button>
-                </div>
+              <div className="mt-4">
+                <SchedulePicker
+                  value={scheduledAt}
+                  onChange={setScheduledAt}
+                  onConfirm={handleConfirmSchedule}
+                  onCancel={() => setShowSchedulePicker(false)}
+                  confirmLabel="Confirm schedule"
+                  isSubmitting={isScheduling}
+                />
               </div>
             )}
           </div>

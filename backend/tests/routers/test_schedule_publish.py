@@ -214,3 +214,124 @@ async def test_cancel_schedule_not_found():
             )
 
     assert exc_info.value.status_code == 404
+
+
+# ── Reschedule endpoint ──────────────────────────────────────────────────────
+
+async def test_reschedule_moves_job_and_updates_scheduled_at():
+    """reschedule_campaign_publish moves the APScheduler job and updates scheduled_at."""
+    from app.routers.publishing import reschedule_campaign_publish, ScheduleRequest
+
+    user_id = uuid.uuid4()
+    old_at = _future_dt()
+    campaign = _make_campaign(scheduled_at=old_at)
+    client = _make_client(user_id=user_id, client_id=campaign.client_id)
+    job = _make_job(campaign_id=campaign.id)
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    mock_scheduler = MagicMock()
+    mock_scheduler.get_job.return_value = None  # treat as no existing args
+    new_at = _future_dt() + timedelta(hours=1)
+
+    with (
+        patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_scheduled_job", AsyncMock(return_value=job)),
+        patch("app.routers.publishing.update_campaign_scheduled_at", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.scheduler", mock_scheduler),
+    ):
+        result = await reschedule_campaign_publish(
+            campaign_id=campaign.id,
+            body=ScheduleRequest(scheduled_at=new_at),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert "job_id" in result
+    assert "scheduled_at" in result
+    mock_scheduler.reschedule_job.assert_called_once()
+    db.commit.assert_called_once()
+    # job row's scheduled_at updated
+    assert job.scheduled_at is not None
+
+
+async def test_reschedule_past_time_rejected():
+    """reschedule to a past time returns SCHEDULED_TIME_IN_PAST."""
+    from app.routers.publishing import reschedule_campaign_publish, ScheduleRequest
+
+    user_id = uuid.uuid4()
+    campaign = _make_campaign(scheduled_at=_future_dt())
+    client = _make_client(user_id=user_id, client_id=campaign.client_id)
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await reschedule_campaign_publish(
+                campaign_id=campaign.id,
+                body=ScheduleRequest(scheduled_at=_past_dt()),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["error"]["code"] == "SCHEDULED_TIME_IN_PAST"
+
+
+async def test_reschedule_non_scheduled_campaign_rejected():
+    """reschedule on a campaign that is not scheduled returns NOT_SCHEDULED."""
+    from app.routers.publishing import reschedule_campaign_publish, ScheduleRequest
+
+    user_id = uuid.uuid4()
+    campaign = _make_campaign(scheduled_at=None)  # no scheduled_at
+    client = _make_client(user_id=user_id, client_id=campaign.client_id)
+    db = AsyncMock()
+
+    with (
+        patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await reschedule_campaign_publish(
+                campaign_id=campaign.id,
+                body=ScheduleRequest(scheduled_at=_future_dt()),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["error"]["code"] == "NOT_SCHEDULED"
+
+
+async def test_reschedule_no_duplicate_job_row():
+    """reschedule_job is called instead of add_job, so no second job row is created."""
+    from app.routers.publishing import reschedule_campaign_publish, ScheduleRequest
+
+    user_id = uuid.uuid4()
+    campaign = _make_campaign(scheduled_at=_future_dt())
+    client = _make_client(user_id=user_id, client_id=campaign.client_id)
+    job = _make_job(campaign_id=campaign.id)
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    mock_scheduler = MagicMock()
+    mock_scheduler.get_job.return_value = None
+
+    with (
+        patch("app.routers.publishing.get_campaign", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_scheduled_job", AsyncMock(return_value=job)),
+        patch("app.routers.publishing.update_campaign_scheduled_at", AsyncMock(return_value=campaign)),
+        patch("app.routers.publishing.scheduler", mock_scheduler),
+    ):
+        await reschedule_campaign_publish(
+            campaign_id=campaign.id,
+            body=ScheduleRequest(scheduled_at=_future_dt() + timedelta(hours=2)),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    # reschedule_job used (not add_job), so no extra job row
+    mock_scheduler.reschedule_job.assert_called_once()
+    mock_scheduler.add_job.assert_not_called()

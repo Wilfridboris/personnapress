@@ -107,3 +107,33 @@ describe("getCampaignTitle", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Campaign");
   });
 });
+
+describe("Edit toggle button", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows Edit button for approved campaign", () => {
+    render(
+      <ApprovalGateClient campaign={makeCampaign({ status: "approved" })} />,
+      { wrapper },
+    );
+    expect(screen.getByRole("button", { name: /^edit$/i })).toBeInTheDocument();
+  });
+
+  it("does not show Edit button for pending_approval campaign", () => {
+    render(
+      <ApprovalGateClient campaign={makeCampaign({ status: "pending_approval" })} />,
+      { wrapper },
+    );
+    expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
+  });
+
+  it("does not show Edit button for published campaign", () => {
+    render(
+      <ApprovalGateClient campaign={makeCampaign({ status: "published" })} />,
+      { wrapper },
+    );
+    expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
+  });
+});

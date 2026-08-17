@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from "react";
 import { Info } from "lucide-react";
 import { campaignsApi, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
@@ -137,11 +137,28 @@ export const SocialPostEditors = forwardRef<
     }
   }
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // JS fallback for browsers without field-sizing: content support
+  const autoResize = useCallback((el: HTMLTextAreaElement | null) => {
+    if (!el || CSS.supports("field-sizing", "content")) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
+
+  // Fire autoResize on mount so existing content sizes correctly in legacy browsers
+  useEffect(() => {
+    if (!containerRef.current || CSS.supports("field-sizing", "content")) return;
+    containerRef.current.querySelectorAll("textarea").forEach((ta) =>
+      autoResize(ta as HTMLTextAreaElement)
+    );
+  }, [autoResize]);
+
   const textareaBase =
-    "w-full resize-none bg-transparent border-b border-ink focus:border-b-2 focus:outline-none px-0 py-2 text-sm font-mono text-ink placeholder:text-graphite disabled:opacity-60 disabled:cursor-default";
+    "w-full resize-none bg-transparent border-b border-ink focus:border-b-2 focus:outline-none px-0 py-2 text-sm font-mono text-ink placeholder:text-graphite disabled:opacity-60 disabled:cursor-default [field-sizing:content] min-h-[6rem] max-h-[32rem] overflow-y-auto";
 
   return (
-    <div className="space-y-8">
+    <div ref={containerRef} className="space-y-8">
       {imageUrl && (
         <div className="border border-border overflow-hidden aspect-video w-full">
           <img
@@ -168,8 +185,8 @@ export const SocialPostEditors = forwardRef<
               setXPost(e.target.value);
               setIsDirty(true);
             }}
+            onInput={(e) => autoResize(e.currentTarget)}
             disabled={readOnly}
-            rows={4}
             aria-label="X post content"
             aria-describedby={!readOnly ? "x-post-counter" : undefined}
             className={textareaBase}
@@ -205,8 +222,8 @@ export const SocialPostEditors = forwardRef<
               setLinkedInPost(e.target.value);
               setIsDirty(true);
             }}
+            onInput={(e) => autoResize(e.currentTarget)}
             disabled={readOnly}
-            rows={8}
             aria-label="LinkedIn post content"
             aria-describedby={!readOnly ? "linkedin-post-counter" : undefined}
             className={textareaBase}
@@ -249,8 +266,8 @@ export const SocialPostEditors = forwardRef<
               setInstagramCaption(e.target.value);
               setIsDirty(true);
             }}
+            onInput={(e) => autoResize(e.currentTarget)}
             disabled={readOnly}
-            rows={6}
             aria-label="Instagram caption content"
             aria-describedby={!readOnly ? "instagram-caption-counter" : undefined}
             className={textareaBase}
@@ -287,8 +304,8 @@ export const SocialPostEditors = forwardRef<
               setFacebookPost(e.target.value);
               setIsDirty(true);
             }}
+            onInput={(e) => autoResize(e.currentTarget)}
             disabled={readOnly}
-            rows={5}
             aria-label="Facebook post content"
             aria-describedby={!readOnly ? "facebook-post-counter" : undefined}
             className={textareaBase}
@@ -325,8 +342,8 @@ export const SocialPostEditors = forwardRef<
               setThreadsPost(e.target.value);
               setIsDirty(true);
             }}
+            onInput={(e) => autoResize(e.currentTarget)}
             disabled={readOnly}
-            rows={4}
             aria-label="Threads post content"
             aria-describedby={!readOnly ? "threads-post-counter" : undefined}
             className={textareaBase}

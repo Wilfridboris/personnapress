@@ -154,6 +154,11 @@ export const campaignsApi = {
     apiFetch<{ campaign_id: string; status: string }>(`/campaigns/${id}/publish/schedule`, {
       method: "DELETE",
     }),
+  reschedule: (id: string, scheduledAt: string, platforms?: string[]) =>
+    apiFetch<{ job_id: string; scheduled_at: string }>(`/campaigns/${id}/publish/schedule`, {
+      method: "PUT",
+      body: JSON.stringify({ scheduled_at: scheduledAt, ...(platforms !== undefined ? { platforms } : {}) }),
+    }),
   retryPublish: (id: string, platform: string) =>
     apiFetch<{ job_id: string }>(`/campaigns/${id}/publish/retry`, {
       method: "POST",

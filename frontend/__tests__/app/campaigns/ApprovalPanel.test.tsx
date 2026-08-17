@@ -31,6 +31,7 @@ const mockPublishHeadless = vi.fn();
 const mockJobGet = vi.fn();
 const mockSchedule = vi.fn();
 const mockCancelSchedule = vi.fn();
+const mockReschedule = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   campaignsApi: {
@@ -42,6 +43,7 @@ vi.mock("@/lib/api", () => ({
     publishHeadless: (...args: unknown[]) => mockPublishHeadless(...args),
     schedule: (...args: unknown[]) => mockSchedule(...args),
     cancelSchedule: (...args: unknown[]) => mockCancelSchedule(...args),
+    reschedule: (...args: unknown[]) => mockReschedule(...args),
   },
   clientsApi: {
     get: vi.fn().mockResolvedValue({ id: "client-456", name: "Test Client" }),
@@ -299,10 +301,11 @@ describe("ApprovalPanel — schedule picker", () => {
     return utils;
   }
 
-  it("Schedule button click shows datetime picker inline", async () => {
+  it("Schedule button click shows datetime picker with presets and timezone note", async () => {
     await renderApprovedWithPlatforms();
     fireEvent.click(screen.getByRole("button", { name: /^schedule$/i }));
-    expect(screen.getByLabelText(/schedule date/i)).toBeInTheDocument();
+    // Presets are always shown in picker
+    expect(screen.getByRole("button", { name: /tomorrow 9 am/i })).toBeInTheDocument();
     expect(screen.getByText(/schedules in/i)).toBeInTheDocument();
   });
 
@@ -312,10 +315,22 @@ describe("ApprovalPanel — schedule picker", () => {
     expect(screen.getByRole("button", { name: /confirm schedule/i })).toBeDisabled();
   });
 
-  it("shows past-time error and disables Confirm when past datetime is selected", async () => {
+  it("selecting a preset chip enables the Confirm button", async () => {
     await renderApprovedWithPlatforms();
     fireEvent.click(screen.getByRole("button", { name: /^schedule$/i }));
 
+    // Click a preset (any future date)
+    fireEvent.click(screen.getByRole("button", { name: /tomorrow 9 am/i }));
+
+    expect(screen.getByRole("button", { name: /confirm schedule/i })).not.toBeDisabled();
+  });
+
+  it("shows past-time error and disables Confirm when custom past datetime is selected", async () => {
+    await renderApprovedWithPlatforms();
+    fireEvent.click(screen.getByRole("button", { name: /^schedule$/i }));
+
+    // Reveal the custom input
+    fireEvent.click(screen.getByRole("button", { name: /^custom$/i }));
     const input = screen.getByLabelText(/schedule date/i);
     // Set a past date
     fireEvent.change(input, { target: { value: "2020-01-01T00:00" } });
@@ -324,19 +339,20 @@ describe("ApprovalPanel — schedule picker", () => {
     expect(screen.getByRole("button", { name: /confirm schedule/i })).toBeDisabled();
   });
 
-  it("calls campaignsApi.schedule with ISO UTC string on Confirm click", async () => {
+  it("calls campaignsApi.schedule with ISO UTC string on Confirm click via custom input", async () => {
     mockSchedule.mockResolvedValueOnce({ job_id: "job-555", scheduled_at: "2099-01-01T12:00:00Z" });
 
     await renderApprovedWithPlatforms();
     fireEvent.click(screen.getByRole("button", { name: /^schedule$/i }));
 
+    // Use Custom chip to type a date
+    fireEvent.click(screen.getByRole("button", { name: /^custom$/i }));
     const input = screen.getByLabelText(/schedule date/i);
     fireEvent.change(input, { target: { value: "2099-01-01T12:00" } });
 
     fireEvent.click(screen.getByRole("button", { name: /confirm schedule/i }));
 
     await waitFor(() => expect(mockSchedule).toHaveBeenCalledWith("campaign-123", expect.stringContaining("2099")));
-    await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
   });
 
   it("shows error toast when scheduling API call fails", async () => {
@@ -346,8 +362,8 @@ describe("ApprovalPanel — schedule picker", () => {
     await renderApprovedWithPlatforms();
     fireEvent.click(screen.getByRole("button", { name: /^schedule$/i }));
 
-    const input = screen.getByLabelText(/schedule date/i);
-    fireEvent.change(input, { target: { value: "2099-01-01T12:00" } });
+    // Use a preset to get a valid future time
+    fireEvent.click(screen.getByRole("button", { name: /tomorrow 9 am/i }));
 
     fireEvent.click(screen.getByRole("button", { name: /confirm schedule/i }));
 
@@ -357,13 +373,14 @@ describe("ApprovalPanel — schedule picker", () => {
   it("Cancel in picker hides the picker", async () => {
     await renderApprovedWithPlatforms();
     fireEvent.click(screen.getByRole("button", { name: /^schedule$/i }));
-    expect(screen.getByLabelText(/schedule date/i)).toBeInTheDocument();
+    // Picker is open: preset chips and Confirm/Cancel are visible
+    expect(screen.getByRole("button", { name: /confirm schedule/i })).toBeInTheDocument();
 
     // The Cancel button inside the picker
-    const cancelBtns = screen.getAllByRole("button", { name: /cancel/i });
+    const cancelBtns = screen.getAllByRole("button", { name: /^cancel$/i });
     fireEvent.click(cancelBtns[cancelBtns.length - 1]);
 
-    expect(screen.queryByLabelText(/schedule date/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /confirm schedule/i })).not.toBeInTheDocument();
   });
 });
 
@@ -416,6 +433,47 @@ describe("ApprovalPanel — scheduled state", () => {
     fireEvent.click(screen.getByRole("button", { name: /cancel schedule/i }));
 
     await waitFor(() => expect(mockCancelSchedule).toHaveBeenCalledWith("campaign-123"));
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
+  });
+
+  it("shows Reschedule button in scheduled state", () => {
+    render(
+      <ApprovalPanel
+        campaign={makeCampaign({ status: "approved", scheduled_at: "2099-07-10T13:00:00Z" })}
+      />,
+      { wrapper },
+    );
+    expect(screen.getByRole("button", { name: /reschedule/i })).toBeInTheDocument();
+  });
+
+  it("clicking Reschedule shows picker with preset chips", () => {
+    render(
+      <ApprovalPanel
+        campaign={makeCampaign({ status: "approved", scheduled_at: "2099-07-10T13:00:00Z" })}
+      />,
+      { wrapper },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^reschedule$/i }));
+    expect(screen.getByRole("button", { name: /confirm reschedule/i })).toBeInTheDocument();
+    expect(screen.getByText(/schedules in/i)).toBeInTheDocument();
+  });
+
+  it("calls campaignsApi.reschedule and refreshes on Confirm reschedule via preset", async () => {
+    mockReschedule.mockResolvedValueOnce({ job_id: "job-999", scheduled_at: "2099-07-11T09:00:00Z" });
+
+    render(
+      <ApprovalPanel
+        campaign={makeCampaign({ status: "approved", scheduled_at: "2099-07-10T13:00:00Z" })}
+      />,
+      { wrapper },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^reschedule$/i }));
+    // Preset fills a future time, enabling Confirm
+    fireEvent.click(screen.getByRole("button", { name: /tomorrow 9 am/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm reschedule/i }));
+
+    await waitFor(() => expect(mockReschedule).toHaveBeenCalledWith("campaign-123", expect.any(String)));
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
   });
 });
