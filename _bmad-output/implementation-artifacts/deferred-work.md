@@ -1,5 +1,17 @@
 # Deferred Work
 
+## Deferred from: code review of 24-1-published-post-record-and-platform-post-id-capture (2026-08-17)
+
+- DateTime() vs timestamptz for published_at/created_at [backend/app/db/repositories/models.py, alembic migration] — project-wide naive UTC pattern via utcnow(); changing one table in isolation would break consistency; revisit if the whole schema migrates to timestamptz
+- created_at lacks server_default in migration [backend/alembic/versions/20260817_0001_c5d6e7f8a9b0_add_published_posts.py] — consistent with all other model migrations in this project; add server_default=func.now() if direct-SQL inserts become a concern
+- Copy-paste permalink helpers — fetch_facebook/instagram/threads_permalink are structurally identical [backend/app/integrations/meta.py] — refactor only; no correctness impact; extract _fetch_permalink(base, post_id, token, field) helper
+- Synchronous permalink fetch adds up to 10s latency per platform on publish path [backend/app/services/publishing.py] — architecture change (background task) required for truly non-blocking; story designates this as best-effort; revisit if publish latency becomes a user complaint
+- No index on platform column — full-table scan for analytics by platform [backend/alembic/versions/20260817_0001_c5d6e7f8a9b0_add_published_posts.py] — add composite index (e.g. client_id, platform, published_at) in 24-2/24-3 once query patterns are confirmed
+- FK ON DELETE not specified for campaigns.id and clients.id [backend/alembic/versions/20260817_0001_c5d6e7f8a9b0_add_published_posts.py] — consistent with rest of schema; data retention handled by story 7-3
+- get_published_posts_for_campaign lacks client_id filter — cross-tenant read risk [backend/app/db/repositories/published_posts.py] — function unused in this story; 24-2 must add client_id scoping when it introduces the analytics route
+- platform column free-text with no enum constraint [backend/app/db/repositories/models.py] — project-wide pattern for platform strings; enforce via a Check constraint or Literal type if analytics queries start producing silent mismatches
+- UPSERT silently overwrites platform_post_id on re-publish, losing publish history [backend/app/db/repositories/published_posts.py] — by design per AC #7; if audit history of re-publishes is needed, add a superseded_at column or an append-only log table in a future story
+
 ## Deferred from: code review of 9-4-switch-transcription-to-openai-whisper (2026-08-16)
 
 - No guard for empty `OPENAI_API_KEY` at startup — 401 from OpenAI surfaces as generic auth failure with no operator hint [backend/app/integrations/openai_audio.py] — pre-existing pattern from groq_audio.py; consider a startup validator if key-misconfiguration errors recur

@@ -215,7 +215,10 @@ async def publish_facebook_page_post(
         raise PlatformError("facebook_page", 401, "Facebook Page connection expired - reconnect in Connections")
     if resp.status_code != 200:
         raise PlatformError("facebook_page", resp.status_code, _extract_error(resp))
-    post_id = resp.json().get("id", "")
+    body = resp.json()
+    # Photo posts return both "id" (photo object) and "post_id" (Page feed story).
+    # Insights API keys on the feed post_id, so prefer it for photo posts.
+    post_id = body.get("post_id") or body.get("id", "")
     if not post_id:
         raise PlatformError("facebook_page", 200, "post returned no id")
     return post_id
@@ -289,6 +292,54 @@ async def publish_threads_post(
     if not post_id:
         raise PlatformError("threads", 200, "threads_publish returned no id")
     return post_id
+
+
+async def fetch_facebook_permalink(post_id: str, page_access_token: str) -> Optional[str]:
+    """Best-effort fetch of the permalink_url for a Facebook Page post. Returns None on any failure."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{META_GRAPH_BASE}/{post_id}",
+                params={"fields": "permalink_url", "access_token": page_access_token},
+            )
+        if resp.status_code == 200:
+            return resp.json().get("permalink_url")
+        logger.warning("fetch_facebook_permalink non-200 status=%s post_id=%s", resp.status_code, post_id)
+    except Exception:
+        logger.warning("fetch_facebook_permalink failed for post_id=%s", post_id, exc_info=True)
+    return None
+
+
+async def fetch_instagram_permalink(media_id: str, page_access_token: str) -> Optional[str]:
+    """Best-effort fetch of the permalink for an Instagram media object. Returns None on any failure."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{META_GRAPH_BASE}/{media_id}",
+                params={"fields": "permalink", "access_token": page_access_token},
+            )
+        if resp.status_code == 200:
+            return resp.json().get("permalink")
+        logger.warning("fetch_instagram_permalink non-200 status=%s media_id=%s", resp.status_code, media_id)
+    except Exception:
+        logger.warning("fetch_instagram_permalink failed for media_id=%s", media_id, exc_info=True)
+    return None
+
+
+async def fetch_threads_permalink(post_id: str, user_access_token: str) -> Optional[str]:
+    """Best-effort fetch of the permalink for a Threads post. Returns None on any failure."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{THREADS_GRAPH_BASE}/{post_id}",
+                params={"fields": "permalink", "access_token": user_access_token},
+            )
+        if resp.status_code == 200:
+            return resp.json().get("permalink")
+        logger.warning("fetch_threads_permalink non-200 status=%s post_id=%s", resp.status_code, post_id)
+    except Exception:
+        logger.warning("fetch_threads_permalink failed for post_id=%s", post_id, exc_info=True)
+    return None
 
 
 async def discover_threads_user_id(

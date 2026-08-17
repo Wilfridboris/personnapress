@@ -8,6 +8,7 @@ import json
 import logging
 import re
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from uuid import UUID
 
 import httpx
@@ -19,6 +20,7 @@ from app.core.exceptions import PlatformError
 from app.db.repositories.campaigns import get_campaign
 from app.db.repositories.jobs import get_published_platforms_for_campaign
 from app.db.repositories.platform_connections import get_connection_for_platform, get_connections_for_client, upsert_connection
+from app.db.repositories.published_posts import upsert_published_post
 from bs4 import BeautifulSoup
 from app.integrations import github as github_integration
 from app.integrations import linkedin as linkedin_integration
@@ -97,6 +99,45 @@ async def _refresh_threads_token_if_needed(cred: dict, db: AsyncSession, client_
     except Exception as exc:
         logger.warning("Threads token renewal failed for client %s: %s", client_id, exc)
         return cred
+
+
+async def _capture_meta_post(
+    db: AsyncSession,
+    campaign,
+    platform: str,
+    platform_post_id: str,
+    access_token: str,
+) -> None:
+    """Best-effort persistence of a published Meta post id and permalink. Never raises.
+
+    Permalink fetch and DB write are both fault-isolated per AD-A10: a failure here
+    must never roll back or change the result of the publish that preceded it.
+    """
+    try:
+        permalink: Optional[str] = None
+        if platform == "instagram":
+            permalink = await meta_integration.fetch_instagram_permalink(platform_post_id, access_token)
+        elif platform == "facebook_page":
+            permalink = await meta_integration.fetch_facebook_permalink(platform_post_id, access_token)
+        elif platform == "threads":
+            permalink = await meta_integration.fetch_threads_permalink(platform_post_id, access_token)
+        else:
+            logger.warning("_capture_meta_post called with unrecognised platform=%s campaign=%s", platform, campaign.id)
+        await upsert_published_post(
+            db,
+            campaign_id=campaign.id,
+            client_id=campaign.client_id,
+            platform=platform,
+            platform_post_id=platform_post_id,
+            permalink=permalink,
+            published_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+    except Exception:
+        logger.error(
+            "_capture_meta_post failed platform=%s campaign=%s",
+            platform, campaign.id,
+            exc_info=True,
+        )
 
 
 async def _refresh_token_if_needed(cred: dict, db: AsyncSession, client_id: UUID) -> dict:
@@ -600,35 +641,38 @@ async def dispatch_publish_for_platform(
             if not (resolved_caption or "").strip():
                 logger.debug("dispatch_publish_for_platform: skipping instagram (no caption) campaign=%s", campaign_id)
                 return {platform: "skipped"}
-            await meta_integration.publish_instagram_feed_post(
+            media_id = await meta_integration.publish_instagram_feed_post(
                 creds["instagram_user_id"],
                 creds["page_access_token"],
                 campaign.image_url,
                 resolved_caption,
             )
+            await _capture_meta_post(db, campaign, "instagram", media_id, creds["page_access_token"])
         elif platform == "facebook_page":
             resolved_message = campaign.facebook_post or campaign.linkedin_post
             if not (resolved_message or "").strip():
                 logger.debug("dispatch_publish_for_platform: skipping facebook_page (no message) campaign=%s", campaign_id)
                 return {platform: "skipped"}
-            await meta_integration.publish_facebook_page_post(
+            fb_post_id = await meta_integration.publish_facebook_page_post(
                 creds["page_id"],
                 creds["page_access_token"],
                 resolved_message,
                 campaign.image_url or None,
             )
+            await _capture_meta_post(db, campaign, "facebook_page", fb_post_id, creds["page_access_token"])
         elif platform == "threads":
             creds = await _refresh_threads_token_if_needed(creds, db, campaign.client_id)
             resolved_text = campaign.threads_post or campaign.x_post
             if not (resolved_text or "").strip():
                 logger.debug("dispatch_publish_for_platform: skipping threads (no text) campaign=%s", campaign_id)
                 return {platform: "skipped"}
-            await meta_integration.publish_threads_post(
+            threads_post_id = await meta_integration.publish_threads_post(
                 creds["threads_user_id"],
                 creds["user_access_token"],
                 resolved_text,
                 image_url=campaign.image_url or None,
             )
+            await _capture_meta_post(db, campaign, "threads", threads_post_id, creds["user_access_token"])
         elif platform == "github_pages":
             await _publish_github(campaign, creds, db)
         return {platform: "success"}
@@ -781,12 +825,13 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                     logger.debug("dispatch_publish: skipping instagram (no caption) campaign=%s", campaign_id)
                     results[platform] = "skipped"
                     continue
-                await meta_integration.publish_instagram_feed_post(
+                media_id = await meta_integration.publish_instagram_feed_post(
                     creds["instagram_user_id"],
                     creds["page_access_token"],
                     campaign.image_url,
                     resolved_caption,
                 )
+                await _capture_meta_post(db, campaign, "instagram", media_id, creds["page_access_token"])
 
             elif platform == "facebook_page":
                 resolved_message = campaign.facebook_post or campaign.linkedin_post
@@ -794,12 +839,13 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                     logger.debug("dispatch_publish: skipping facebook_page (no message) campaign=%s", campaign_id)
                     results[platform] = "skipped"
                     continue
-                await meta_integration.publish_facebook_page_post(
+                fb_post_id = await meta_integration.publish_facebook_page_post(
                     creds["page_id"],
                     creds["page_access_token"],
                     resolved_message,
                     campaign.image_url or None,
                 )
+                await _capture_meta_post(db, campaign, "facebook_page", fb_post_id, creds["page_access_token"])
 
             elif platform == "threads":
                 creds = await _refresh_threads_token_if_needed(creds, db, campaign.client_id)
@@ -808,12 +854,13 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                     logger.debug("dispatch_publish: skipping threads (no text) campaign=%s", campaign_id)
                     results[platform] = "skipped"
                     continue
-                await meta_integration.publish_threads_post(
+                threads_post_id = await meta_integration.publish_threads_post(
                     creds["threads_user_id"],
                     creds["user_access_token"],
                     resolved_text,
                     image_url=campaign.image_url or None,
                 )
+                await _capture_meta_post(db, campaign, "threads", threads_post_id, creds["user_access_token"])
 
             elif platform == "github_pages":
                 github_result = await _publish_github(campaign, creds, db)

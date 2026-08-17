@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, Date, Enum as SAEnum, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, Date, DateTime, Enum as SAEnum, ForeignKey, Text, UniqueConstraint
 from sqlalchemy import false as sa_false
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.dialects.postgresql import JSONB
@@ -273,6 +273,24 @@ class Article(SQLModel, table=True):
     published_at: datetime = Field(default_factory=utcnow)
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+
+class PublishedPost(SQLModel, table=True):
+    __tablename__ = "published_posts"
+    __table_args__ = (UniqueConstraint("campaign_id", "platform"),)
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    campaign_id: uuid.UUID = Field(
+        sa_column=Column(PGUUID(as_uuid=True), ForeignKey("campaigns.id"), nullable=False, index=True)
+    )
+    client_id: uuid.UUID = Field(
+        sa_column=Column(PGUUID(as_uuid=True), ForeignKey("clients.id"), nullable=False, index=True)
+    )
+    platform: str = Field(sa_column=Column(Text, nullable=False))
+    platform_post_id: str = Field(sa_column=Column(Text, nullable=False))
+    permalink: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    published_at: datetime = Field(sa_column=Column(DateTime(), nullable=False))
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class DeliveryToken(SQLModel, table=True):
