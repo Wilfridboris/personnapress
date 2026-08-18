@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   const authUrl = new URL("https://threads.net/oauth/authorize");
   authUrl.searchParams.set("client_id", threadsAppId);
   authUrl.searchParams.set("redirect_uri", `${APP_URL}/api/auth/threads/callback`);
-  authUrl.searchParams.set("scope", "threads_basic,threads_content_publish");
+  authUrl.searchParams.set("scope", "threads_basic,threads_content_publish,threads_manage_insights");
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("state", state);
 
