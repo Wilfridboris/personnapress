@@ -170,10 +170,8 @@ def _fb_unavailable_reason(error: dict) -> Optional[str]:
     # Token expired / unauthorized — this is transient; re-raise so worker retries next cadence
     if code == 190:
         return None
-    # Unknown unavailability — record rather than raise so sweep continues
-    if code is not None:
-        return _REASON_UNKNOWN
-    return None
+    # Unknown unavailability or non-standard error body — record rather than raise so sweep continues
+    return _REASON_UNKNOWN
 
 
 def _map_facebook_snapshot(post, raw: dict, now: datetime) -> MetricSnapshot:
@@ -250,9 +248,7 @@ def _ig_unavailable_reason(error: dict) -> Optional[str]:
         return _REASON_NO_DATA_YET
     if code == 190:
         return None  # transient; re-raise
-    if code is not None:
-        return _REASON_UNKNOWN
-    return None
+    return _REASON_UNKNOWN
 
 
 def _map_instagram_snapshot(post, raw: dict, now: datetime) -> MetricSnapshot:
@@ -334,9 +330,7 @@ def _threads_unavailable_reason(error: dict) -> Optional[str]:
         return _REASON_NO_DATA_YET
     if code == 190:
         return None  # transient; re-raise
-    if code is not None:
-        return _REASON_UNKNOWN
-    return None
+    return _REASON_UNKNOWN
 
 
 def _map_threads_snapshot(post, raw: dict, now: datetime) -> MetricSnapshot:
