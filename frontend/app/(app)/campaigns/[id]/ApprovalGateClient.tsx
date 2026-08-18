@@ -228,7 +228,7 @@ export function ApprovalGateClient({ campaign, jobErrorDetails, jobIsActive = fa
                 readOnly={!isPending && !isEditing}
                 showXSection={hideBlogSection ? !!campaign.x_post : true}
                 showLinkedInSection={hideBlogSection ? !!campaign.linkedin_post : true}
-                metaContext={(isPending || isEditing) ? metaContext : undefined}
+                metaContext={(isPending || isEditing || !!(campaign.instagram_caption || campaign.facebook_post || campaign.threads_post)) ? metaContext : undefined}
                 imageUrl={isRoadmapSocialPost ? (campaign.image_url ?? null) : null}
               />
             </div>
