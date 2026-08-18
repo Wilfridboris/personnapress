@@ -48,6 +48,7 @@ _THREADS_METRICS = "views,likes,replies,reposts,quotes"
 _REASON_PAGE_UNDER_100_LIKES = "page_under_100_likes"
 _REASON_PERMISSION_MISSING = "permission_missing"
 _REASON_NO_DATA_YET = "no_data_yet"
+_REASON_TOKEN_EXPIRED = "token_expired"
 _REASON_UNKNOWN = "unknown"
 
 
@@ -130,7 +131,7 @@ async def _fetch_facebook(client, post, creds: dict, now: datetime) -> MetricSna
     raw = _safe_json(resp)
 
     if resp.status_code != 200:
-        reason = _fb_unavailable_reason(raw.get("error", {}))
+        reason = _fb_unavailable_reason(raw.get("error") or {})
         if reason:
             logger.info(
                 "meta_metrics FB unavailable post=%s reason=%s",
@@ -145,6 +146,7 @@ async def _fetch_facebook(client, post, creds: dict, now: datetime) -> MetricSna
                 raw=raw,
                 unavailable_reason=reason,
             )
+        logger.warning("meta_metrics FB unexpected non-200 post=%s status=%s body=%s", post.platform_post_id, resp.status_code, raw)
         resp.raise_for_status()
 
     return _map_facebook_snapshot(post, raw, now)
@@ -167,9 +169,9 @@ def _fb_unavailable_reason(error: dict) -> Optional[str]:
     # Post too new / no data collected yet
     if code == 100 and subcode == 2108006:
         return _REASON_NO_DATA_YET
-    # Token expired / unauthorized — this is transient; re-raise so worker retries next cadence
+    # Token expired / unauthorized — record so the sweep continues; the UI reason surfaces this
     if code == 190:
-        return None
+        return _REASON_TOKEN_EXPIRED
     # Unknown unavailability or non-standard error body — record rather than raise so sweep continues
     return _REASON_UNKNOWN
 
@@ -220,7 +222,7 @@ async def _fetch_instagram(client, post, creds: dict, now: datetime) -> MetricSn
     raw = _safe_json(resp)
 
     if resp.status_code != 200:
-        reason = _ig_unavailable_reason(raw.get("error", {}))
+        reason = _ig_unavailable_reason(raw.get("error") or {})
         if reason:
             logger.info(
                 "meta_metrics IG unavailable post=%s reason=%s",
@@ -235,6 +237,7 @@ async def _fetch_instagram(client, post, creds: dict, now: datetime) -> MetricSn
                 raw=raw,
                 unavailable_reason=reason,
             )
+        logger.warning("meta_metrics IG unexpected non-200 post=%s status=%s body=%s", post.platform_post_id, resp.status_code, raw)
         resp.raise_for_status()
 
     return _map_instagram_snapshot(post, raw, now)
@@ -247,7 +250,7 @@ def _ig_unavailable_reason(error: dict) -> Optional[str]:
     if code == 100:
         return _REASON_NO_DATA_YET
     if code == 190:
-        return None  # transient; re-raise
+        return _REASON_TOKEN_EXPIRED
     return _REASON_UNKNOWN
 
 
@@ -302,7 +305,7 @@ async def _fetch_threads(client, post, creds: dict, now: datetime) -> MetricSnap
     raw = _safe_json(resp)
 
     if resp.status_code != 200:
-        reason = _threads_unavailable_reason(raw.get("error", {}))
+        reason = _threads_unavailable_reason(raw.get("error") or {})
         if reason:
             logger.info(
                 "meta_metrics Threads unavailable post=%s reason=%s",
@@ -317,6 +320,7 @@ async def _fetch_threads(client, post, creds: dict, now: datetime) -> MetricSnap
                 raw=raw,
                 unavailable_reason=reason,
             )
+        logger.warning("meta_metrics Threads unexpected non-200 post=%s status=%s body=%s", post.platform_post_id, resp.status_code, raw)
         resp.raise_for_status()
 
     return _map_threads_snapshot(post, raw, now)
@@ -329,7 +333,7 @@ def _threads_unavailable_reason(error: dict) -> Optional[str]:
     if code == 100:
         return _REASON_NO_DATA_YET
     if code == 190:
-        return None  # transient; re-raise
+        return _REASON_TOKEN_EXPIRED
     return _REASON_UNKNOWN
 
 
