@@ -48,7 +48,6 @@ _THREADS_METRICS = "views,likes,replies,reposts,quotes"
 _REASON_PAGE_UNDER_100_LIKES = "page_under_100_likes"
 _REASON_PERMISSION_MISSING = "permission_missing"
 _REASON_NO_DATA_YET = "no_data_yet"
-_REASON_TOKEN_EXPIRED = "token_expired"
 _REASON_UNKNOWN = "unknown"
 
 
@@ -169,9 +168,9 @@ def _fb_unavailable_reason(error: dict) -> Optional[str]:
     # Post too new / no data collected yet
     if code == 100 and subcode == 2108006:
         return _REASON_NO_DATA_YET
-    # Token expired / unauthorized — record so the sweep continues; the UI reason surfaces this
+    # Token expired / unauthorized — transient; re-raise so worker retries next cadence
     if code == 190:
-        return _REASON_TOKEN_EXPIRED
+        return None
     # Unknown unavailability or non-standard error body — record rather than raise so sweep continues
     return _REASON_UNKNOWN
 
@@ -250,7 +249,7 @@ def _ig_unavailable_reason(error: dict) -> Optional[str]:
     if code == 100:
         return _REASON_NO_DATA_YET
     if code == 190:
-        return _REASON_TOKEN_EXPIRED
+        return None  # transient; re-raise
     return _REASON_UNKNOWN
 
 
@@ -333,7 +332,7 @@ def _threads_unavailable_reason(error: dict) -> Optional[str]:
     if code == 100:
         return _REASON_NO_DATA_YET
     if code == 190:
-        return _REASON_TOKEN_EXPIRED
+        return None  # transient; re-raise
     return _REASON_UNKNOWN
 
 
