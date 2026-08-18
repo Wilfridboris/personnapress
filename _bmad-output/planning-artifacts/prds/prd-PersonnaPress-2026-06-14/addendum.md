@@ -2,6 +2,8 @@
 
 *Companion to `prd.md`. Contains depth that belongs in downstream documents (architecture, UX, solution design) or that earned a place but doesn't fit the PRD's main narrative.*
 
+> **2026-08-17 reconciliation note (PRD v2.0 re-baseline):** Two facts below are superseded by shipped work. (1) **Pricing** is now $29 / $49 / $150-tier Agency $149 (Growth "most popular"), not $29/$79/$199 — see prd.md §8. (2) **Providers** are now configurable and multi-vendor, not single-provider: text via `LLM_PROVIDER` (Gemini default, Anthropic Claude supported), image via `IMAGE_PROVIDER` (Replicate FLUX.1 [pro] or Google Nano Banana Pro), transcription via OpenAI Whisper, email via Resend. The competitive landscape (§A) reflects June 2026 and is retained as a historical snapshot. New data entities added since (articles, article_revisions, delivery_tokens, roadmaps, jobs.result) extend the §C schema.
+
 ## A. Competitive Landscape (June 2026)
 
 ### Market Gap

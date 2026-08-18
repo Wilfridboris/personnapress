@@ -167,6 +167,22 @@ Threads has its own tester management, independent of app Facebook Roles. Under 
 | `threads_basic` | Threads profile info and the user's posted media/text content | Read Threads user ID and username only |
 | `threads_content_publish` | Publish text and media posts to Threads | Publish campaign short-form text via the Threads container flow |
 
+### 6c-i-a. Post Analytics Scopes (Epic 24)
+
+These are **additional** permissions required only for the Post Analytics feature (Epic 24 — the Analytics dashboard tab). They are **not** needed for publishing and can be added in a **separate, later App Review submission** once publishing is approved and the analytics collection pipeline is live. Each grants read-only access to post-level engagement insights; PersonnaPress reads them on a scheduled harvester and never on user request.
+
+| Scope | OAuth flow | What it grants | PersonnaPress usage |
+|-------|-----------|----------------|---------------------|
+| `read_insights` | Facebook Login for Business | Read insights for Pages the user administers | Read Facebook Page **post** engagement metrics via `GET /{post_id}/insights` for the Analytics dashboard |
+| `instagram_manage_insights` | Facebook Login for Business | Read insights for the connected Instagram business/creator account | Read Instagram **media** metrics via `GET /{ig_media_id}/insights` |
+| `threads_manage_insights` | Threads (dedicated use case) | Read insights for the connected Threads account | Read Threads **media** metrics via `GET /{media_id}/insights` |
+
+**Platform caveats to expect in analytics data:**
+
+- **Facebook Page post insights require the Page to have 100+ likes.** Below that threshold Meta returns no insights, so the dashboard degrades that post to an "analytics not available" state (it never shows fabricated zeros).
+- **Instagram removed the `impressions` metric in Graph API v21 (Jan 2025).** The collector maps `views` (fallback `reach`) into the normalized impressions column instead.
+- **Many Facebook Page Insights metrics were deprecated June 15 2026.** Pin the collector to the still-supported metric set at build time.
+
 ### 6c-ii. Publishing Rate Limits
 
 Keep these limits in mind when testing and when writing Use Case descriptions. Exceeding them during testing will cause publish calls to fail with 429 errors.
@@ -206,7 +222,7 @@ Tick every box before pressing record or submitting. A single miss restarts the 
 | ☐ | **At least one successful API call** made with each requested permission in the last 30 days | Meta checks call history; zero calls = auto-flag |
 | ☐ | **Privacy Policy URL live** (not 404, not a parked domain) | Mandatory field |
 | ☐ | **Data Deletion Request callback or instructions URL** working | Non-negotiable; broken links are a documented rejection cause |
-| ☐ | **Only the three publishing permissions requested** — do NOT request `threads_manage_replies`, `threads_manage_insights`, `instagram_manage_comments`, or `ads_management` unless you genuinely use them | Over-scoping is a named rejection trigger |
+| ☐ | **Request only permissions you genuinely use.** For the **publishing** submission that is the three publishing permissions only — do NOT include `threads_manage_replies`, `instagram_manage_comments`, or `ads_management`. The analytics insight permissions (`read_insights`, `instagram_manage_insights`, `threads_manage_insights` — see Section 6c-i-a) belong to the **separate Epic 24 analytics submission**, not the publishing one. | Over-scoping is a named rejection trigger; bundling analytics scopes into the publishing review without a working analytics flow to demo will fail |
 | ☐ | **No placeholder/test content** visible ("lorem ipsum", "test123", fake usernames) | Triggers the "generic/staged screencast" rejection |
 | ☐ | **Real Page name and real IG/Threads username** visible throughout | Staged-looking UIs fail the authenticity check |
 | ☐ | **Token refresh implemented** (long-lived tokens = 60 days; public-profile grants = 90 days) | Silent access loss looks like broken functionality |
