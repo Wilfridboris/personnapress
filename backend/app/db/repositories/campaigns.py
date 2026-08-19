@@ -19,6 +19,7 @@ async def create_campaign(
     skip_image: bool = False,
     target_word_count: Optional[str] = None,
     article_template: Optional[str] = None,
+    generation_mode: Optional[str] = None,
 ) -> Campaign:
     campaign = Campaign(
         client_id=client_id,
@@ -31,6 +32,7 @@ async def create_campaign(
         skip_image=skip_image,
         target_word_count=target_word_count,
         article_template=article_template,
+        generation_mode=generation_mode,
     )
     session.add(campaign)
     await session.flush()

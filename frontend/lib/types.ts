@@ -201,6 +201,7 @@ export interface Campaign {
   skip_image: boolean;
   github_pr_url: string | null;
   roadmap_id: string | null;
+  generation_mode?: CampaignGenerationMode | null;
   created_at: string;
   updated_at: string;
   publish_job?: PublishJobInfo | null;
@@ -220,6 +221,8 @@ export interface VoiceScore {
   tags?: string[];
 }
 
+export type CampaignGenerationMode = "generate" | "assist";
+
 export interface CampaignCreate {
   client_id: string;
   brain_dump: string;
@@ -230,6 +233,7 @@ export interface CampaignCreate {
   skip_image?: boolean;
   target_word_count?: "300-500" | "600-1000" | "1500-2500" | null;
   article_template?: "standard" | "how-to" | "listicle" | "thought-leadership" | null;
+  generation_mode?: CampaignGenerationMode | null;
 }
 
 export interface Job {

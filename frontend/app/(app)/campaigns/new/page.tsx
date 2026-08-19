@@ -12,6 +12,8 @@ import { campaignsApi, publishingApi, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { LengthSelector, type TargetLength } from "@/components/campaigns/LengthSelector";
 import { TemplateSelector, type ArticleTemplate } from "@/components/campaigns/TemplateSelector";
+import { GenerationModeSelector } from "@/components/campaigns/GenerationModeSelector";
+import type { CampaignGenerationMode } from "@/lib/types";
 import { VoiceBrainDump } from "@/components/campaigns/VoiceBrainDump";
 
 const VALID_ARTICLE_TEMPLATES: ArticleTemplate[] = ["standard", "how-to", "listicle", "thought-leadership"];
@@ -37,6 +39,8 @@ const DRAFT_KEY = (clientId: string) =>
 
 const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+const VALID_GENERATION_MODES: CampaignGenerationMode[] = ["generate", "assist"];
+
 interface BrainDumpDraft {
   brainDump: string;
   targetKeyword: string;
@@ -44,6 +48,7 @@ interface BrainDumpDraft {
   targetAudience: string;
   targetLength: TargetLength;
   articleTemplate: ArticleTemplate;
+  generationMode: CampaignGenerationMode;
   savedAt: string;
 }
 
@@ -84,6 +89,7 @@ export default function NewCampaignPage() {
   const [campaignType, setCampaignType] = useState<"blog_full" | "social_only">("blog_full");
   const [targetLength, setTargetLength] = useState<TargetLength>("600-1000");
   const [articleTemplate, setArticleTemplate] = useState<ArticleTemplate>("standard");
+  const [generationMode, setGenerationMode] = useState<CampaignGenerationMode>("generate");
   const [generateImage, setGenerateImage] = useState(true);
   const [brainDump, setBrainDump] = useState("");
   const [targetKeyword, setTargetKeyword] = useState("");
@@ -135,6 +141,7 @@ export default function NewCampaignPage() {
         targetAudience,
         targetLength,
         articleTemplate,
+        generationMode,
         savedAt: new Date().toISOString(),
       };
       try {
@@ -147,7 +154,7 @@ export default function NewCampaignPage() {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [brainDump, targetKeyword, supportingKeywords, targetAudience, targetLength, articleTemplate, activeClientId]);
+  }, [brainDump, targetKeyword, supportingKeywords, targetAudience, targetLength, articleTemplate, generationMode, activeClientId]);
 
   // Load draft from localStorage on mount / client change (AC 2, AC 3)
   useEffect(() => {
@@ -174,6 +181,7 @@ export default function NewCampaignPage() {
         targetAudience: typeof draft.targetAudience === "string" ? draft.targetAudience : "",
         targetLength: validLengths.includes(draft.targetLength) ? draft.targetLength : "600-1000",
         articleTemplate: VALID_ARTICLE_TEMPLATES.includes(draft.articleTemplate) ? draft.articleTemplate : "standard",
+        generationMode: VALID_GENERATION_MODES.includes(draft.generationMode) ? draft.generationMode : "generate",
         savedAt: draft.savedAt,
       });
     } catch {
@@ -252,6 +260,11 @@ export default function NewCampaignPage() {
         ? draftBanner.articleTemplate
         : "standard"
     );
+    setGenerationMode(
+      VALID_GENERATION_MODES.includes(draftBanner.generationMode)
+        ? draftBanner.generationMode
+        : "generate"
+    );
     setDraftBanner(null);
   }
 
@@ -277,6 +290,7 @@ export default function NewCampaignPage() {
         skip_image: !generateImage,
         target_word_count: campaignType === "blog_full" ? targetLength : null,
         article_template: campaignType === "blog_full" ? articleTemplate : null,
+        generation_mode: campaignType === "blog_full" ? generationMode : null,
       });
       setBrainDump("");
       setTargetKeyword("");
@@ -597,9 +611,13 @@ export default function NewCampaignPage() {
         campaignType === "blog_full" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
       }`}>
         <div className="overflow-hidden" aria-hidden={campaignType === "social_only" || undefined}>
-          {/* NEW -- length selector first */}
-          <LengthSelector value={targetLength} onChange={setTargetLength} />
-          <TemplateSelector value={articleTemplate} onChange={setArticleTemplate} />
+          <GenerationModeSelector value={generationMode} onChange={setGenerationMode} />
+          {generationMode === "generate" && (
+            <>
+              <LengthSelector value={targetLength} onChange={setTargetLength} />
+              <TemplateSelector value={articleTemplate} onChange={setArticleTemplate} />
+            </>
+          )}
 
           <div className="space-y-1 mb-2">
             <label className="font-mono text-xs text-graphite uppercase tracking-widest">

@@ -39,6 +39,7 @@ def _make_campaign(campaign_id=None, client_id=None, campaign_type="blog_full", 
     c.roadmap_id = None
     c.target_word_count = None
     c.article_template = None
+    c.generation_mode = None
     c.created_at = datetime(2026, 7, 2, 10, 0, 0, tzinfo=timezone.utc)
     c.updated_at = datetime(2026, 7, 2, 10, 0, 0, tzinfo=timezone.utc)
     return c
@@ -785,7 +786,9 @@ async def test_revoice_campaign_original_unchanged():
 
     assert source.status == original_status
     assert source.brain_dump == original_brain_dump
-    mock_create_campaign.assert_awaited_once_with(db, source.client_id, original_brain_dump)
+    mock_create_campaign.assert_awaited_once_with(
+        db, source.client_id, original_brain_dump, generation_mode=source.generation_mode
+    )
 
 
 async def test_revoice_campaign_invalid_status_returns_422():
@@ -981,6 +984,41 @@ async def test_revoice_campaign_wrong_user_returns_403():
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail["error"]["code"] == "FORBIDDEN"
+
+
+async def test_revoice_campaign_preserves_generation_mode():
+    """revoice_campaign passes the source campaign's generation_mode to create_campaign,
+    so an assist campaign is not silently reverted to full-rewrite mode on re-voice."""
+    from app.routers.campaigns import revoice_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    source = _make_campaign(client_id=client.id)
+    source.status = "approved"
+    source.brain_dump = "Original brain dump content for revoice."
+    source.generation_mode = "assist"
+    new_campaign = _make_campaign(client_id=client.id)
+    new_campaign.generation_mode = "assist"
+    new_job = _make_job(campaign_id=new_campaign.id)
+    db = AsyncMock()
+    mock_create = AsyncMock(return_value=new_campaign)
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=source)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.create_campaign", mock_create),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=new_job)),
+    ):
+        result = await revoice_campaign(
+            campaign_id=source.id,
+            background_tasks=MagicMock(),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.new_campaign_id == new_campaign.id
+    call_kwargs = mock_create.call_args[1]
+    assert call_kwargs.get("generation_mode") == "assist"
 
 
 # ── Campaign blog_html sanitizer — image handling ─────────────────────────────
@@ -1580,3 +1618,92 @@ def test_campaign_create_invalid_article_template():
             brain_dump="A" * 25,
             article_template="newsletter",
         )
+
+
+# ── generation_mode: Story 3.28 ────────────────────────────────────────────────
+
+async def test_campaign_create_with_generation_mode_assist():
+    """POST /campaigns with generation_mode='assist' passes value to create_campaign."""
+    from app.routers.campaigns import create_new_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_campaign(client_id=client.id)
+    campaign.generation_mode = "assist"
+    job = _make_job(campaign_id=campaign.id)
+
+    db = AsyncMock()
+    body = CampaignCreate(
+        client_id=client.id,
+        brain_dump="A" * 25,
+        generation_mode="assist",
+    )
+    background_tasks = MagicMock()
+    mock_create = AsyncMock(return_value=campaign)
+
+    with (
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.check_trial_not_expired", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.check_campaign_limit", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.create_campaign", mock_create),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=job)),
+    ):
+        result = await create_new_campaign(
+            body=body,
+            background_tasks=background_tasks,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.campaign_id == campaign.id
+    call_kwargs = mock_create.call_args[1]
+    assert call_kwargs.get("generation_mode") == "assist"
+
+
+def test_campaign_create_invalid_generation_mode():
+    """CampaignCreate schema rejects unknown generation_mode values with ValidationError."""
+    import pydantic
+    with pytest.raises(pydantic.ValidationError):
+        CampaignCreate(
+            client_id=uuid.uuid4(),
+            brain_dump="A" * 25,
+            generation_mode="auto",
+        )
+
+
+async def test_regenerate_preserves_generation_mode():
+    """regenerate_campaign passes the source campaign's generation_mode to create_campaign."""
+    from app.routers.campaigns import regenerate_campaign
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    source = _make_campaign(client_id=client.id)
+    source.status = "rejected"
+    source.target_keyword = None
+    source.target_audience = None
+    source.secondary_keywords = None
+    source.generation_mode = "assist"
+    new_campaign = _make_campaign(client_id=client.id)
+    new_campaign.generation_mode = "assist"
+    new_job = _make_job(campaign_id=new_campaign.id)
+    db = AsyncMock()
+    mock_create = AsyncMock(return_value=new_campaign)
+
+    with (
+        patch("app.routers.campaigns.get_campaign", AsyncMock(return_value=source)),
+        patch("app.routers.campaigns.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.campaigns.check_trial_not_expired", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.check_campaign_limit", AsyncMock(return_value=None)),
+        patch("app.routers.campaigns.create_campaign", mock_create),
+        patch("app.routers.campaigns.create_job", AsyncMock(return_value=new_job)),
+    ):
+        result = await regenerate_campaign(
+            campaign_id=source.id,
+            background_tasks=MagicMock(),
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.campaign_id == new_campaign.id
+    call_kwargs = mock_create.call_args[1]
+    assert call_kwargs.get("generation_mode") == "assist"

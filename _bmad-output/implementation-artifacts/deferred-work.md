@@ -516,3 +516,8 @@
 - Non-deterministic tiebreak when two posts share max engagements [backend/app/services/analytics.py] — cosmetic; add secondary ORDER BY published_post_id to best_post subquery if determinism is required
 - INNER JOIN silently drops published posts whose campaign was deleted [backend/app/services/analytics.py] — campaigns are never deleted (data retention story 7-3 only anonymizes users); revisit if soft-delete of campaigns is introduced
 - DISTINCT ON captured_at tiebreak non-deterministic for same-timestamp rows [backend/app/services/analytics.py] — vanishingly rare; add secondary ORDER BY id if dedup issues arise
+
+## Deferred from: code review of story-3.28 (2026-08-18)
+
+- Assist mode still applies the Brand Voice Profile to social posts [backend/app/services/generation.py:184] — the assist blog preserves the author's raw voice, but the derived social posts still run through the BVP and default social prompt. Already scoped as future work by the story's Task 4 (full "assist-social" preserving author phrasing per platform). Revisit when assist-social is picked up.
+- Assist mode has no H1-repair scaffolding [backend/app/integrations/anthropic_client.py:160, backend/app/integrations/gemini.py:315] — default mode injects a TL;DR block but neither mode synthesizes a missing <h1>. If a model omits the h1 in assist output, pipeline title extraction falls back to "Untitled". Pre-existing shared fallback, low likelihood given the assist prompt's explicit "derive a title" directive. Add an assist h1 synthesis step if it ever surfaces in practice.

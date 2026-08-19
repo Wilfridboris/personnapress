@@ -37,6 +37,7 @@ class CampaignCreate(BaseModel):
     skip_image: bool = False
     target_word_count: Optional[Literal["300-500", "600-1000", "1500-2500"]] = None
     article_template: Optional[Literal["standard", "how-to", "listicle", "thought-leadership"]] = None
+    generation_mode: Optional[Literal["generate", "assist"]] = None
 
     @field_validator("brain_dump", mode="before")
     @classmethod
@@ -79,6 +80,7 @@ class CampaignResponse(BaseModel):
     roadmap_id: Optional[uuid.UUID] = None
     target_word_count: Optional[str] = None
     article_template: Optional[str] = None
+    generation_mode: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

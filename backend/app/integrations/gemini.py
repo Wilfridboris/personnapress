@@ -14,6 +14,7 @@ from google.genai import types
 from app.core.config import settings
 from app.integrations.generation_prompts import (
     _DEFAULT_VOICE,
+    _BLOG_ASSIST_PROMPT,
     _BLOG_PROMPT,
     _FIDELITY_PROMPT,
     _SOCIAL_PROMPT,
@@ -149,7 +150,7 @@ def _sanitize_json_str(raw: str) -> str:
         .replace("”", '"')   # right double quotation mark
         .replace("‘", "'")   # left single quotation mark
         .replace("’", "'")   # right single quotation mark
-        .replace("—", "--")  # em-dash → plain double dash
+        .replace("—", ", ")  # em-dash → comma (never emit the banned double-hyphen)
         .replace("–", "-")   # en-dash → plain dash
     )
 
@@ -227,73 +228,79 @@ async def generate_blog(
     secondary_keywords: str | None = None,
     target_word_count: str | None = None,
     article_template: str | None = None,
+    generation_mode: str | None = None,
 ) -> str:
-    if brand_voice_profile:
-        tone_list = ", ".join(str(t) for t in brand_voice_profile.get("tone", []))
-        cadence = brand_voice_profile.get("cadence") or {}
-        avg_sentence_length = cadence.get("avg_sentence_length") or 15
-        variation_pattern = str(cadence.get("variation_pattern") or "").strip()
-        paragraph_structure = str(cadence.get("paragraph_structure") or "").strip()
-        cadence_parts = [f"avg sentence length {avg_sentence_length} words"]
-        if variation_pattern:
-            cadence_parts.append(f'sentence variation: "{variation_pattern}"')
-        if paragraph_structure:
-            cadence_parts.append(f'paragraph structure: "{paragraph_structure}"')
-        cadence_instruction = "; ".join(cadence_parts)
-        if variation_pattern or paragraph_structure:
-            cadence_instruction += ". Apply all of these patterns literally in the prose."
-        banned_jargon_list = ", ".join(str(j) for j in brand_voice_profile.get("banned_jargon", []))
-        # Use voice injection when voice_brief is present; fall back to JSON for legacy BVPs
-        if brand_voice_profile.get("voice_brief"):
-            voice_section = _build_voice_injection(brand_voice_profile)
+    is_assist = (generation_mode or "generate") == "assist"
+
+    if is_assist:
+        prompt = _BLOG_ASSIST_PROMPT.format(brain_dump=brain_dump)
+    else:
+        if brand_voice_profile:
+            tone_list = ", ".join(str(t) for t in brand_voice_profile.get("tone", []))
+            cadence = brand_voice_profile.get("cadence") or {}
+            avg_sentence_length = cadence.get("avg_sentence_length") or 15
+            variation_pattern = str(cadence.get("variation_pattern") or "").strip()
+            paragraph_structure = str(cadence.get("paragraph_structure") or "").strip()
+            cadence_parts = [f"avg sentence length {avg_sentence_length} words"]
+            if variation_pattern:
+                cadence_parts.append(f'sentence variation: "{variation_pattern}"')
+            if paragraph_structure:
+                cadence_parts.append(f'paragraph structure: "{paragraph_structure}"')
+            cadence_instruction = "; ".join(cadence_parts)
+            if variation_pattern or paragraph_structure:
+                cadence_instruction += ". Apply all of these patterns literally in the prose."
+            banned_jargon_list = ", ".join(str(j) for j in brand_voice_profile.get("banned_jargon", []))
+            # Use voice injection when voice_brief is present; fall back to JSON for legacy BVPs
+            if brand_voice_profile.get("voice_brief"):
+                voice_section = _build_voice_injection(brand_voice_profile)
+            else:
+                voice_section = json.dumps(brand_voice_profile)
         else:
-            voice_section = json.dumps(brand_voice_profile)
-    else:
-        voice_section = _DEFAULT_VOICE
-        tone_list = "professional, clear, authoritative"
-        cadence_instruction = "avg sentence length 15 words"
-        banned_jargon_list = "none specified"
+            voice_section = _DEFAULT_VOICE
+            tone_list = "professional, clear, authoritative"
+            cadence_instruction = "avg sentence length 15 words"
+            banned_jargon_list = "none specified"
 
-    meta_voice_note = _meta_voice_note(brand_voice_profile or {})
+        meta_voice_note = _meta_voice_note(brand_voice_profile or {})
 
-    seo_target_section, audience_section = _build_seo_section(target_keyword, target_audience, secondary_keywords)
+        seo_target_section, audience_section = _build_seo_section(target_keyword, target_audience, secondary_keywords)
 
-    template_structure_override = _build_template_structure(article_template, meta_voice_note)
+        template_structure_override = _build_template_structure(article_template, meta_voice_note)
 
-    _WORD_COUNT_MAP = {
-        "300-500": "300-500 words",
-        "600-1000": "600-1,000 words",
-        "1500-2500": "1,500-2,500 words",
-    }
-    word_count_range = _WORD_COUNT_MAP.get(target_word_count or "", "900-1,500 words")
+        _WORD_COUNT_MAP = {
+            "300-500": "300-500 words",
+            "600-1000": "600-1,000 words",
+            "1500-2500": "1,500-2,500 words",
+        }
+        word_count_range = _WORD_COUNT_MAP.get(target_word_count or "", "900-1,500 words")
 
-    if target_word_count == "300-500":
-        length_override_section = (
-            "QUICK READ MODE (300-500 words):\n"
-            "- Strict word limit: 300-500 words total including all headings and HTML.\n"
-            "- OMIT the <div class=\"tldr\"> block entirely. Do not output it.\n"
-            "- OMIT the <h2>Frequently Asked Questions</h2> and <dl class=\"faq\"> block entirely.\n"
-            "- Write 1-2 H2 body sections only (not 3-4).\n"
-            "- The BLUF intro paragraph and conclusion are still required.\n"
-            "- Every sentence must earn its place. Cut anything that does not give the reader\n"
-            "  a new fact or a specific action."
+        if target_word_count == "300-500":
+            length_override_section = (
+                "QUICK READ MODE (300-500 words):\n"
+                "- Strict word limit: 300-500 words total including all headings and HTML.\n"
+                "- OMIT the <div class=\"tldr\"> block entirely. Do not output it.\n"
+                "- OMIT the <h2>Frequently Asked Questions</h2> and <dl class=\"faq\"> block entirely.\n"
+                "- Write 1-2 H2 body sections only (not 3-4).\n"
+                "- The BLUF intro paragraph and conclusion are still required.\n"
+                "- Every sentence must earn its place. Cut anything that does not give the reader\n"
+                "  a new fact or a specific action."
+            )
+        else:
+            length_override_section = ""
+
+        prompt = _BLOG_PROMPT.format(
+            voice_section=voice_section,
+            meta_voice_note=meta_voice_note,
+            brain_dump=brain_dump,
+            tone_list=tone_list,
+            cadence_instruction=cadence_instruction,
+            banned_jargon_list=banned_jargon_list,
+            seo_target_section=seo_target_section,
+            audience_section=audience_section,
+            word_count_range=word_count_range,
+            template_structure_override=template_structure_override,
+            length_override_section=length_override_section,
         )
-    else:
-        length_override_section = ""
-
-    prompt = _BLOG_PROMPT.format(
-        voice_section=voice_section,
-        meta_voice_note=meta_voice_note,
-        brain_dump=brain_dump,
-        tone_list=tone_list,
-        cadence_instruction=cadence_instruction,
-        banned_jargon_list=banned_jargon_list,
-        seo_target_section=seo_target_section,
-        audience_section=audience_section,
-        word_count_range=word_count_range,
-        template_structure_override=template_structure_override,
-        length_override_section=length_override_section,
-    )
 
     response = await _client.aio.models.generate_content(
         model=_MODEL,
@@ -304,27 +311,28 @@ async def generate_blog(
     # Belt-and-suspenders: replace any em-dashes the model emitted despite the ban
     result = result.replace("—", ", ")
 
-    # Post-processing validation pass
+    # Post-processing validation pass (assist mode does not require TL;DR or multiple H2s)
     if "<h1" not in result.lower():
         logger.warning("generate_blog: Gemini output missing H1 tag")
-    h2_count = result.lower().count("<h2")
-    if h2_count < 2:
-        logger.warning("generate_blog: Gemini output has fewer than 2 H2 tags (%d found)", h2_count)
-    if '<div class="tldr">' not in result:
-        h1_close = result.lower().find("</h1>")
-        if h1_close != -1:
-            insert_pos = h1_close + len("</h1>")
-            result = (
-                result[:insert_pos]
-                + '<div class="tldr"><p><strong>TL;DR:</strong> [Summary pending review]</p></div>'
-                + result[insert_pos:]
-            )
-        else:
-            # H1 also absent: prepend TL;DR so the block is never omitted
-            result = (
-                '<div class="tldr"><p><strong>TL;DR:</strong> [Summary pending review]</p></div>'
-                + result
-            )
+    if not is_assist:
+        h2_count = result.lower().count("<h2")
+        if h2_count < 2:
+            logger.warning("generate_blog: Gemini output has fewer than 2 H2 tags (%d found)", h2_count)
+        if '<div class="tldr">' not in result:
+            h1_close = result.lower().find("</h1>")
+            if h1_close != -1:
+                insert_pos = h1_close + len("</h1>")
+                result = (
+                    result[:insert_pos]
+                    + '<div class="tldr"><p><strong>TL;DR:</strong> [Summary pending review]</p></div>'
+                    + result[insert_pos:]
+                )
+            else:
+                # H1 also absent: prepend TL;DR so the block is never omitted
+                result = (
+                    '<div class="tldr"><p><strong>TL;DR:</strong> [Summary pending review]</p></div>'
+                    + result
+                )
 
     return result
 

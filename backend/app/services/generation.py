@@ -161,6 +161,7 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
             campaign.secondary_keywords,
             target_word_count=campaign.target_word_count,
             article_template=campaign.article_template,
+            generation_mode=campaign.generation_mode,
         )
         if not blog_html:
             raise ValueError("generate_blog returned empty content")
@@ -173,22 +174,38 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
         blog_title_raw = h1_match.group(1).strip() if h1_match else "Untitled"
         blog_title = re.sub(r"<[^>]+>", "", blog_title_raw).strip() or "Untitled"
 
-        voice_score, social = await asyncio.gather(
-            _llm_with_retry(
-                _llm.check_fidelity,
-                blog_html,
-                brand_voice_profile,
-                _FIDELITY_THINKING_TOKENS,
-                campaign.brain_dump,
-            ),
-            _llm_with_retry(
+        is_assist = (campaign.generation_mode or "generate") == "assist"
+
+        if is_assist:
+            # Assist mode preserves the author's raw voice intentionally.
+            # BVP fidelity scoring is not applicable and is suppressed (AC 6).
+            # Social posts use the existing prompt which borrows authored passages as hooks.
+            voice_score = None
+            social = await _llm_with_retry(
                 _llm.generate_social,
                 campaign.brain_dump,
                 blog_title,
                 brand_voice_profile,
                 _SOCIAL_THINKING_TOKENS,
-            ),
-        )
+            )
+        else:
+            voice_score, social = await asyncio.gather(
+                _llm_with_retry(
+                    _llm.check_fidelity,
+                    blog_html,
+                    brand_voice_profile,
+                    _FIDELITY_THINKING_TOKENS,
+                    campaign.brain_dump,
+                ),
+                _llm_with_retry(
+                    _llm.generate_social,
+                    campaign.brain_dump,
+                    blog_title,
+                    brand_voice_profile,
+                    _SOCIAL_THINKING_TOKENS,
+                ),
+            )
+
         campaign.voice_score = voice_score
         campaign.x_post = social["x_post"]
         campaign.linkedin_post = social["linkedin_post"]

@@ -577,3 +577,55 @@ async def test_generate_social_standalone_hard_truncates_facebook_at_800(mock_cl
     result = await generate_social_standalone("brain dump", _VALID_BVP)
     assert len(result["facebook_post"]) == 800
     assert result["facebook_post"].endswith("…")
+
+
+# ── generate_blog: assist mode (Story 3.28) ───────────────────────────────────
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_blog_assist_mode_uses_assist_prompt(mock_client):
+    """generation_mode='assist' sends _BLOG_ASSIST_PROMPT to the model."""
+    from app.integrations import anthropic_client
+
+    captured_prompt = []
+
+    async def capture(**kwargs):
+        captured_prompt.append(kwargs.get("messages", [{}])[0].get("content", ""))
+        return _make_anthropic_response("<h1>Title</h1><p>Content.</p>")
+
+    mock_client.messages.create = AsyncMock(side_effect=capture)
+    await anthropic_client.generate_blog("My own writing.", _VALID_BVP, thinking_tokens=0, generation_mode="assist")
+
+    prompt_text = captured_prompt[0]
+    assert "MANDATORY STRUCTURE" not in prompt_text
+    assert "BLUF" not in prompt_text
+    assert "AUTHORED PASSAGE" not in prompt_text
+    assert "My own writing." in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_blog_assist_mode_no_tldr_injection(mock_client):
+    """assist mode does not inject a TL;DR block when the output lacks one."""
+    from app.integrations.anthropic_client import generate_blog
+
+    html_without_tldr = "<h1>Title</h1><p>Content.</p>"
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(html_without_tldr)
+    )
+    result = await generate_blog("dump", _VALID_BVP, thinking_tokens=0, generation_mode="assist")
+    assert '<div class="tldr">' not in result
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_blog_default_mode_still_injects_tldr(mock_client):
+    """Default mode (no generation_mode) still injects TL;DR when missing."""
+    from app.integrations.anthropic_client import generate_blog
+
+    html_without_tldr = "<h1>Title</h1><p>Content.</p><h2>Sec</h2><h2>Two</h2><h2>Three</h2>"
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(html_without_tldr)
+    )
+    result = await generate_blog("dump", _VALID_BVP, thinking_tokens=0, generation_mode="generate")
+    assert '<div class="tldr">' in result

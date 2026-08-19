@@ -137,6 +137,7 @@ async def create_new_campaign(
         skip_image=body.skip_image,
         target_word_count=body.target_word_count,
         article_template=body.article_template,
+        generation_mode=body.generation_mode,
     )
     job = await create_job(db, job_type="generation", status="pending", campaign_id=campaign.id)
 
@@ -474,6 +475,7 @@ async def regenerate_campaign(
         skip_image=campaign.skip_image,
         target_word_count=campaign.target_word_count,
         article_template=campaign.article_template,
+        generation_mode=campaign.generation_mode,
     )
     new_job = await create_job(db, job_type="generation", status="pending", campaign_id=new_campaign.id)
 
@@ -516,7 +518,12 @@ async def revoice_campaign(
             detail={"error": {"code": "REVOICE_NO_BRAIN_DUMP", "message": "This campaign has no brain dump to re-generate from."}},
         )
 
-    new_campaign = await create_campaign(db, campaign.client_id, campaign.brain_dump)
+    new_campaign = await create_campaign(
+        db,
+        campaign.client_id,
+        campaign.brain_dump,
+        generation_mode=campaign.generation_mode,
+    )
     new_job = await create_job(db, job_type="generation", status="pending", campaign_id=new_campaign.id)
 
     await db.commit()

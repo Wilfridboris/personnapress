@@ -2,6 +2,7 @@
 import pytest
 
 from app.integrations.generation_prompts import (
+    _BLOG_ASSIST_PROMPT,
     _BLOG_PROMPT,
     _FIDELITY_PROMPT,
     _SOCIAL_PROMPT,
@@ -492,3 +493,86 @@ class TestStandaloneVoiceInjectionAntiPatternScope:
         assert "ANTI-PATTERN" in result
         assert "apply to all posts" in result
         assert "BRAND STRUCTURE HINTS" not in result
+
+
+# ── TestAssistPrompt -- Story 3.28: Assist mode ───────────────────────────────
+
+class TestAssistPrompt:
+    """_BLOG_ASSIST_PROMPT contains correct directives and omits default-mode scaffolding."""
+
+    def _render(self, brain_dump: str = "test brain dump") -> str:
+        return _BLOG_ASSIST_PROMPT.format(brain_dump=brain_dump)
+
+    def test_prompt_formats_without_error(self):
+        result = self._render("My writing goes here.")
+        assert "My writing goes here." in result
+
+    def test_preserve_directive_present(self):
+        result = self._render()
+        lower = result.lower()
+        assert "reproduce" in lower or "faithfully" in lower or "preserve" in lower
+
+    def test_no_restructure_directive(self):
+        result = self._render()
+        lower = result.lower()
+        assert "do not restructure" in lower or "not restructure" in lower
+
+    def test_no_vocabulary_substitution_directive(self):
+        result = self._render()
+        lower = result.lower()
+        assert "synonym" in lower or "substitute vocabulary" in lower or "word choices" in lower
+
+    def test_no_brand_voice_profile_application(self):
+        result = self._render()
+        lower = result.lower()
+        assert "do not apply" in lower or "not apply" in lower
+
+    def test_no_tldr_added(self):
+        result = self._render()
+        lower = result.lower()
+        assert "tldr" in lower or "tl;dr" in lower
+
+    def test_no_faq_added(self):
+        result = self._render()
+        lower = result.lower()
+        assert "faq" in lower
+
+    def test_html_only_output_rule(self):
+        result = self._render()
+        lower = result.lower()
+        assert "valid html" in lower
+
+    def test_em_dash_ban_in_assist_prompt(self):
+        result = self._render()
+        assert "em-dash" in result
+
+    def test_double_hyphen_ban_in_assist_prompt(self):
+        result = self._render()
+        lower = result.lower()
+        assert "double-hyphen" in lower or "double hyphen" in lower
+
+    def test_no_mandatory_structure_scaffolding(self):
+        result = self._render()
+        assert "MANDATORY STRUCTURE" not in result
+        assert "BLUF" not in result
+
+
+# ── TestDefaultPromptSoftenedPreservation -- Story 3.28 AC 5 ─────────────────
+
+class TestDefaultPromptSoftenedPreservation:
+    """Verify _BLOG_PROMPT authored-passage definition is broadened per AC 5."""
+
+    def test_single_strong_sentence_treated_as_authored(self):
+        lower = _BLOG_PROMPT.lower()
+        assert "single strong" in lower or "single" in lower
+
+    def test_finished_prose_classification_expanded(self):
+        assert "finished prose" in _BLOG_PROMPT.lower()
+
+    def test_authored_passage_corrections_only_language_strong(self):
+        lower = _BLOG_PROMPT.lower()
+        assert "corrections only" in lower or "grammar and punctuation corrections only" in lower
+
+    def test_authored_passage_any_voice(self):
+        lower = _BLOG_PROMPT.lower()
+        assert "any voice" in lower or "non-first-person" in lower

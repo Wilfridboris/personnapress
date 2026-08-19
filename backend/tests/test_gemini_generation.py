@@ -1449,3 +1449,51 @@ async def test_generate_social_standalone_hard_truncates_facebook_at_800(mock_cl
     result = await generate_social_standalone("brain dump", _VALID_BVP)
     assert len(result["facebook_post"]) == 800
     assert result["facebook_post"].endswith("…")
+
+
+# ── generate_blog: assist mode (Story 3.28) ───────────────────────────────────
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_assist_mode_uses_assist_prompt(mock_client):
+    """generation_mode='assist' sends _BLOG_ASSIST_PROMPT to the model."""
+    from app.integrations import gemini
+
+    captured_prompt = []
+
+    async def capture(*args, **kwargs):
+        captured_prompt.append(kwargs.get("contents") or (args[1] if len(args) > 1 else ""))
+        return _make_response("<h1>Title</h1><p>Content.</p>")
+
+    mock_client.aio.models.generate_content = capture
+    await gemini.generate_blog("My own writing.", _VALID_BVP, generation_mode="assist")
+
+    prompt_text = captured_prompt[0]
+    assert "MANDATORY STRUCTURE" not in prompt_text
+    assert "BLUF" not in prompt_text
+    assert "AUTHORED PASSAGE" not in prompt_text
+    assert "My own writing." in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_assist_mode_no_tldr_injection(mock_client):
+    """assist mode does not inject a TL;DR block when the output lacks one."""
+    from app.integrations.gemini import generate_blog
+
+    html_without_tldr = "<h1>Title</h1><p>Content.</p>"
+    mock_client.aio.models.generate_content = _mock_aio_generate(html_without_tldr)
+    result = await generate_blog("dump", _VALID_BVP, generation_mode="assist")
+    assert '<div class="tldr">' not in result
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_blog_default_mode_still_injects_tldr(mock_client):
+    """Default mode (no generation_mode) still injects TL;DR when missing."""
+    from app.integrations.gemini import generate_blog
+
+    html_without_tldr = "<h1>Title</h1><p>Content.</p><h2>Sec</h2><h2>Two</h2><h2>Three</h2>"
+    mock_client.aio.models.generate_content = _mock_aio_generate(html_without_tldr)
+    result = await generate_blog("dump", _VALID_BVP, generation_mode="generate")
+    assert '<div class="tldr">' in result
