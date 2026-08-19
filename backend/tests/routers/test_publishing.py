@@ -908,16 +908,20 @@ async def test_list_linkedin_organizations_two_step_resolution():
 
     acl_response = MagicMock()
     acl_response.status_code = 200
-    acl_response.json.return_value = {"elements": [{"organization": "urn:li:organization:99999"}], "paging": {}}
+    acl_response.json.return_value = {"elements": [{"organization": "urn:li:organization:99999"}]}
 
     org_response = MagicMock()
     org_response.status_code = 200
-    org_response.json.return_value = {"localizedName": "Acme Corp", "followersCount": 500}
+    org_response.json.return_value = {"localizedName": "Acme Corp", "id": 99999}
+
+    size_response = MagicMock()
+    size_response.status_code = 200
+    size_response.json.return_value = {"firstDegreeSize": 500}
 
     mock_http = AsyncMock()
     mock_http.__aenter__ = AsyncMock(return_value=mock_http)
     mock_http.__aexit__ = AsyncMock(return_value=False)
-    mock_http.get = AsyncMock(side_effect=[acl_response, org_response])
+    mock_http.get = AsyncMock(side_effect=[acl_response, org_response, size_response])
 
     original = settings.LINKEDIN_ORG_POSTING_ENABLED
     try:

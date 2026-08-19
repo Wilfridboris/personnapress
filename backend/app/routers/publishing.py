@@ -437,16 +437,13 @@ async def list_linkedin_organizations(
     }
     try:
         async with httpx.AsyncClient(timeout=15.0) as http_client:
-            # Step 1: get org URNs where user is ADMINISTRATOR.
-            # Tilde (~) inline expansion does not work with versioned API headers,
-            # so we fetch only the URNs here and resolve names in a second call.
+            # Step 1: get org URNs where user is ADMINISTRATOR via versioned REST endpoint.
             acl_resp = await http_client.get(
-                "https://api.linkedin.com/v2/organizationAcls",
+                "https://api.linkedin.com/rest/organizationAcls",
                 params={
                     "q": "roleAssignee",
                     "role": "ADMINISTRATOR",
                     "state": "APPROVED",
-                    "projection": "(elements*(organization),paging)",
                 },
                 headers=li_headers,
             )
@@ -473,21 +470,33 @@ async def list_linkedin_organizations(
             if not org_ids:
                 return {"organizations": []}
 
-            # Step 2: resolve names and follower counts via /rest/organizations/{id}.
+            # Step 2: resolve name via /rest/organizations/{id} (localizedName is in the body;
+            # no field projection supported). Step 3: follower count from /rest/networkSizes.
             organizations = []
             for org_id in org_ids:
                 try:
                     org_resp = await http_client.get(
                         f"https://api.linkedin.com/rest/organizations/{org_id}",
-                        params={"fields": "localizedName,followersCount"},
                         headers=li_headers,
                     )
-                    if org_resp.status_code == 200:
-                        org_data = org_resp.json()
-                        org_name = org_data.get("localizedName", "")
-                        follower_count = org_data.get("followersCount", 0)
-                        if org_name:
-                            organizations.append({"id": org_id, "name": org_name, "follower_count": follower_count})
+                    if org_resp.status_code != 200:
+                        continue
+                    org_name = org_resp.json().get("localizedName", "")
+                    if not org_name:
+                        continue
+                    # Follower count lives on a separate endpoint.
+                    follower_count = 0
+                    try:
+                        size_resp = await http_client.get(
+                            f"https://api.linkedin.com/rest/networkSizes/urn:li:organization:{org_id}",
+                            params={"edgeType": "COMPANY_FOLLOWED_BY_MEMBER"},
+                            headers=li_headers,
+                        )
+                        if size_resp.status_code == 200:
+                            follower_count = size_resp.json().get("firstDegreeSize", 0)
+                    except Exception:
+                        pass
+                    organizations.append({"id": org_id, "name": org_name, "follower_count": follower_count})
                 except Exception:
                     pass  # skip orgs whose detail call fails rather than aborting the whole list
 
