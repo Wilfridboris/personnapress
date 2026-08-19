@@ -430,54 +430,74 @@ async def list_linkedin_organizations(
         )
 
     access_token = cred.get("access_token", "")
+    li_headers = {
+        "Authorization": f"Bearer {access_token}",
+        "LinkedIn-Version": "202602",
+        "X-Restli-Protocol-Version": "2.0.0",
+    }
     try:
         async with httpx.AsyncClient(timeout=15.0) as http_client:
-            resp = await http_client.get(
+            # Step 1: get org URNs where user is ADMINISTRATOR.
+            # Tilde (~) inline expansion does not work with versioned API headers,
+            # so we fetch only the URNs here and resolve names in a second call.
+            acl_resp = await http_client.get(
                 "https://api.linkedin.com/v2/organizationAcls",
                 params={
                     "q": "roleAssignee",
                     "role": "ADMINISTRATOR",
                     "state": "APPROVED",
-                    "projection": "(elements*(organization~(localizedName,followersCount),organizationRole,state),paging)",
+                    "projection": "(elements*(organization),paging)",
                 },
-                headers={
-                    "Authorization": f"Bearer {access_token}",
-                    "LinkedIn-Version": "202602",
-                },
+                headers=li_headers,
             )
+            if acl_resp.status_code in (401, 403):
+                raise HTTPException(
+                    status_code=403,
+                    detail={"error": {"code": "token_insufficient_scope", "message": "Please reconnect LinkedIn to enable company page access.", "detail": {}}},
+                )
+            if acl_resp.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail={"error": {"code": "LINKEDIN_API_ERROR", "message": f"LinkedIn API returned {acl_resp.status_code}.", "detail": {}}},
+                )
+
+            acl_elements = acl_resp.json().get("elements", [])
+            # Parse org numeric IDs from URNs: urn:li:organization:123456
+            org_ids = []
+            for el in acl_elements:
+                urn = el.get("organization", "")
+                parts = urn.rsplit(":", 1)
+                if len(parts) == 2 and parts[1].isdigit():
+                    org_ids.append(parts[1])
+
+            if not org_ids:
+                return {"organizations": []}
+
+            # Step 2: resolve names and follower counts via /rest/organizations/{id}.
+            organizations = []
+            for org_id in org_ids:
+                try:
+                    org_resp = await http_client.get(
+                        f"https://api.linkedin.com/rest/organizations/{org_id}",
+                        params={"fields": "localizedName,followersCount"},
+                        headers=li_headers,
+                    )
+                    if org_resp.status_code == 200:
+                        org_data = org_resp.json()
+                        org_name = org_data.get("localizedName", "")
+                        follower_count = org_data.get("followersCount", 0)
+                        if org_name:
+                            organizations.append({"id": org_id, "name": org_name, "follower_count": follower_count})
+                except Exception:
+                    pass  # skip orgs whose detail call fails rather than aborting the whole list
+
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=502,
             detail={"error": {"code": "LINKEDIN_API_ERROR", "message": f"Failed to reach LinkedIn API: {str(exc)[:100]}", "detail": {}}},
         )
-
-    if resp.status_code in (401, 403):
-        raise HTTPException(
-            status_code=403,
-            detail={"error": {"code": "token_insufficient_scope", "message": "Please reconnect LinkedIn to enable company page access.", "detail": {}}},
-        )
-    if resp.status_code != 200:
-        raise HTTPException(
-            status_code=502,
-            detail={"error": {"code": "LINKEDIN_API_ERROR", "message": f"LinkedIn API returned {resp.status_code}.", "detail": {}}},
-        )
-
-    data = resp.json()
-    elements = data.get("elements", [])
-    organizations = []
-    for el in elements:
-        org_inline = el.get("organization~", {})
-        org_urn: str = el.get("organization", "")
-        # Parse org id from URN: urn:li:organization:123456
-        org_id = ""
-        if org_urn:
-            parts = org_urn.rsplit(":", 1)
-            if len(parts) == 2:
-                org_id = parts[1]
-        org_name = org_inline.get("localizedName", "")
-        follower_count = org_inline.get("followersCount", 0)
-        if org_id and org_name:
-            organizations.append({"id": org_id, "name": org_name, "follower_count": follower_count})
 
     return {"organizations": organizations}
 

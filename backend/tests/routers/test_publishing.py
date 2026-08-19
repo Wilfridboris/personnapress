@@ -895,6 +895,49 @@ async def test_list_linkedin_organizations_disabled_returns_403():
         settings.LINKEDIN_ORG_POSTING_ENABLED = original
 
 
+@pytest.mark.asyncio
+async def test_list_linkedin_organizations_two_step_resolution():
+    """org listing uses two calls: ACLs for URNs, then /rest/organizations/{id} for names."""
+    from app.routers.publishing import list_linkedin_organizations
+    from app.core.config import settings
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    creds = {"access_token": "tok", "name": "Alice", "scopes": "r_organization_admin,w_organization_social"}
+    li_conn = _make_linkedin_connection(client_id=client.id, creds=creds)
+
+    acl_response = MagicMock()
+    acl_response.status_code = 200
+    acl_response.json.return_value = {"elements": [{"organization": "urn:li:organization:99999"}], "paging": {}}
+
+    org_response = MagicMock()
+    org_response.status_code = 200
+    org_response.json.return_value = {"localizedName": "Acme Corp", "followersCount": 500}
+
+    mock_http = AsyncMock()
+    mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+    mock_http.__aexit__ = AsyncMock(return_value=False)
+    mock_http.get = AsyncMock(side_effect=[acl_response, org_response])
+
+    original = settings.LINKEDIN_ORG_POSTING_ENABLED
+    try:
+        settings.LINKEDIN_ORG_POSTING_ENABLED = True
+        with (
+            patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+            patch("app.routers.publishing.get_connections_for_client", AsyncMock(return_value=[li_conn])),
+            patch("app.routers.publishing.httpx.AsyncClient", return_value=mock_http),
+        ):
+            result = await list_linkedin_organizations(
+                client_id=client.id,
+                current_user={"user_id": str(user_id)},
+                db=AsyncMock(),
+            )
+    finally:
+        settings.LINKEDIN_ORG_POSTING_ENABLED = original
+
+    assert result == {"organizations": [{"id": "99999", "name": "Acme Corp", "follower_count": 500}]}
+
+
 # ---------------------------------------------------------------------------
 # Story 5.8: scopes persistence + linkedin_org_capable (AC 2, 4)
 # ---------------------------------------------------------------------------
