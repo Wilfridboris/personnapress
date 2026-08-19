@@ -1,6 +1,7 @@
 import json
 import logging
 import uuid
+from urllib.parse import quote
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 
@@ -487,8 +488,9 @@ async def list_linkedin_organizations(
                     # Follower count lives on a separate endpoint.
                     follower_count = 0
                     try:
+                        encoded_urn = quote(f"urn:li:organization:{org_id}", safe="")
                         size_resp = await http_client.get(
-                            f"https://api.linkedin.com/rest/networkSizes/urn:li:organization:{org_id}",
+                            f"https://api.linkedin.com/rest/networkSizes/{encoded_urn}",
                             params={"edgeType": "COMPANY_FOLLOWED_BY_MEMBER"},
                             headers=li_headers,
                         )
