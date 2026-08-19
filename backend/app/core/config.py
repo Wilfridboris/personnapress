@@ -69,8 +69,8 @@ class Settings(BaseSettings):
     THREADS_APP_SECRET: str = ""
 
     # LinkedIn Marketing Developer Platform approval gate
-    # Set to true after LinkedIn grants MDP approval for r_organization_admin + w_organization_social scopes.
-    LINKEDIN_ORG_POSTING_ENABLED: bool = False
+    # Org scopes (r_organization_admin + w_organization_social) are approved and active.
+    LINKEDIN_ORG_POSTING_ENABLED: bool = True
 
     # Post analytics feature flag (Epic 24). Controls whether metrics_poll is registered.
     # Enabled by default for Meta (free reads). Disable to pause harvesting during incidents.

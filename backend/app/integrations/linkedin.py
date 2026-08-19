@@ -4,8 +4,8 @@ from app.core.config import settings
 from app.core.exceptions import PlatformError
 
 
-async def exchange_code_for_token(code: str, redirect_uri: str) -> str:
-    """Exchange OAuth code for access token."""
+async def exchange_code_for_token(code: str, redirect_uri: str) -> dict:
+    """Exchange OAuth code for access token. Returns {"access_token": str, "scope": str}."""
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(
             "https://www.linkedin.com/oauth/v2/accessToken",
@@ -22,10 +22,11 @@ async def exchange_code_for_token(code: str, redirect_uri: str) -> str:
         body = resp.json() if resp.content else {}
         detail = body.get("error_description") or body.get("error") or "token exchange failed"
         raise PlatformError("LinkedIn", resp.status_code, detail)
-    token = resp.json().get("access_token")
+    data = resp.json()
+    token = data.get("access_token")
     if not token:
         raise PlatformError("LinkedIn", 200, "token exchange returned no access_token")
-    return token
+    return {"access_token": token, "scope": data.get("scope") or ""}
 
 
 async def _get_linkedin_author_urn(access_token: str, client: httpx.AsyncClient) -> str:

@@ -298,6 +298,50 @@ describe("PlatformConnectionCard — Meta platforms connected state", () => {
   });
 });
 
+describe("PlatformConnectionCard — LinkedIn org-capable reconnect hint (Story 5.8)", () => {
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_LINKEDIN_ORG_POSTING_ENABLED = "true";
+  });
+
+  afterEach(() => {
+    delete process.env.NEXT_PUBLIC_LINKEDIN_ORG_POSTING_ENABLED;
+  });
+
+  it("shows reconnect hint when flag on and linkedin_org_capable is false", () => {
+    renderCard({
+      platform: "linkedin",
+      connected: true,
+      account_identifier: "Alice",
+      linkedin_org_capable: false,
+    });
+    expect(screen.getByText(/New: publish to a Company Page you manage/)).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /Reconnect to enable/ });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute("href", "/api/auth/linkedin?client_id=client-123");
+  });
+
+  it("does NOT show reconnect hint when linkedin_org_capable is true", () => {
+    renderCard({
+      platform: "linkedin",
+      connected: true,
+      account_identifier: "Alice",
+      linkedin_org_capable: true,
+    });
+    expect(screen.queryByText(/New: publish to a Company Page you manage/)).not.toBeInTheDocument();
+  });
+
+  it("does NOT show reconnect hint when feature flag is off", () => {
+    process.env.NEXT_PUBLIC_LINKEDIN_ORG_POSTING_ENABLED = "false";
+    renderCard({
+      platform: "linkedin",
+      connected: true,
+      account_identifier: "Alice",
+      linkedin_org_capable: false,
+    });
+    expect(screen.queryByText(/New: publish to a Company Page you manage/)).not.toBeInTheDocument();
+  });
+});
+
 describe("PlatformConnectionCard — WordPress.com sub-choice", () => {
   it("test_wordpress_connect_shows_type_picker — clicking Connect shows type picker, not form", () => {
     renderCard(notConnected);

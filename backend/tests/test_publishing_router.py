@@ -328,9 +328,10 @@ async def test_linkedin_oauth_callback_success():
 
     with (
         patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connection", AsyncMock(return_value=None)),
         patch(
             "app.routers.publishing.linkedin_integration.exchange_code_for_token",
-            AsyncMock(return_value="lat"),
+            AsyncMock(return_value={"access_token": "lat", "scope": "openid,profile,w_member_social"}),
         ),
         patch(
             "app.routers.publishing.linkedin_integration.get_user_name",

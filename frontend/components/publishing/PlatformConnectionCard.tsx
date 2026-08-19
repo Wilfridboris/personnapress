@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Building2, Loader2, Lock, User } from "lucide-react";
+import { Building2, ExternalLink, Loader2, Lock, Sparkles, User } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
@@ -230,19 +230,36 @@ export function PlatformConnectionCard({ clientId, connection }: Props) {
                       </span>
                     )}
                     {connection.platform === "linkedin" && (
-                      <span className="block text-xs text-[#555555] mt-0.5">
-                        Posting as:{" "}
-                        {connection.linkedin_target === "organization" && connection.linkedin_org_name
-                          ? connection.linkedin_org_name
-                          : "Personal Account"}
-                        {" "}
-                        <button
-                          onClick={handleOpenTargetPicker}
-                          className="underline underline-offset-2 hover:text-[#111111] transition-colors"
-                        >
-                          Change
-                        </button>
-                      </span>
+                      <>
+                        <span className="block text-xs text-[#555555] mt-0.5">
+                          Posting as:{" "}
+                          {connection.linkedin_target === "organization" && connection.linkedin_org_name
+                            ? connection.linkedin_org_name
+                            : "Personal Account"}
+                          {" "}
+                          <button
+                            onClick={handleOpenTargetPicker}
+                            className="underline underline-offset-2 hover:text-[#111111] transition-colors"
+                          >
+                            Change
+                          </button>
+                        </span>
+                        {orgPostingEnabled && connection.linkedin_org_capable === false && (
+                          <span className="mt-1.5 flex items-start gap-1.5 text-xs text-[#555555]">
+                            <Sparkles className="size-3.5 shrink-0 mt-px text-[#2E4F2E]" aria-hidden="true" />
+                            <span className="text-pretty">
+                              New: publish to a Company Page you manage.{" "}
+                              <a
+                                href={`/api/auth/linkedin?client_id=${clientId}`}
+                                className="inline-flex items-center gap-1 text-[#111111] underline underline-offset-2 hover:text-[#111111] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
+                              >
+                                Reconnect to enable.
+                                <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
+                              </a>
+                            </span>
+                          </span>
+                        )}
+                      </>
                     )}
                   </>
                 ) : (

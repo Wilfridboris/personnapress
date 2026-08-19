@@ -1,4 +1,4 @@
-"""Integration tests for linkedin.py — upload_image and create_post_with_image."""
+"""Integration tests for linkedin.py — exchange_code_for_token, upload_image, create_post_with_image."""
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,6 +11,54 @@ def _mock_response(status_code: int, json_body: dict | None = None, headers: dic
     resp.text = str(json_body or {})
     resp.headers = headers or {}
     return resp
+
+
+# ---------------------------------------------------------------------------
+# exchange_code_for_token — returns dict with access_token and scope
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_exchange_code_for_token_returns_access_token_and_scope():
+    """Happy path: token endpoint returns access_token and scope; both are returned in dict."""
+    from app.integrations.linkedin import exchange_code_for_token
+
+    token_response = {
+        "access_token": "AQX_test_token",
+        "expires_in": 5184000,
+        "scope": "openid,profile,w_member_social,r_organization_admin,w_organization_social",
+        "token_type": "Bearer",
+    }
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = AsyncMock(return_value=_mock_response(200, token_response))
+
+    with patch("app.integrations.linkedin.httpx.AsyncClient", return_value=mock_client):
+        result = await exchange_code_for_token("auth_code", "https://example.com/callback")
+
+    assert result["access_token"] == "AQX_test_token"
+    assert result["scope"] == "openid,profile,w_member_social,r_organization_admin,w_organization_social"
+    assert "w_organization_social" in result["scope"]
+
+
+@pytest.mark.asyncio
+async def test_exchange_code_for_token_missing_scope_returns_empty_string():
+    """If LinkedIn omits scope in response, scope defaults to empty string (legacy compat)."""
+    from app.integrations.linkedin import exchange_code_for_token
+
+    token_response = {"access_token": "AQX_legacy_token"}
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = AsyncMock(return_value=_mock_response(200, token_response))
+
+    with patch("app.integrations.linkedin.httpx.AsyncClient", return_value=mock_client):
+        result = await exchange_code_for_token("auth_code", "https://example.com/callback")
+
+    assert result["access_token"] == "AQX_legacy_token"
+    assert result["scope"] == ""
 
 
 # ---------------------------------------------------------------------------

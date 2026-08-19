@@ -893,3 +893,144 @@ async def test_list_linkedin_organizations_disabled_returns_403():
         assert exc_info.value.status_code == 403
     finally:
         settings.LINKEDIN_ORG_POSTING_ENABLED = original
+
+
+# ---------------------------------------------------------------------------
+# Story 5.8: scopes persistence + linkedin_org_capable (AC 2, 4)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_linkedin_oauth_callback_persists_scopes():
+    """linkedin_oauth_callback stores the scopes string from the token endpoint in the credential blob."""
+    from app.routers.publishing import linkedin_oauth_callback, OAuthCallbackRequest
+    from app.core.security import decrypt_credential
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    stored_creds = []
+
+    async def fake_upsert(db, client_id, platform, encrypted):
+        stored_creds.append(json.loads(decrypt_credential(encrypted)))
+
+    scope_str = "openid,profile,w_member_social,r_organization_admin,w_organization_social"
+    token_data = {"access_token": "AQX_tok", "scope": scope_str}
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connection", AsyncMock(return_value=None)),
+        patch("app.routers.publishing.linkedin_integration.exchange_code_for_token", AsyncMock(return_value=token_data)),
+        patch("app.routers.publishing.linkedin_integration.get_user_name", AsyncMock(return_value="Test User")),
+        patch("app.routers.publishing.upsert_connection", fake_upsert),
+    ):
+        result = await linkedin_oauth_callback(
+            client_id=client.id,
+            body=OAuthCallbackRequest(code="auth_code"),
+            current_user={"user_id": str(user_id)},
+            db=AsyncMock(),
+        )
+
+    assert result["connected"] is True
+    assert len(stored_creds) == 1
+    blob = stored_creds[0]
+    assert blob["access_token"] == "AQX_tok"
+    assert blob["scopes"] == scope_str
+    assert "w_organization_social" in blob["scopes"]
+
+
+@pytest.mark.asyncio
+async def test_linkedin_oauth_callback_preserves_target_on_reconnect():
+    """Reconnect via hint must not reset a previously saved linkedin_target to personal."""
+    from app.routers.publishing import linkedin_oauth_callback, OAuthCallbackRequest
+    from app.core.security import decrypt_credential, encrypt_credential
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    stored_creds = []
+
+    async def fake_upsert(db, client_id, platform, encrypted):
+        stored_creds.append(json.loads(decrypt_credential(encrypted)))
+
+    existing_blob = {"access_token": "old_tok", "name": "Old Name", "target": "organization", "org_id": "urn:li:organization:999", "org_name": "Acme Corp"}
+    from unittest.mock import MagicMock
+    existing_conn = MagicMock()
+    existing_conn.encrypted_credentials = encrypt_credential(json.dumps(existing_blob))
+
+    scope_str = "openid,profile,w_member_social,r_organization_admin,w_organization_social"
+    token_data = {"access_token": "new_tok", "scope": scope_str}
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connection", AsyncMock(return_value=existing_conn)),
+        patch("app.routers.publishing.linkedin_integration.exchange_code_for_token", AsyncMock(return_value=token_data)),
+        patch("app.routers.publishing.linkedin_integration.get_user_name", AsyncMock(return_value="New Name")),
+        patch("app.routers.publishing.upsert_connection", fake_upsert),
+    ):
+        result = await linkedin_oauth_callback(
+            client_id=client.id,
+            body=OAuthCallbackRequest(code="auth_code"),
+            current_user={"user_id": str(user_id)},
+            db=AsyncMock(),
+        )
+
+    assert result["connected"] is True
+    blob = stored_creds[0]
+    assert blob["access_token"] == "new_tok"
+    assert blob["scopes"] == scope_str
+    assert blob["target"] == "organization"
+    assert blob["org_id"] == "urn:li:organization:999"
+    assert blob["org_name"] == "Acme Corp"
+
+
+@pytest.mark.asyncio
+async def test_connections_list_linkedin_org_capable_true_for_org_scoped_blob():
+    """Connections list returns linkedin_org_capable=True when blob has w_organization_social in scopes."""
+    from app.routers.publishing import list_platform_connections
+    from app.core.security import encrypt_credential
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+
+    creds = {"access_token": "tok", "name": "Alice", "scopes": "openid,profile,w_member_social,r_organization_admin,w_organization_social"}
+    li_conn = _make_linkedin_connection(client_id=client.id, creds=creds)
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connections_for_client", AsyncMock(return_value=[li_conn])),
+    ):
+        response = await list_platform_connections(
+            client_id=client.id,
+            current_user={"user_id": str(user_id)},
+            db=AsyncMock(),
+        )
+
+    li_item = next(i for i in response["items"] if i["platform"] == "linkedin")
+    assert li_item["linkedin_org_capable"] is True
+    # Confirm secrets are not leaked
+    assert "access_token" not in li_item
+    assert "scopes" not in li_item
+
+
+@pytest.mark.asyncio
+async def test_connections_list_linkedin_org_capable_false_for_legacy_blob():
+    """Connections list returns linkedin_org_capable=False for a legacy blob with no scopes key."""
+    from app.routers.publishing import list_platform_connections
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+
+    # Legacy blob: no 'scopes' key (pre-5.8 connection)
+    creds = {"access_token": "tok", "name": "Bob"}
+    li_conn = _make_linkedin_connection(client_id=client.id, creds=creds)
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connections_for_client", AsyncMock(return_value=[li_conn])),
+    ):
+        response = await list_platform_connections(
+            client_id=client.id,
+            current_user={"user_id": str(user_id)},
+            db=AsyncMock(),
+        )
+
+    li_item = next(i for i in response["items"] if i["platform"] == "linkedin")
+    assert li_item["linkedin_org_capable"] is False

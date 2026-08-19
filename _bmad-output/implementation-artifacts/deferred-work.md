@@ -1,5 +1,15 @@
 # Deferred Work
 
+## Deferred from: code review of 5-8-enable-linkedin-company-page-posting (2026-08-19)
+
+- org_capable derived from stored scopes not live API [backend/app/routers/publishing.py:61] — pre-existing architectural trade-off; reactive path (Story 5.7 AC 5) handles live scope revocation
+- No test that LinkedIn OAuth initiation requests org scopes [frontend/app/api/auth/linkedin/route.ts] — pre-existing from Story 5.7; scope string in OAuth redirect not touched by 5.8
+- User with org target but org_capable=false can open picker without scope guard — pre-existing Story 5.7 gap; reactive error already surfaces reconnect link
+- No test for linkedin_org_capable=undefined case — backend always sets the field as boolean on connected LinkedIn items; undefined only possible via stale cached response
+- Connections list secret-exclusion not enforced by allowlist — architectural, pre-existing pattern; test asserts absence of access_token and scopes
+- AC 5 manual real-API verification outcomes not recorded — deployment step Boris must complete in production with a real Company Page
+- Missing test coverage for scope=null/int and 4xx paths in exchange_code_for_token — beyond what AC 2 test requirements specify; happy path and missing-scope path covered
+
 ## Deferred from: code review of 24-1-published-post-record-and-platform-post-id-capture (2026-08-17)
 
 - DateTime() vs timestamptz for published_at/created_at [backend/app/db/repositories/models.py, alembic migration] — project-wide naive UTC pattern via utcnow(); changing one table in isolation would break consistency; revisit if the whole schema migrates to timestamptz

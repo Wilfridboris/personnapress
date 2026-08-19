@@ -28,6 +28,7 @@ from app.db.repositories.models import Client, PlatformConnection, User
 from app.db.repositories.jobs import create_job, get_publish_job_for_campaign, get_scheduled_job
 from app.db.repositories.platform_connections import (
     delete_connection,
+    get_connection,
     get_connections_for_client,
     upsert_connection,
 )
@@ -52,15 +53,16 @@ router = APIRouter(prefix="", tags=["publishing"])
 ALL_PLATFORMS = ["wordpress", "webflow", "x", "linkedin", "github_pages", "instagram", "facebook_page", "threads"]
 
 
-def _extract_linkedin_target(encrypted_credentials: str) -> tuple[str, Optional[str]]:
-    """Return (target, org_name) from a LinkedIn credential blob. Defaults to personal."""
+def _extract_linkedin_target(encrypted_credentials: str) -> tuple[str, Optional[str], bool]:
+    """Return (target, org_name, org_capable) from a LinkedIn credential blob. Defaults to personal."""
     try:
         data = json.loads(decrypt_credential(encrypted_credentials))
         target = data.get("target", "personal")
         org_name = data.get("org_name") or None
-        return target, org_name
+        org_capable = "w_organization_social" in (data.get("scopes") or "")
+        return target, org_name, org_capable
     except Exception:
-        return "personal", None
+        return "personal", None, False
 
 
 def _extract_identifier(platform: str, encrypted_credentials: str) -> Optional[str]:
@@ -156,10 +158,11 @@ async def list_platform_connections(
                 item["github_detection"] = _extract_github_detection(pc.encrypted_credentials)
                 item["direct_commit_default"] = _extract_direct_commit_default(pc.encrypted_credentials)
             if platform == "linkedin":
-                target, org_name = _extract_linkedin_target(pc.encrypted_credentials)
+                target, org_name, org_capable = _extract_linkedin_target(pc.encrypted_credentials)
                 item["linkedin_target"] = target
                 if org_name:
                     item["linkedin_org_name"] = org_name
+                item["linkedin_org_capable"] = org_capable
             items.append(item)
         elif platform == "wordpress" and "wordpress-com" in connected_map:
             # WordPress.com connection shown under the wordpress card
@@ -358,16 +361,30 @@ async def linkedin_oauth_callback(
 
     redirect_uri = f"{settings.APP_URL}/api/auth/linkedin/callback"
     try:
-        access_token = await linkedin_integration.exchange_code_for_token(body.code, redirect_uri)
+        token_data = await linkedin_integration.exchange_code_for_token(body.code, redirect_uri)
     except Exception as e:
         raise HTTPException(
             status_code=400,
             detail={"error": {"code": "TOKEN_EXCHANGE_FAILED", "message": _platform_error_msg(e), "detail": {}}},
         )
 
+    access_token = token_data["access_token"]
+    scope_str = token_data.get("scope") or ""
     name = await linkedin_integration.get_user_name(access_token)
 
-    cred_json = json.dumps({"access_token": access_token, "name": name})
+    # Preserve target/org selection from any existing credential so reconnect does not reset posting target.
+    preserved: dict = {}
+    existing_conn = await get_connection(db, client_id, "linkedin")
+    if existing_conn:
+        try:
+            existing_data = json.loads(decrypt_credential(existing_conn.encrypted_credentials))
+            for key in ("target", "org_id", "org_name"):
+                if key in existing_data:
+                    preserved[key] = existing_data[key]
+        except Exception:
+            pass
+
+    cred_json = json.dumps({"access_token": access_token, "name": name, "scopes": scope_str, **preserved})
     encrypted = encrypt_credential(cred_json)
     await upsert_connection(db, client_id, "linkedin", encrypted)
 

@@ -321,6 +321,7 @@ export interface PlatformConnectionStatus {
   direct_commit_default?: boolean;
   linkedin_target?: "personal" | "organization";
   linkedin_org_name?: string;
+  linkedin_org_capable?: boolean;
 }
 
 export interface ConnectionCreatePayload {
