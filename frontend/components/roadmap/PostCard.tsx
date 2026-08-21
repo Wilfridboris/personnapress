@@ -6,6 +6,7 @@ import { ExternalLink, UploadCloud } from "lucide-react";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
+import { getAngleLabel } from "@/lib/angles";
 import type { RoadmapCampaignSummary } from "@/lib/types";
 
 export function getPlatformInfo(campaign: RoadmapCampaignSummary): {
@@ -55,6 +56,7 @@ export function PostCard({
 }: PostCardProps) {
   const { label: platformLabel, postText, platformKey } = getPlatformInfo(campaign);
   const timeLabel = formatScheduledTime(scheduledFor);
+  const angleLabel = getAngleLabel(campaign.angle);
 
   return (
     <div
@@ -71,6 +73,11 @@ export function PostCard({
             <span className="font-body text-xs text-graphite uppercase tracking-[0.08em] truncate">
               {platformLabel}
             </span>
+            {angleLabel && platformLabel !== "Blog" && (
+              <span className="font-body text-xs uppercase tracking-[0.08em] text-graphite border border-[#E5E5E5] px-1.5 py-0.5 shrink-0 whitespace-nowrap">
+                {angleLabel}
+              </span>
+            )}
           </div>
           {isRemoved ? (
             <span className="font-body text-xs text-graphite uppercase tracking-[0.08em] bg-[#E5E5E5] px-2 py-0.5 shrink-0">

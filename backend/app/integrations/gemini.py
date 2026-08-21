@@ -13,12 +13,14 @@ from google.genai import types
 
 from app.core.config import settings
 from app.integrations.generation_prompts import (
+    _ANGLE_DIRECTIVE_TEMPLATE,
     _DEFAULT_VOICE,
     _BLOG_ASSIST_PROMPT,
     _BLOG_PROMPT,
     _FIDELITY_PROMPT,
     _SOCIAL_PROMPT,
     _SOCIAL_STANDALONE_PROMPT,
+    _WEEK_PLAN_PROMPT,
     _build_seo_section,
     _build_social_universal_rules,
     _build_standalone_voice_injection,
@@ -29,6 +31,7 @@ from app.integrations.generation_prompts import (
     _md_to_html,
     _strip_blog_trailer,
 )
+from app.services.angles import ANGLE_LABELS, KNOWN_CODES, _LINKEDIN_ORDER, _X_ORDER
 
 logger = logging.getLogger(__name__)
 
@@ -609,6 +612,8 @@ async def generate_social_standalone(
     brain_dump: str,
     brand_voice_profile: dict | None,
     thinking_tokens: int = 0,
+    angle: str | None = None,
+    hook: str | None = None,
 ) -> dict:
     """Generate standalone social posts for Plan My Week (no blog exists).
 
@@ -616,6 +621,10 @@ async def generate_social_standalone(
     LinkedIn (1200-2500 chars, hook/structure/CTA) and X (70-280 chars,
     Hook->Value->Proof->Nudge). BVP fields opening_pattern, closing_pattern,
     and post_structure_template are injected as structure hints.
+
+    When angle/hook are provided (roadmap path), an ANGLE DIRECTIVE is injected
+    into the prompt to commit the post to one specific angle. When None (social_only
+    brain-dump campaigns), behavior is identical to the pre-20.8 implementation.
     """
     if brand_voice_profile:
         bvp_without_voice = {k: v for k, v in brand_voice_profile.items() if k != "voice_brief"}
@@ -680,6 +689,14 @@ async def generate_social_standalone(
         social_universal_rules=social_universal_rules,
         brain_dump=brain_dump,
     )
+
+    if angle:
+        display_label = ANGLE_LABELS.get(angle, angle)
+        hook_line = f"- Opening thesis / hook to build from: {hook}\n" if hook else ""
+        prompt = prompt + _ANGLE_DIRECTIVE_TEMPLATE.format(
+            display_label=display_label,
+            hook_line=hook_line,
+        )
 
     response = await _client.aio.models.generate_content(
         model=_MODEL,
@@ -759,3 +776,112 @@ async def generate_social_standalone(
         data["threads_post"] = data["threads_post"][:499] + "…"
 
     return data
+
+
+async def generate_week_plan(
+    brain_dump: str,
+    brand_voice_profile: dict | None,
+    linkedin_count: int,
+    twitter_count: int,
+) -> dict:
+    """Plan a diverse week of social posts -- one LLM call that sees all slots at once.
+
+    Returns:
+        {
+          "linkedin": [{"angle": str, "hook": str, "facet": str}, ...],  # linkedin_count entries
+          "x":        [{"angle": str, "hook": str, "facet": str}, ...],  # twitter_count entries
+        }
+
+    Each entry uses a distinct angle code from the taxonomy. Shape is validated and
+    minimally repaired (unknown codes are replaced with fallback codes). Raises
+    ValueError if the response cannot be parsed at all (caller must fall back).
+    """
+    bvp_json = json.dumps(
+        {k: v for k, v in brand_voice_profile.items() if k != "voice_brief"}
+        if brand_voice_profile else {}
+    )
+    linkedin_angles = ", ".join(_LINKEDIN_ORDER)
+    x_angles = ", ".join(_X_ORDER)
+
+    prompt = _WEEK_PLAN_PROMPT.format(
+        bvp_json=bvp_json,
+        brain_dump=brain_dump,
+        linkedin_count=linkedin_count,
+        twitter_count=twitter_count,
+        linkedin_angles=linkedin_angles,
+        x_angles=x_angles,
+    )
+
+    response = await _client.aio.models.generate_content(
+        model=_MODEL,
+        contents=prompt,
+        config=_thinking_config(0),
+    )
+    raw = _strip_fences(response.text.strip())
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        logger.error("generate_week_plan: Gemini returned invalid JSON: %r", raw[:200])
+        raise ValueError(f"generate_week_plan: Gemini returned invalid JSON: {exc}") from exc
+
+    if not isinstance(data.get("linkedin"), list) or not isinstance(data.get("x"), list):
+        raise ValueError("generate_week_plan: missing 'linkedin' or 'x' list in response")
+
+    data["linkedin"] = _repair_plan_entries(data["linkedin"], linkedin_count, "linkedin")
+    data["x"] = _repair_plan_entries(data["x"], twitter_count, "x")
+
+    return data
+
+
+def _repair_plan_entries(entries: list, expected: int, platform: str) -> list:
+    """Validate and minimally repair plan entries for one platform.
+
+    - Entries with unknown or duplicate angle codes are replaced with the next fallback.
+    - If fewer entries than expected, pads with unused pool codes before cycling.
+    - Truncates if more entries than expected (shouldn't happen but defensive).
+    """
+    valid: list[dict] = []
+    used_angles: list[str] = []
+
+    for entry in entries[:expected]:
+        if not isinstance(entry, dict):
+            continue
+        code = entry.get("angle", "")
+        if code not in KNOWN_CODES or code in used_angles:
+            code = _next_fallback(platform, used_angles)
+        hook = str(entry.get("hook") or "").strip().replace("—", ", ")
+        facet = str(entry.get("facet") or "").strip()
+        valid.append({"angle": code, "hook": hook, "facet": facet})
+        used_angles.append(code)
+
+    missing = expected - len(valid)
+    if missing > 0:
+        pad_angles = _pad_fallback(platform, used_angles, missing)
+        for code in pad_angles:
+            valid.append({"angle": code, "hook": "", "facet": ""})
+
+    return valid
+
+
+def _next_fallback(platform: str, used: list[str]) -> str:
+    pool = _LINKEDIN_ORDER if platform == "linkedin" else _X_ORDER
+    for code in pool:
+        if code not in used:
+            return code
+    return pool[len(used) % len(pool)]
+
+
+def _pad_fallback(platform: str, used: list[str], count: int) -> list[str]:
+    pool = _LINKEDIN_ORDER if platform == "linkedin" else _X_ORDER
+    result: list[str] = []
+    # Prefer codes not yet used before cycling
+    for code in pool:
+        if code not in used and len(result) < count:
+            result.append(code)
+    # Cycle from pool start for any remaining slots
+    idx = 0
+    while len(result) < count:
+        result.append(pool[idx % len(pool)])
+        idx += 1
+    return result

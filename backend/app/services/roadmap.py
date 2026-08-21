@@ -18,6 +18,7 @@ from app.db.repositories.jobs import create_job
 from app.db.repositories.models import Campaign, Client, CampaignStatus, Roadmap, RoadmapStatus
 from app.services import generation as generation_service
 from app.services import image as image_service
+from app.services.angles import fallback_angles
 from app.services.generation import run_generation_pipeline
 from app.services.subscription_service import check_image_limit_batch
 
@@ -74,6 +75,11 @@ async def generate_roadmap(roadmap_id: uuid.UUID, db: AsyncSession) -> None:
         campaign_ids: list[uuid.UUID] = []
         title_hints: list[str] = []
 
+        # ── Step 4a: Plan angles for the week (best-effort; fallback on failure) ──
+        plan = await generation_service.plan_week_angles(
+            roadmap.brain_dump, bvp, linkedin_count, twitter_count
+        )
+
         # ── Step 4: Blog + social slot ────────────────────────────────────────
         if blog_enabled:
             blog_campaign = Campaign(
@@ -102,6 +108,7 @@ async def generate_roadmap(roadmap_id: uuid.UUID, db: AsyncSession) -> None:
             title_hints.append(_extract_title(blog_campaign.blog_html or ""))
 
         # ── Twitter-only slots ────────────────────────────────────────────────
+        x_plan = plan.get("x", [])
         for i in range(twitter_count):
             x_campaign = Campaign(
                 client_id=roadmap.client_id,
@@ -114,14 +121,20 @@ async def generate_roadmap(roadmap_id: uuid.UUID, db: AsyncSession) -> None:
             await db.refresh(x_campaign)
             await db.commit()
 
+            slot = x_plan[i] if i < len(x_plan) else {}
+            slot_angle = slot.get("angle") or None
+            slot_hook = slot.get("hook") or None
+
             await generation_service.generate_social_only(
-                roadmap.brain_dump, bvp, "x", x_campaign.id, db
+                roadmap.brain_dump, bvp, "x", x_campaign.id, db,
+                angle=slot_angle, hook=slot_hook,
             )
 
             campaign_ids.append(x_campaign.id)
             title_hints.append(f"Roadmap X post {i + 1}")
 
         # ── LinkedIn-only slots ───────────────────────────────────────────────
+        li_plan = plan.get("linkedin", [])
         for i in range(linkedin_count):
             li_campaign = Campaign(
                 client_id=roadmap.client_id,
@@ -134,8 +147,13 @@ async def generate_roadmap(roadmap_id: uuid.UUID, db: AsyncSession) -> None:
             await db.refresh(li_campaign)
             await db.commit()
 
+            slot = li_plan[i] if i < len(li_plan) else {}
+            slot_angle = slot.get("angle") or None
+            slot_hook = slot.get("hook") or None
+
             await generation_service.generate_social_only(
-                roadmap.brain_dump, bvp, "linkedin", li_campaign.id, db
+                roadmap.brain_dump, bvp, "linkedin", li_campaign.id, db,
+                angle=slot_angle, hook=slot_hook,
             )
 
             campaign_ids.append(li_campaign.id)

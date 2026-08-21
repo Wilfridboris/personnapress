@@ -537,3 +537,13 @@
 - MAX_CHARS enforcement asymmetry between onChange (event value) and handleTranscript (combined value) [frontend/components/roadmap/PlanMyWeekClient.tsx:191] — pre-existing design; both paths correctly enforce the cap; centralise into a setter utility if the handler grows
 - `handleTranscript` not memoized with `useCallback` [frontend/components/roadmap/PlanMyWeekClient.tsx:191] — same pattern as campaigns/new reference implementation; VoiceBrainDump is not React.memo'd so memoization has no practical benefit today; revisit if VoiceBrainDump gains memo optimisation
 - Assist mode has no H1-repair scaffolding [backend/app/integrations/anthropic_client.py:160, backend/app/integrations/gemini.py:315] — default mode injects a TL;DR block but neither mode synthesizes a missing <h1>. If a model omits the h1 in assist output, pipeline title extraction falls back to "Untitled". Pre-existing shared fallback, low likelihood given the assist prompt's explicit "derive a title" directive. Add an assist h1 synthesis step if it ever surfaces in practice.
+
+## Deferred from: code review of 20-8-roadmap-post-angle-variation (2026-08-21)
+
+- brain_dump brace injection risk in `.format()` call [generation_prompts.py] — pre-existing pattern across all prompts in the codebase; not introduced by this story
+- Gemini `response.text` None crash on blocked/empty response [gemini.py] — pre-existing pattern across all Gemini calls; apply a guard when hardening all Gemini response handling
+- Private symbols `_LINKEDIN_ORDER`, `_X_ORDER` imported across module boundary [angles.py] — minor style issue; expose a public API if angles module grows
+- `ANGLE_LABELS` maintained separately in Python (angles.py) and TypeScript (angles.ts) — no compile-time sync enforcement; acceptable at current scale; add a codegen step if taxonomy grows
+- `_repair_plan_entries`/`_next_fallback`/`_pad_fallback` helpers duplicated across providers [anthropic_client.py, gemini.py] — architectural constraint: integrations layer cannot cross-import; noted in dev agent record
+- No input validation on `linkedin_count`/`twitter_count` [roadmap.py] — caller-controlled counts; 0 handled gracefully; revisit if callers become external/untrusted
+- Angle codes listed as bare comma-separated strings in prompt (not explicit JSON array syntax) [generation_prompts.py] — `_repair_plan_entries` repair layer handles invalid returns; upgrade to JSON array if model non-compliance becomes an issue

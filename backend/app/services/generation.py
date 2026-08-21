@@ -251,11 +251,17 @@ async def generate_social_only(
     platform: str,
     campaign_id: uuid.UUID,
     db: AsyncSession,
+    angle: str | None = None,
+    hook: str | None = None,
 ) -> None:
     """Generate a single social post for a roadmap-only-social campaign.
 
     Calls generate_social_standalone (0 thinking tokens) and writes only the requested
     platform field to the Campaign row. The other platform field is left NULL.
+
+    When angle/hook are provided (roadmap path), the angle directive is passed through
+    to the LLM and persisted on campaign.angle. When None (social_only brain-dump
+    campaigns), behavior is identical to the pre-20.8 implementation.
     """
     campaign_result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
     campaign = campaign_result.scalar_one_or_none()
@@ -268,6 +274,8 @@ async def generate_social_only(
         brain_dump,
         bvp,
         _SOCIAL_THINKING_TOKENS,
+        angle=angle,
+        hook=hook,
     )
 
     if platform == "x":
@@ -304,9 +312,53 @@ async def generate_social_only(
         logger.error("generate_social_only: unknown platform %r for campaign %s", platform, campaign_id)
         return
 
+    if angle:
+        campaign.angle = angle
     campaign.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
-    logger.info("generate_social_only: campaign %s platform=%s done", campaign_id, platform)
+    logger.info("generate_social_only: campaign %s platform=%s angle=%s done", campaign_id, platform, angle)
+
+
+async def plan_week_angles(
+    brain_dump: str,
+    bvp: dict | None,
+    linkedin_count: int,
+    twitter_count: int,
+) -> dict:
+    """Call the week planner once and return a validated angle plan.
+
+    On any failure, logs the error and returns a deterministic fallback plan
+    built from `fallback_angles` so roadmap generation always continues.
+
+    Returns:
+        {
+          "linkedin": [{"angle": str, "hook": str | None, "facet": str}, ...],
+          "x":        [{"angle": str, "hook": str | None, "facet": str}, ...],
+        }
+    """
+    from app.services.angles import fallback_angles
+
+    try:
+        plan = await _llm_with_retry(
+            _llm.generate_week_plan,
+            brain_dump,
+            bvp,
+            linkedin_count,
+            twitter_count,
+        )
+        logger.info(
+            "plan_week_angles: planner returned %d linkedin, %d x slots",
+            len(plan.get("linkedin", [])),
+            len(plan.get("x", [])),
+        )
+        return plan
+    except Exception as exc:
+        logger.warning("plan_week_angles: planner failed, using fallback. Error: %s", exc)
+        sentry_sdk.capture_exception(exc)
+        return {
+            "linkedin": [{"angle": a, "hook": None, "facet": ""} for a in fallback_angles("linkedin", linkedin_count)],
+            "x": [{"angle": a, "hook": None, "facet": ""} for a in fallback_angles("x", twitter_count)],
+        }
 
 
 async def run_social_only_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:

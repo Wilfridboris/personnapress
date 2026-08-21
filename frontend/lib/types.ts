@@ -68,6 +68,7 @@ export interface RoadmapCampaignSummary {
   image_url: string | null;
   status: string;
   scheduled_for: string | null;
+  angle?: string | null;
 }
 
 export interface RoadmapStatusResponse {

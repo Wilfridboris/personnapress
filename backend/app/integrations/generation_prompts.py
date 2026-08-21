@@ -649,6 +649,61 @@ def _md_to_html(html: str) -> str:
     return html
 
 
+_WEEK_PLAN_PROMPT = """You are a content strategist planning a diverse week of social posts for one creator.
+
+BRAND VOICE PROFILE (JSON):
+{bvp_json}
+
+BRAIN DUMP (the raw ideas for this week):
+{brain_dump}
+
+TASK: Assign a DISTINCT content angle, a unique opening thesis (hook), and the specific
+brain-dump facet used to each post slot below. The goal is a week that reads like a
+deliberate series, not the same idea restated multiple times.
+
+SLOT COUNTS:
+- LinkedIn posts: {linkedin_count}
+- X (Twitter) posts: {twitter_count}
+
+ALLOWED ANGLES per platform:
+- LinkedIn: {linkedin_angles}
+- X: {x_angles}
+
+RULES:
+1. Every entry must use a DIFFERENT angle from the ones already used in that platform's list.
+   When the pool is exhausted, you may cycle, but delay repeats as long as possible.
+2. "hook" is the one-line opening thesis unique to that slot (not a full post -- just the seed idea).
+3. "facet" names which part of the brain dump this slot draws from (one short phrase).
+4. STRETCH, do not invent: when the brain dump is thin, spread the same underlying ideas
+   across different angles and formats. Do NOT fabricate facts, numbers, tools, or outcomes
+   not present in the brain dump. Voice fidelity and factual honesty outrank variety.
+5. Never use an em-dash (—) or double-dash (--) in any hook or facet text.
+6. "angle" MUST be one of the allowed codes listed above. No other values are valid.
+
+Return ONLY a valid JSON object (no markdown, no explanation):
+{{
+  "linkedin": [
+    {{"angle": "<code>", "hook": "<one-line opening thesis>", "facet": "<brain-dump facet used>"}},
+    ...
+  ],
+  "x": [
+    {{"angle": "<code>", "hook": "<one-line opening thesis>", "facet": "<brain-dump facet used>"}},
+    ...
+  ]
+}}
+
+The "linkedin" list must have exactly {linkedin_count} entries.
+The "x" list must have exactly {twitter_count} entries.
+"""
+
+_ANGLE_DIRECTIVE_TEMPLATE = """
+ANGLE FOR THIS POST (write ONLY from this angle):
+- Angle: {display_label}
+{hook_line}- Do not restate other angles. Commit fully to this one angle.
+- Do not invent facts, numbers, tools, or outcomes beyond what is in the brain dump.
+"""
+
+
 def _strip_blog_trailer(html: str) -> str:
     m = re.search(r"(?s).*(?:</[a-zA-Z][a-zA-Z0-9]*>|/>)", html)
     if not m:

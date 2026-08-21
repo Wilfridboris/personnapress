@@ -89,6 +89,7 @@ class CampaignSummary(BaseModel):
     image_url: Optional[str] = None
     status: str
     scheduled_for: Optional[datetime] = None
+    angle: Optional[str] = None
 
 
 class RoadmapStatusResponse(BaseModel):
@@ -256,6 +257,7 @@ async def get_roadmap_status(
             image_url=c.image_url,
             status=c.status.value,
             scheduled_for=c.scheduled_at,
+            angle=c.angle,
         )
         for c in campaigns
     ]
