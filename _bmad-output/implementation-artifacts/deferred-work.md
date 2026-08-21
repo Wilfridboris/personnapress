@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 20-9-roadmap-card-inline-image-upload (2026-08-21)
+
+- Read-only placeholder shows UploadCloud icon when no image [PostCard.tsx:240] — pre-existing cosmetic UX issue; `!canEditImage` branch retained original appearance per story spec; low priority cleanup
+- PostEditPanel `maxLength` side-change — switching from `.slice(0, charLimit)` onChange to `maxLength` attribute [PostEditPanel.tsx:136]; functionally equivalent for this component (no external `setText` calls exist); not in story scope
+- PostEditPanel `saveError` lacks `role="alert"` [PostEditPanel.tsx:220] — pre-existing accessibility gap in the draw panel error display; applies to both save and upload error paths in the drawer
+
 ## Deferred from: code review of 5-8-enable-linkedin-company-page-posting (2026-08-19)
 
 - org_capable derived from stored scopes not live API [backend/app/routers/publishing.py:61] — pre-existing architectural trade-off; reactive path (Story 5.7 AC 5) handles live scope revocation

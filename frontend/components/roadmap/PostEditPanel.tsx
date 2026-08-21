@@ -132,11 +132,8 @@ export function PostEditPanel({
           <textarea
             ref={textareaRef}
             value={text}
-            onChange={(e) =>
-              setText(
-                charLimit > 0 ? e.target.value.slice(0, charLimit) : e.target.value
-              )
-            }
+            onChange={(e) => setText(e.target.value)}
+            maxLength={charLimit > 0 ? charLimit : undefined}
             disabled={readOnly}
             className={cn(
               "w-full bg-transparent resize-none font-mono text-sm text-ink leading-[1.7]",

@@ -1,13 +1,18 @@
 "use client";
 
+import { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ExternalLink, UploadCloud } from "lucide-react";
+import { ExternalLink, Loader2, UploadCloud } from "lucide-react";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { Button } from "@/components/ui/Button";
+import { roadmapsApi, APIError } from "@/lib/api";
+import { useClientStore } from "@/lib/stores/useClientStore";
 import { cn } from "@/lib/utils";
 import { getAngleLabel } from "@/lib/angles";
 import type { RoadmapCampaignSummary } from "@/lib/types";
+
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 export function getPlatformInfo(campaign: RoadmapCampaignSummary): {
   label: string;
@@ -54,9 +59,51 @@ export function PostCard({
   onEdit,
   onUpdate,
 }: PostCardProps) {
+  const { activeClientId } = useClientStore();
+  const [pendingPreview, setPendingPreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const { label: platformLabel, postText, platformKey } = getPlatformInfo(campaign);
   const timeLabel = formatScheduledTime(scheduledFor);
   const angleLabel = getAngleLabel(campaign.angle);
+
+  // Transient blob preview overrides persisted image only during upload
+  const displayedImage = pendingPreview ?? campaign.image_url;
+  const canEditImage = !isRemoved && campaign.status !== "published";
+
+  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !activeClientId) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setUploadError("Unsupported file type. Please use PNG, JPEG, or WebP.");
+      return;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      setUploadError("Image must be under 5 MB.");
+      return;
+    }
+    setIsUploading(true);
+    setUploadError(null);
+    const localUrl = URL.createObjectURL(file);
+    setPendingPreview(localUrl);
+    try {
+      const { image_url } = await roadmapsApi.uploadCampaignImage(
+        campaign.id,
+        activeClientId,
+        file
+      );
+      onUpdate({ image_url });
+    } catch (err: unknown) {
+      setUploadError(err instanceof APIError ? err.message : "Image upload failed.");
+    } finally {
+      setIsUploading(false);
+      setPendingPreview(null);
+      URL.revokeObjectURL(localUrl);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   return (
     <div
@@ -112,23 +159,113 @@ export function PostCard({
         </p>
 
         {/* Image area */}
-        <div className="h-[80px] w-full overflow-hidden flex items-center justify-center border border-dashed border-[#E5E5E5]">
-          {campaign.image_url ? (
-            <Image
-              src={campaign.image_url}
-              alt=""
-              width={240}
-              height={135}
-              className="w-full h-full object-cover"
-              style={{ objectFit: "cover" }}
-            />
+        {canEditImage ? (
+          displayedImage ? (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              aria-label="Replace image"
+              className={cn(
+                "group relative block h-20 w-full overflow-hidden border border-[#E5E5E5]",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1",
+                "disabled:cursor-wait"
+              )}
+            >
+              {displayedImage.startsWith("blob:") ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={displayedImage}
+                  alt=""
+                  className="size-full object-cover"
+                />
+              ) : (
+                <Image
+                  src={displayedImage}
+                  alt=""
+                  width={240}
+                  height={80}
+                  className="size-full object-cover"
+                  style={{ objectFit: "cover" }}
+                />
+              )}
+              <span
+                className={cn(
+                  "absolute inset-0 flex items-center justify-center gap-1.5 bg-ink/60",
+                  "opacity-0 transition-opacity duration-150",
+                  "group-hover:opacity-100 group-focus-visible:opacity-100",
+                  isUploading && "opacity-100"
+                )}
+              >
+                {isUploading ? (
+                  <Loader2 className="size-4 animate-spin text-white" aria-hidden="true" />
+                ) : (
+                  <UploadCloud className="size-4 text-white" aria-hidden="true" />
+                )}
+                <span className="font-mono text-xs uppercase tracking-[0.08em] text-white">
+                  {isUploading ? "Uploading" : "Replace"}
+                </span>
+              </span>
+            </button>
           ) : (
-            <div className="flex flex-col items-center gap-1">
-              <UploadCloud className="w-4 h-4 text-graphite" aria-hidden="true" />
-              <span className="font-body text-xs text-graphite">Add your own image</span>
-            </div>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              aria-label="Upload your own image"
+              className={cn(
+                "group relative flex h-20 w-full items-center justify-center",
+                "border border-dashed border-[#E5E5E5] bg-white",
+                "transition-colors duration-150 hover:border-ink hover:bg-[#F9F9F6]",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1",
+                "disabled:cursor-wait disabled:opacity-60"
+              )}
+            >
+              <div className="flex flex-col items-center gap-1">
+                <UploadCloud className="size-4 text-graphite transition-colors group-hover:text-ink" aria-hidden="true" />
+                <span className="font-body text-xs text-graphite transition-colors group-hover:text-ink">
+                  {isUploading ? "Uploading..." : "Add your own image"}
+                </span>
+              </div>
+            </button>
+          )
+        ) : (
+          <div className="h-20 w-full overflow-hidden flex items-center justify-center border border-dashed border-[#E5E5E5]">
+            {campaign.image_url ? (
+              <Image
+                src={campaign.image_url}
+                alt=""
+                width={240}
+                height={80}
+                className="size-full object-cover"
+                style={{ objectFit: "cover" }}
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-1">
+                <UploadCloud className="size-4 text-graphite" aria-hidden="true" />
+                <span className="font-body text-xs text-graphite">Add your own image</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={handleImageSelect}
+        />
+
+        {/* Upload error */}
+        {uploadError && (
+          <p className="font-body text-xs text-danger" role="alert">
+            {uploadError}
+          </p>
+        )}
 
         {/* Action row */}
         {isRemoved ? (
