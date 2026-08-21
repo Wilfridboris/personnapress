@@ -530,4 +530,10 @@
 ## Deferred from: code review of story-3.28 (2026-08-18)
 
 - Assist mode still applies the Brand Voice Profile to social posts [backend/app/services/generation.py:184] — the assist blog preserves the author's raw voice, but the derived social posts still run through the BVP and default social prompt. Already scoped as future work by the story's Task 4 (full "assist-social" preserving author phrasing per platform). Revisit when assist-social is picked up.
+
+## Deferred from: code review of 20-7-plan-my-week-voice-recording (2026-08-21)
+
+- Accessibility: no `aria-describedby` connecting VoiceBrainDump recorder to brain-dump textarea [frontend/components/roadmap/PlanMyWeekClient.tsx:449] — pre-existing pattern from campaigns/new; both use VoiceBrainDump without aria-describedby linking recorder to field; address in a focused accessibility pass
+- MAX_CHARS enforcement asymmetry between onChange (event value) and handleTranscript (combined value) [frontend/components/roadmap/PlanMyWeekClient.tsx:191] — pre-existing design; both paths correctly enforce the cap; centralise into a setter utility if the handler grows
+- `handleTranscript` not memoized with `useCallback` [frontend/components/roadmap/PlanMyWeekClient.tsx:191] — same pattern as campaigns/new reference implementation; VoiceBrainDump is not React.memo'd so memoization has no practical benefit today; revisit if VoiceBrainDump gains memo optimisation
 - Assist mode has no H1-repair scaffolding [backend/app/integrations/anthropic_client.py:160, backend/app/integrations/gemini.py:315] — default mode injects a TL;DR block but neither mode synthesizes a missing <h1>. If a model omits the h1 in assist output, pipeline title extraction falls back to "Untitled". Pre-existing shared fallback, low likelihood given the assist prompt's explicit "derive a title" directive. Add an assist h1 synthesis step if it ever surfaces in practice.

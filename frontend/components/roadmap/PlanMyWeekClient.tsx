@@ -10,6 +10,7 @@ import { clientsApi, subscriptionsApi, roadmapsApi } from "@/lib/api";
 import { usePlatformConnections } from "@/hooks/usePlatformConnections";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
+import { VoiceBrainDump } from "@/components/campaigns/VoiceBrainDump";
 
 const MAX_CHARS = 10_000;
 const MIN_CHARS = 20;
@@ -186,6 +187,24 @@ export function PlanMyWeekClient() {
     ta.style.height = "auto";
     ta.style.height = `${ta.scrollHeight}px`;
   }, [brainDump]);
+
+  const handleTranscript = (text: string) => {
+    setBrainDump((prev) => {
+      const trimmed = text.trim();
+      if (!trimmed) return prev;
+      const combined =
+        prev.trim() === "" ? trimmed : `${prev.trimEnd()}\n\n${trimmed}`;
+      return combined.slice(0, MAX_CHARS);
+    });
+    setTimeout(() => {
+      const ta = textareaRef.current;
+      if (ta) {
+        ta.style.height = "auto";
+        ta.style.height = `${ta.scrollHeight}px`;
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+      }
+    }, 0);
+  };
 
   const imageQuota = subscription
     ? subscription.plan_limits.image_gens - subscription.image_gen_used
@@ -428,12 +447,13 @@ export function PlanMyWeekClient() {
         >
           What&apos;s on your mind this week?
         </label>
+        <VoiceBrainDump onTranscript={handleTranscript} />
         <textarea
           id="brain-dump"
           ref={textareaRef}
           value={brainDump}
           onChange={(e) => setBrainDump(e.target.value.slice(0, MAX_CHARS))}
-          placeholder="Paste your raw ideas here: voice note transcript, rough bullets, half-finished thoughts. No structure needed."
+          placeholder="Record or type everything on your mind this week: the wins, the lessons, the opinions, the numbers. The more raw material you give, the more distinct angles we can turn it into. No structure needed."
           className={cn(
             "w-full bg-transparent resize-none font-mono text-sm text-ink leading-[1.7]",
             "border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink",
