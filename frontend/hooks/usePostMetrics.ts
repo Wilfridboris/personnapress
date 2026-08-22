@@ -21,6 +21,10 @@ export interface ClientSummary {
   client_id: string;
   total_impressions: number | null;
   total_engagements: number | null;
+  total_likes: number | null;
+  total_comments: number | null;
+  total_shares: number | null;
+  engagement_rate: number | null;
   posts_tracked: number;
   best_post: BestPost | null;
   freshest_captured_at: string | null;
@@ -33,6 +37,10 @@ export interface PostMetricItem {
   campaign_excerpt: string | null;
   latest_impressions: number | null;
   latest_engagements: number | null;
+  latest_likes: number | null;
+  latest_comments: number | null;
+  latest_shares: number | null;
+  engagement_rate: number | null;
   permalink: string | null;
   captured_at: string | null;
   series: SeriesPoint[];

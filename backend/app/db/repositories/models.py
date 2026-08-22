@@ -315,6 +315,9 @@ class PostMetric(SQLModel, table=True):
     captured_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     impressions: Optional[int] = Field(default=None, sa_column=Column(BigInteger, nullable=True))
     engagements: Optional[int] = Field(default=None, sa_column=Column(BigInteger, nullable=True))
+    likes: Optional[int] = Field(default=None, sa_column=Column(BigInteger, nullable=True))
+    comments: Optional[int] = Field(default=None, sa_column=Column(BigInteger, nullable=True))
+    shares: Optional[int] = Field(default=None, sa_column=Column(BigInteger, nullable=True))
     raw: Optional[dict] = Field(default=None, sa_column=Column(JSONB, nullable=True))
     unavailable_reason: Optional[str] = Field(
         default=None,

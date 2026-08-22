@@ -1,4 +1,11 @@
-"""Tests for GET /api/v1/analytics/clients/{client_id}/summary and /posts."""
+"""Tests for GET /api/v1/analytics/clients/{client_id}/summary and /posts.
+
+Story 24.4 additions (AC #13):
+  - engagement_rate field: NULL when impressions=0 or NULL (no divide-by-zero)
+  - latest_likes/comments/shares in PostMetricItem
+  - total_likes/comments/shares/engagement_rate in ClientSummaryResponse
+  - reason-string alignment: unavailable_reason uses 'page_under_100_likes'
+"""
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -36,6 +43,10 @@ async def test_summary_returns_200_for_valid_client():
         client_id=client_id,
         total_impressions=1000,
         total_engagements=50,
+        total_likes=30,
+        total_comments=10,
+        total_shares=5,
+        engagement_rate=0.05,
         posts_tracked=3,
         best_post=None,
         freshest_captured_at=None,
@@ -59,6 +70,10 @@ async def test_summary_returns_200_for_valid_client():
     assert result.client_id == client_id
     assert result.posts_tracked == 3
     assert result.total_impressions == 1000
+    assert result.total_likes == 30
+    assert result.total_comments == 10
+    assert result.total_shares == 5
+    assert result.engagement_rate == 0.05
 
 
 async def test_summary_returns_404_for_wrong_client():
@@ -115,6 +130,10 @@ async def test_summary_empty_client_returns_zero_posts():
         client_id=client_id,
         total_impressions=None,
         total_engagements=None,
+        total_likes=None,
+        total_comments=None,
+        total_shares=None,
+        engagement_rate=None,
         posts_tracked=0,
         best_post=None,
         freshest_captured_at=None,
@@ -136,6 +155,7 @@ async def test_summary_empty_client_returns_zero_posts():
 
     assert result.posts_tracked == 0
     assert result.total_impressions is None
+    assert result.engagement_rate is None
 
 
 # ---------------------------------------------------------------------------
@@ -161,6 +181,10 @@ async def test_posts_returns_200_for_valid_client():
                 campaign_excerpt=None,
                 latest_impressions=500,
                 latest_engagements=30,
+                latest_likes=20,
+                latest_comments=6,
+                latest_shares=4,
+                engagement_rate=0.06,
                 permalink="https://instagram.com/p/test",
                 captured_at=None,
                 series=[],
@@ -185,12 +209,19 @@ async def test_posts_returns_200_for_valid_client():
         )
 
     assert len(result.items) == 1
-    assert result.items[0].platform == "instagram"
-    assert result.items[0].latest_impressions == 500
+    item = result.items[0]
+    assert item.platform == "instagram"
+    assert item.latest_impressions == 500
+    assert item.latest_likes == 20
+    assert item.latest_comments == 6
+    assert item.latest_shares == 4
+    assert item.engagement_rate == 0.06
 
 
 async def test_posts_unavailable_marker_returned():
-    """Posts with no snapshots return explicit unavailable marker, not fabricated zeros."""
+    """Posts with no snapshots return explicit unavailable marker, not fabricated zeros.
+    Story 24.4 AC#11: reason string uses 'page_under_100_likes' (not 'facebook_under_100_likes').
+    """
     from app.routers.analytics import client_post_metrics
     from app.schemas.analytics import ClientPostMetricsResponse, PostMetricItem
 
@@ -209,10 +240,14 @@ async def test_posts_unavailable_marker_returned():
                 campaign_excerpt=None,
                 latest_impressions=None,
                 latest_engagements=None,
+                latest_likes=None,
+                latest_comments=None,
+                latest_shares=None,
+                engagement_rate=None,
                 permalink=None,
                 captured_at=None,
                 series=[],
-                unavailable_reason="facebook_under_100_likes",
+                unavailable_reason="page_under_100_likes",
             )
         ],
         freshest_captured_at=None,
@@ -233,9 +268,13 @@ async def test_posts_unavailable_marker_returned():
         )
 
     item = result.items[0]
-    assert item.unavailable_reason == "facebook_under_100_likes"
+    assert item.unavailable_reason == "page_under_100_likes"
     assert item.latest_impressions is None
     assert item.latest_engagements is None
+    assert item.latest_likes is None
+    assert item.latest_comments is None
+    assert item.latest_shares is None
+    assert item.engagement_rate is None
 
 
 async def test_posts_empty_client_returns_empty_list():
@@ -280,8 +319,17 @@ async def test_service_summary_empty_db_returns_zero():
     client_id = uuid.uuid4()
     session = AsyncMock()
 
-    # Simulate DB returning a row with COUNT(*)=0
-    mock_row = {"posts_tracked": 0, "total_impressions": None, "total_engagements": None, "freshest_captured_at": None, "best_post_id": None}
+    mock_row = {
+        "posts_tracked": 0,
+        "total_impressions": None,
+        "total_engagements": None,
+        "total_likes": None,
+        "total_comments": None,
+        "total_shares": None,
+        "engagement_rate": None,
+        "freshest_captured_at": None,
+        "best_post_id": None,
+    }
     mock_result = MagicMock()
     mock_result.mappings.return_value.first.return_value = mock_row
     session.execute = AsyncMock(return_value=mock_result)
@@ -290,6 +338,8 @@ async def test_service_summary_empty_db_returns_zero():
 
     assert result.posts_tracked == 0
     assert result.total_impressions is None
+    assert result.total_likes is None
+    assert result.engagement_rate is None
     assert result.best_post is None
 
 
@@ -317,7 +367,6 @@ async def test_service_posts_no_snapshot_marker():
 
     client_id = uuid.uuid4()
     ppid = uuid.uuid4()
-    camp_id = uuid.uuid4()
 
     session = AsyncMock()
     calls = []
@@ -356,3 +405,114 @@ async def test_service_posts_no_snapshot_marker():
     assert item.unavailable_reason == "no_snapshot"
     assert item.latest_impressions is None
     assert item.latest_engagements is None
+    assert item.latest_likes is None
+    assert item.latest_comments is None
+    assert item.latest_shares is None
+    assert item.engagement_rate is None
+
+
+# ---------------------------------------------------------------------------
+# 24.4 AC#13 — engagement_rate NULL-safety
+# ---------------------------------------------------------------------------
+
+async def test_service_posts_engagement_rate_null_when_impressions_zero():
+    """engagement_rate must be NULL (not infinity/error) when impressions=0. (AC #5, #13)"""
+    from app.services.analytics import get_client_post_metrics
+
+    client_id = uuid.uuid4()
+    ppid = uuid.uuid4()
+    session = AsyncMock()
+    calls = []
+
+    def fake_execute(query, params=None):
+        calls.append(params)
+        result = MagicMock()
+        call_n = len(calls)
+        if call_n == 1:
+            post_row = {
+                "published_post_id": ppid,
+                "platform": "threads",
+                "permalink": None,
+                "campaign_title": "Threads post",
+                "campaign_excerpt": None,
+            }
+            result.mappings.return_value.all.return_value = [post_row]
+        elif call_n == 2:
+            # latest snapshot with impressions=0 -> engagement_rate must be NULL
+            snap = {
+                "published_post_id": ppid,
+                "impressions": 0,
+                "engagements": 5,
+                "likes": 3,
+                "comments": 1,
+                "shares": 1,
+                "engagement_rate": None,  # SQL NULLIF(0,0) -> NULL
+                "captured_at": None,
+                "unavailable_reason": None,
+            }
+            result.mappings.return_value.all.return_value = [snap]
+        elif call_n == 3:
+            result.mappings.return_value.all.return_value = []
+        elif call_n == 4:
+            result.scalar = MagicMock(return_value=None)
+        return result
+
+    session.execute = AsyncMock(side_effect=lambda q, p=None: fake_execute(q, p))
+
+    result = await get_client_post_metrics(session, client_id)
+
+    item = result.items[0]
+    assert item.engagement_rate is None  # no divide-by-zero
+    assert item.latest_engagements == 5
+    assert item.latest_likes == 3
+
+
+async def test_service_posts_engagement_rate_null_when_impressions_none():
+    """engagement_rate must be NULL when impressions IS NULL (data not collected). (AC #5, #13)"""
+    from app.services.analytics import get_client_post_metrics
+
+    client_id = uuid.uuid4()
+    ppid = uuid.uuid4()
+    session = AsyncMock()
+    calls = []
+
+    def fake_execute(query, params=None):
+        calls.append(params)
+        result = MagicMock()
+        call_n = len(calls)
+        if call_n == 1:
+            post_row = {
+                "published_post_id": ppid,
+                "platform": "instagram",
+                "permalink": None,
+                "campaign_title": "IG post",
+                "campaign_excerpt": None,
+            }
+            result.mappings.return_value.all.return_value = [post_row]
+        elif call_n == 2:
+            snap = {
+                "published_post_id": ppid,
+                "impressions": None,
+                "engagements": 10,
+                "likes": 8,
+                "comments": 2,
+                "shares": 0,
+                "engagement_rate": None,  # NULL impressions -> NULL rate
+                "captured_at": None,
+                "unavailable_reason": None,
+            }
+            result.mappings.return_value.all.return_value = [snap]
+        elif call_n == 3:
+            result.mappings.return_value.all.return_value = []
+        elif call_n == 4:
+            result.scalar = MagicMock(return_value=None)
+        return result
+
+    session.execute = AsyncMock(side_effect=lambda q, p=None: fake_execute(q, p))
+
+    result = await get_client_post_metrics(session, client_id)
+
+    item = result.items[0]
+    assert item.engagement_rate is None  # NULL impressions -> NULL rate
+    assert item.latest_engagements == 10
+    assert item.latest_likes == 8

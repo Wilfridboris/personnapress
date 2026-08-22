@@ -24,6 +24,7 @@ async def get_client_summary(
     Compute client-level rollup from post_metrics via SQL only (AD-A2).
     Latest value per post = row with highest captured_at (DISTINCT ON, AD-A3).
     Never 500s on missing data (AD-A10).
+    engagement_rate = SUM(engagements) / SUM(impressions), NULL-safe.
     """
     result = await session.execute(
         text("""
@@ -32,6 +33,9 @@ async def get_client_summary(
                     published_post_id,
                     impressions,
                     engagements,
+                    likes,
+                    comments,
+                    shares,
                     captured_at
                 FROM post_metrics
                 WHERE client_id = :client_id
@@ -42,6 +46,14 @@ async def get_client_summary(
                 COUNT(*) AS posts_tracked,
                 SUM(impressions) AS total_impressions,
                 SUM(engagements) AS total_engagements,
+                SUM(likes) AS total_likes,
+                SUM(comments) AS total_comments,
+                SUM(shares) AS total_shares,
+                CASE
+                    WHEN SUM(impressions) > 0
+                    THEN SUM(engagements)::float / SUM(impressions)::float
+                    ELSE NULL
+                END AS engagement_rate,
                 MAX(captured_at) AS freshest_captured_at,
                 (
                     SELECT published_post_id::text
@@ -60,6 +72,10 @@ async def get_client_summary(
             client_id=client_id,
             total_impressions=None,
             total_engagements=None,
+            total_likes=None,
+            total_comments=None,
+            total_shares=None,
+            engagement_rate=None,
             posts_tracked=0,
             best_post=None,
             freshest_captured_at=None,
@@ -104,6 +120,10 @@ async def get_client_summary(
         client_id=client_id,
         total_impressions=int(row["total_impressions"]) if row["total_impressions"] is not None else None,
         total_engagements=int(row["total_engagements"]) if row["total_engagements"] is not None else None,
+        total_likes=int(row["total_likes"]) if row["total_likes"] is not None else None,
+        total_comments=int(row["total_comments"]) if row["total_comments"] is not None else None,
+        total_shares=int(row["total_shares"]) if row["total_shares"] is not None else None,
+        engagement_rate=float(row["engagement_rate"]) if row["engagement_rate"] is not None else None,
         posts_tracked=int(row["posts_tracked"]),
         best_post=best_post,
         freshest_captured_at=row["freshest_captured_at"],
@@ -118,6 +138,7 @@ async def get_client_post_metrics(
     Return per-post metrics for all Meta published posts of a client.
     Latest snapshot = DISTINCT ON captured_at DESC (AD-A3).
     Posts with no snapshots return explicit unavailable marker (AD-A5).
+    engagement_rate per post = engagements / impressions, NULL-safe (NULLIF).
     Never 500s (AD-A10).
     """
     # All published Meta posts for this client (joined with campaign info)
@@ -148,13 +169,21 @@ async def get_client_post_metrics(
 
     post_ids = [str(p["published_post_id"]) for p in posts]
 
-    # Latest snapshot per post (bulk DISTINCT ON)
+    # Latest snapshot per post (bulk DISTINCT ON), including component columns
     latest_result = await session.execute(
         text("""
             SELECT DISTINCT ON (published_post_id)
                 published_post_id,
                 impressions,
                 engagements,
+                likes,
+                comments,
+                shares,
+                CASE
+                    WHEN NULLIF(impressions, 0) IS NOT NULL
+                    THEN engagements::float / impressions::float
+                    ELSE NULL
+                END AS engagement_rate,
                 captured_at,
                 unavailable_reason
             FROM post_metrics
@@ -228,6 +257,10 @@ async def get_client_post_metrics(
                     campaign_excerpt=post["campaign_excerpt"],
                     latest_impressions=None,
                     latest_engagements=None,
+                    latest_likes=None,
+                    latest_comments=None,
+                    latest_shares=None,
+                    engagement_rate=None,
                     permalink=post["permalink"],
                     captured_at=None,
                     series=[],
@@ -235,8 +268,6 @@ async def get_client_post_metrics(
                 )
             )
         else:
-            # If all values in series are null and unavailable_reason is set,
-            # still pass through the unavailable_reason so the UI can display it.
             items.append(
                 PostMetricItem(
                     published_post_id=uuid.UUID(pid),
@@ -245,6 +276,10 @@ async def get_client_post_metrics(
                     campaign_excerpt=post["campaign_excerpt"],
                     latest_impressions=int(snap["impressions"]) if snap["impressions"] is not None else None,
                     latest_engagements=int(snap["engagements"]) if snap["engagements"] is not None else None,
+                    latest_likes=int(snap["likes"]) if snap["likes"] is not None else None,
+                    latest_comments=int(snap["comments"]) if snap["comments"] is not None else None,
+                    latest_shares=int(snap["shares"]) if snap["shares"] is not None else None,
+                    engagement_rate=float(snap["engagement_rate"]) if snap["engagement_rate"] is not None else None,
                     permalink=post["permalink"],
                     captured_at=snap["captured_at"],
                     series=series_map.get(pid, []),

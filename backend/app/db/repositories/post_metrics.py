@@ -21,6 +21,9 @@ async def bulk_insert_snapshots(
             captured_at=snap.captured_at,
             impressions=snap.impressions,
             engagements=snap.engagements,
+            likes=snap.likes,
+            comments=snap.comments,
+            shares=snap.shares,
             raw=snap.raw,
             unavailable_reason=snap.unavailable_reason,
         )
@@ -97,5 +100,8 @@ class MetricSnapshotRow:
     captured_at: datetime
     impressions: Optional[int]
     engagements: Optional[int]
+    likes: Optional[int]
+    comments: Optional[int]
+    shares: Optional[int]
     raw: dict
     unavailable_reason: Optional[str]

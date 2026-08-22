@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Heart, MessageCircle, Repeat2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -10,6 +10,43 @@ import type { PostMetricItem, SeriesPoint } from "@/hooks/usePostMetrics";
 import { fmt } from "@/lib/formatters";
 
 type PlatformFilter = "all" | "facebook_page" | "instagram" | "threads";
+
+const PLATFORM_NOUNS: Record<string, { comments: string; shares: string }> = {
+  facebook_page: { comments: "Comments", shares: "Shares" },
+  instagram:     { comments: "Comments", shares: "Shares" },
+  threads:       { comments: "Replies",  shares: "Reposts" },
+};
+
+function fmtComponent(n: number | null | undefined): string {
+  return n == null ? "—" : fmt(n);
+}
+
+interface EngagementBreakdownProps {
+  platform: string;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+}
+
+function EngagementBreakdown({ platform, likes, comments, shares }: EngagementBreakdownProps) {
+  const nouns = PLATFORM_NOUNS[platform] ?? { comments: "Comments", shares: "Shares" };
+  return (
+    <div className="flex items-center gap-3 mt-1 font-mono text-xs text-graphite">
+      <span className="inline-flex items-center gap-1">
+        <Heart className="size-3" aria-hidden="true" />
+        <span aria-label={`${fmtComponent(likes)} likes`}>{fmtComponent(likes)}</span>
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <MessageCircle className="size-3" aria-hidden="true" />
+        <span aria-label={`${fmtComponent(comments)} ${nouns.comments.toLowerCase()}`}>{fmtComponent(comments)}</span>
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <Repeat2 className="size-3" aria-hidden="true" />
+        <span aria-label={`${fmtComponent(shares)} ${nouns.shares.toLowerCase()}`}>{fmtComponent(shares)}</span>
+      </span>
+    </div>
+  );
+}
 
 const FILTER_OPTIONS: { value: PlatformFilter; label: string; platform?: string }[] = [
   { value: "all", label: "All" },
@@ -225,7 +262,15 @@ export function PostMetricsTable({ items, isLoading }: Props) {
                       {isUnavailable ? (
                         <PlatformUnavailableState reason={item.unavailable_reason} />
                       ) : (
-                        fmt(item.latest_engagements)
+                        <div className="flex flex-col items-end">
+                          <span>{fmt(item.latest_engagements)}</span>
+                          <EngagementBreakdown
+                            platform={item.platform}
+                            likes={item.latest_likes}
+                            comments={item.latest_comments}
+                            shares={item.latest_shares}
+                          />
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">

@@ -112,6 +112,7 @@ These bind here by their **original** ids/names from `architecture.md` — read-
 - **Binds:** Alembic migration, `models/`
 - **Prevents:** schema sprawl (per-platform metrics tables, a metrics-column explosion on `campaigns`).
 - **Rule:** the epic adds **exactly one** new table `post_metrics` (append-only snapshots) and **one** field (`platform_post_id` + `permalink`) on the existing per-platform publish representation (AD-A4). Cross-platform display reads normalized columns on `post_metrics`; platform-specific extras live in its `raw` JSONB. The only new `jobs.job_type` value is `"metrics_poll"`. No new campaign field, no new job store.
+- **Amendment (Story 24.4, 2026-08-21):** the normalized column set is widened from `(impressions, engagements)` to also include `(likes, comments, shares)` — a bounded, platform-universal set of engagement components. `engagements` formula is unchanged. Unbounded platform-specific extras (saves, quotes) remain in `raw` only. This is the only intentional deviation; all other AD-A7 constraints remain.
 
 ### AD-A8 — LinkedIn analytics: organization path is live now; member path is gated
 

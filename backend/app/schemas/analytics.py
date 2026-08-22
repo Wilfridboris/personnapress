@@ -23,6 +23,10 @@ class ClientSummaryResponse(BaseModel):
     client_id: uuid.UUID
     total_impressions: Optional[int]
     total_engagements: Optional[int]
+    total_likes: Optional[int]
+    total_comments: Optional[int]
+    total_shares: Optional[int]
+    engagement_rate: Optional[float]
     posts_tracked: int
     best_post: Optional[BestPost]
     freshest_captured_at: Optional[datetime]
@@ -35,6 +39,10 @@ class PostMetricItem(BaseModel):
     campaign_excerpt: Optional[str]
     latest_impressions: Optional[int]
     latest_engagements: Optional[int]
+    latest_likes: Optional[int]
+    latest_comments: Optional[int]
+    latest_shares: Optional[int]
+    engagement_rate: Optional[float]
     permalink: Optional[str]
     captured_at: Optional[datetime]
     series: list[SeriesPoint]

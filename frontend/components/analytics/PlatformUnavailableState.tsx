@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useId, useCallback } from "react";
 import { Info } from "lucide-react";
 
 type UnavailabilityReason =
-  | "facebook_under_100_likes"
+  | "page_under_100_likes"
   | "permission_missing"
   | "no_snapshot"
   | string
@@ -15,7 +15,7 @@ interface Props {
 }
 
 const REASON_COPY: Record<string, string> = {
-  facebook_under_100_likes:
+  page_under_100_likes:
     "Facebook only provides post insights for Pages with 100+ likes. Analytics will appear here once this Page reaches that threshold.",
   permission_missing:
     "Analytics permissions have not been granted for this platform. Reconnect the platform and enable insights permissions to start tracking.",

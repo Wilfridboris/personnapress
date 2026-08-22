@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 24-4-post-engagement-metric-breakdown (2026-08-21)
+
+- Sentry breadcrumb on subcode-33 runs unconditionally on every under-100-likes FB hit — will persist in production indefinitely until someone removes it; acceptable for now as the breadcrumb is the diagnostic tool for settling the subcode-33 uncertainty per AC #12
+- `extract_components_from_raw` early-exit on `not raw.get("data")` drops FB `_object` data in the edge case where insights returned 200 with empty data list; only triggered for a brand-new or invalid post response, not normal operation
+- `MetricSnapshotRow.raw: dict` is typed as non-Optional but the DB column is nullable; pre-existing type annotation inaccuracy in the duck type; no runtime impact since MetricSnapshot.raw always defaults to {}
+
 ## Deferred from: code review of 20-9-roadmap-card-inline-image-upload (2026-08-21)
 
 - Read-only placeholder shows UploadCloud icon when no image [PostCard.tsx:240] — pre-existing cosmetic UX issue; `!canEditImage` branch retained original appearance per story spec; low priority cleanup

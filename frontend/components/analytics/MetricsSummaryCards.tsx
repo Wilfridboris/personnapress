@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Heart, MessageCircle, Repeat2 } from "lucide-react";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { ClientSummary } from "@/hooks/usePostMetrics";
@@ -18,6 +18,15 @@ function SummaryCard({ label, children }: CardProps) {
       <div className="font-display text-2xl font-bold text-ink truncate">{children}</div>
     </div>
   );
+}
+
+function fmtPct(rate: number | null | undefined): string {
+  if (rate == null) return "N/A";
+  return `${(rate * 100).toFixed(1)}%`;
+}
+
+function fmtComponent(n: number | null | undefined): string {
+  return n == null ? "—" : fmt(n);
 }
 
 interface Props {
@@ -50,11 +59,29 @@ export function MetricsSummaryCards({ summary, isLoading }: Props) {
       </SummaryCard>
 
       <SummaryCard label="Total Engagements">
-        {fmt(summary?.total_engagements)}
+        <span className="flex flex-col gap-0.5">
+          <span>{fmt(summary?.total_engagements)}</span>
+          {(summary?.total_likes != null || summary?.total_comments != null || summary?.total_shares != null) && (
+            <span className="flex items-center gap-3 font-mono text-xs font-normal text-graphite">
+              <span className="inline-flex items-center gap-1">
+                <Heart className="size-3" aria-hidden="true" />
+                <span aria-label={`${fmtComponent(summary?.total_likes)} likes`}>{fmtComponent(summary?.total_likes)}</span>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <MessageCircle className="size-3" aria-hidden="true" />
+                <span aria-label={`${fmtComponent(summary?.total_comments)} comments`}>{fmtComponent(summary?.total_comments)}</span>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Repeat2 className="size-3" aria-hidden="true" />
+                <span aria-label={`${fmtComponent(summary?.total_shares)} shares`}>{fmtComponent(summary?.total_shares)}</span>
+              </span>
+            </span>
+          )}
+        </span>
       </SummaryCard>
 
-      <SummaryCard label="Posts Tracked">
-        {summary?.posts_tracked ?? 0}
+      <SummaryCard label="Engagement Rate">
+        {fmtPct(summary?.engagement_rate)}
       </SummaryCard>
 
       <SummaryCard label="Best-Performing Post">
