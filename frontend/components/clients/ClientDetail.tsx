@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
@@ -142,6 +143,12 @@ export function ClientDetail({ client }: Props) {
   const [deleting, setDeleting] = useState(false);
   const deleteBtnRef = useRef<HTMLButtonElement>(null);
 
+  // ── Refresh modal ─────────────────────────────────────────────────────────
+  const [showRefreshModal, setShowRefreshModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const refreshBtnRef = useRef<HTMLButtonElement>(null);
+
   // ── File upload panel ref (used by low-confidence banner) ─────────────────
   const fileUploadRef = useRef<FileUploadPanelHandle>(null);
 
@@ -202,6 +209,21 @@ export function ClientDetail({ client }: Props) {
       setShowDeleteModal(false);
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleRefreshConfirm = async () => {
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      const { job_id } = await clientsApi.ingest(client.id);
+      setJobId(String(job_id));
+      setHasVoiceProfile(false);
+      setShowRefreshModal(false);
+    } catch (err: unknown) {
+      setRefreshError(err instanceof Error ? err.message : "Failed to start re-analysis.");
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -342,6 +364,14 @@ export function ClientDetail({ client }: Props) {
                 Profile ready
               </p>
               <p className="text-sm text-ink">Voice profile has been generated.</p>
+              <button
+                ref={refreshBtnRef}
+                onClick={() => setShowRefreshModal(true)}
+                className={`${secondaryBtn} inline-flex items-center gap-2 mt-4`}
+              >
+                <RefreshCw className="size-4" aria-hidden="true" />
+                Refresh voice profile
+              </button>
             </div>
           </div>
         )}
@@ -399,6 +429,20 @@ export function ClientDetail({ client }: Props) {
         confirmVariant="danger"
         isLoading={deleting}
         triggerRef={deleteBtnRef}
+      />
+
+      {/* ── Refresh voice profile confirmation modal ─────────────────── */}
+      <ConfirmModal
+        isOpen={showRefreshModal}
+        onClose={() => { setShowRefreshModal(false); setRefreshError(null); }}
+        onConfirm={handleRefreshConfirm}
+        title="Re-analyze voice profile?"
+        description={`This will rebuild ${client.name}'s voice profile from the current website content and uploaded files. Uploaded files are kept. Voice questionnaire answers are not re-applied. This action cannot be undone.`}
+        confirmLabel="Re-analyze"
+        confirmVariant="primary"
+        isLoading={refreshing}
+        triggerRef={refreshBtnRef}
+        error={refreshError}
       />
     </>
   );
