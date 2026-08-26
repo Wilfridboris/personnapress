@@ -629,3 +629,83 @@ async def test_generate_blog_default_mode_still_injects_tldr(mock_client):
     )
     result = await generate_blog("dump", _VALID_BVP, thinking_tokens=0, generation_mode="generate")
     assert '<div class="tldr">' in result
+
+
+# ── generate_social_standalone: assist mode (Story 3.29) ──────────────────────
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_assist_mode_uses_assist_prompt(mock_client):
+    """generation_mode='assist' sends _SOCIAL_STANDALONE_ASSIST_PROMPT to Anthropic."""
+    from app.integrations import anthropic_client
+
+    captured_prompt = []
+
+    async def capture(**kwargs):
+        captured_prompt.append(kwargs.get("messages", [{}])[0].get("content", ""))
+        return _make_anthropic_response(_VALID_STANDALONE_SOCIAL_JSON)
+
+    mock_client.messages.create = AsyncMock(side_effect=capture)
+    await anthropic_client.generate_social_standalone(
+        "My finished post.", _VALID_BVP, generation_mode="assist"
+    )
+
+    prompt_text = captured_prompt[0]
+    assert "stand alone" not in prompt_text
+    assert "My finished post." in prompt_text
+    assert "own sentences" in prompt_text or "own wording" in prompt_text
+    assert "BRAND VOICE PROFILE" not in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_generate_mode_unchanged(mock_client):
+    """Default mode still uses _SOCIAL_STANDALONE_PROMPT."""
+    from app.integrations import anthropic_client
+
+    captured_prompt = []
+
+    async def capture(**kwargs):
+        captured_prompt.append(kwargs.get("messages", [{}])[0].get("content", ""))
+        return _make_anthropic_response(_VALID_STANDALONE_SOCIAL_JSON)
+
+    mock_client.messages.create = AsyncMock(side_effect=capture)
+    await anthropic_client.generate_social_standalone("brain dump", _VALID_BVP, generation_mode="generate")
+
+    prompt_text = captured_prompt[0]
+    assert "stand alone" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_none_mode_defaults_to_generate(mock_client):
+    """generation_mode=None (roadmap default) coerces to generate mode."""
+    from app.integrations import anthropic_client
+
+    captured_prompt = []
+
+    async def capture(**kwargs):
+        captured_prompt.append(kwargs.get("messages", [{}])[0].get("content", ""))
+        return _make_anthropic_response(_VALID_STANDALONE_SOCIAL_JSON)
+
+    mock_client.messages.create = AsyncMock(side_effect=capture)
+    await anthropic_client.generate_social_standalone("brain dump", _VALID_BVP, generation_mode=None)
+
+    prompt_text = captured_prompt[0]
+    assert "stand alone" in prompt_text
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.anthropic_client._client")
+async def test_generate_social_standalone_assist_returns_valid_five_key_dict(mock_client):
+    """Assist mode still validates the 5-key JSON shape and returns a dict."""
+    from app.integrations.anthropic_client import generate_social_standalone
+
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response(_VALID_STANDALONE_SOCIAL_JSON)
+    )
+    result = await generate_social_standalone("My post.", _VALID_BVP, generation_mode="assist")
+    for key in ("x_post", "linkedin_post", "instagram_caption", "facebook_post", "threads_post"):
+        assert key in result
+        assert isinstance(result[key], str)
+        assert result[key]

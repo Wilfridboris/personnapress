@@ -290,7 +290,7 @@ export default function NewCampaignPage() {
         skip_image: !generateImage,
         target_word_count: campaignType === "blog_full" ? targetLength : null,
         article_template: campaignType === "blog_full" ? articleTemplate : null,
-        generation_mode: campaignType === "blog_full" ? generationMode : null,
+        generation_mode: generationMode,
       });
       setBrainDump("");
       setTargetKeyword("");
@@ -518,7 +518,10 @@ export default function NewCampaignPage() {
           value={brainDump}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder={`e.g. "I ran a 90-day test comparing 3 LinkedIn posting strategies, daily tips vs. 3x storytelling vs. 2x case studies. Case studies drove 4x more DMs. Most people post daily tips because it feels safe. Here's what I found and why I switched..."`}
+          placeholder={generationMode === "assist"
+            ? "Paste the post you already wrote. It will be kept as written, only cleaned up and fit to each platform."
+            : `e.g. "I ran a 90-day test comparing 3 LinkedIn posting strategies, daily tips vs. 3x storytelling vs. 2x case studies. Case studies drove 4x more DMs. Most people post daily tips because it feels safe. Here's what I found and why I switched..."`
+          }
           className={cn(
             "w-full bg-transparent resize-none font-mono text-sm text-ink leading-[1.7]",
             "border-0 border-b border-ink/20 focus:border-b-2 focus:border-ink",
@@ -607,11 +610,12 @@ export default function NewCampaignPage() {
         </div>
       </div>
 
+      <GenerationModeSelector value={generationMode} onChange={setGenerationMode} contentType={campaignType} />
+
       <div className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
         campaignType === "blog_full" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
       }`}>
         <div className="overflow-hidden" aria-hidden={campaignType === "social_only" || undefined}>
-          <GenerationModeSelector value={generationMode} onChange={setGenerationMode} />
           {generationMode === "generate" && (
             <>
               <LengthSelector value={targetLength} onChange={setTargetLength} />

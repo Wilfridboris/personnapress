@@ -19,6 +19,7 @@ from app.integrations.generation_prompts import (
     _BLOG_PROMPT,
     _FIDELITY_PROMPT,
     _SOCIAL_PROMPT,
+    _SOCIAL_STANDALONE_ASSIST_PROMPT,
     _SOCIAL_STANDALONE_PROMPT,
     _WEEK_PLAN_PROMPT,
     _build_seo_section,
@@ -439,6 +440,7 @@ async def generate_social_standalone(
     thinking_tokens: int = 0,
     angle: str | None = None,
     hook: str | None = None,
+    generation_mode: str | None = None,
 ) -> dict:
     """Generate standalone social posts for Plan My Week (no blog exists).
 
@@ -450,70 +452,78 @@ async def generate_social_standalone(
     When angle/hook are provided (roadmap path), an ANGLE DIRECTIVE is injected
     into the prompt to commit the post to one specific angle. When None (social_only
     brain-dump campaigns), behavior is identical to the pre-20.8 implementation.
+
+    When generation_mode='assist', uses _SOCIAL_STANDALONE_ASSIST_PROMPT to preserve
+    the author's own wording and only adapt it to each platform's format.
     """
-    if brand_voice_profile:
-        bvp_without_voice = {k: v for k, v in brand_voice_profile.items() if k != "voice_brief"}
-        bvp_json = json.dumps(bvp_without_voice)
-        tone_list = ", ".join(str(t) for t in brand_voice_profile.get("tone", []))
-        cadence = brand_voice_profile.get("cadence") or {}
-        avg_sentence_length = cadence.get("avg_sentence_length") or 15
-        variation_pattern = str(cadence.get("variation_pattern") or "").strip()
-        paragraph_structure = str(cadence.get("paragraph_structure") or "").strip()
-        cadence_parts = [f"avg sentence length {avg_sentence_length} words"]
-        if variation_pattern:
-            cadence_parts.append(f'sentence variation: "{variation_pattern}"')
-        if paragraph_structure:
-            cadence_parts.append(f'paragraph structure: "{paragraph_structure}"')
-        cadence_instruction = "; ".join(cadence_parts)
+    is_assist = (generation_mode or "generate") == "assist"
+
+    if is_assist:
+        prompt = _SOCIAL_STANDALONE_ASSIST_PROMPT.format(brain_dump=brain_dump)
     else:
-        bvp_json = _DEFAULT_VOICE
-        tone_list = "professional, clear, authoritative"
-        cadence_instruction = "avg sentence length 15 words"
+        if brand_voice_profile:
+            bvp_without_voice = {k: v for k, v in brand_voice_profile.items() if k != "voice_brief"}
+            bvp_json = json.dumps(bvp_without_voice)
+            tone_list = ", ".join(str(t) for t in brand_voice_profile.get("tone", []))
+            cadence = brand_voice_profile.get("cadence") or {}
+            avg_sentence_length = cadence.get("avg_sentence_length") or 15
+            variation_pattern = str(cadence.get("variation_pattern") or "").strip()
+            paragraph_structure = str(cadence.get("paragraph_structure") or "").strip()
+            cadence_parts = [f"avg sentence length {avg_sentence_length} words"]
+            if variation_pattern:
+                cadence_parts.append(f'sentence variation: "{variation_pattern}"')
+            if paragraph_structure:
+                cadence_parts.append(f'paragraph structure: "{paragraph_structure}"')
+            cadence_instruction = "; ".join(cadence_parts)
+        else:
+            bvp_json = _DEFAULT_VOICE
+            tone_list = "professional, clear, authoritative"
+            cadence_instruction = "avg sentence length 15 words"
 
-    voice_brief = (brand_voice_profile or {}).get("voice_brief") or ""
-    if voice_brief:
-        linkedin_voice_section = (
-            "\nLINKEDIN BRAND VOICE (apply to linkedin_post only -- do not apply to x_post):\n"
-            f"{voice_brief}\n"
-        )
-        instagram_voice_section = (
-            "\nINSTAGRAM BRAND VOICE (apply to instagram_caption only):\n"
-            f"{voice_brief}\n"
-        )
-        facebook_voice_section = (
-            "\nFACEBOOK BRAND VOICE (apply to facebook_post only):\n"
-            f"{voice_brief}\n"
-        )
-        sentences = [s.strip() for s in voice_brief.split(". ") if s.strip()]
-        brief_excerpt = ". ".join(sentences[:2])
-        if brief_excerpt and not brief_excerpt.endswith("."):
-            brief_excerpt += "."
-        threads_voice_section = (
-            "\nTHREADS BRAND VOICE (apply to threads_post only -- keep it raw and unpolished; "
-            "voice is for register, not formality):\n"
-            f"{brief_excerpt}\n"
-        )
-    else:
-        linkedin_voice_section = ""
-        instagram_voice_section = ""
-        facebook_voice_section = ""
-        threads_voice_section = ""
+        voice_brief = (brand_voice_profile or {}).get("voice_brief") or ""
+        if voice_brief:
+            linkedin_voice_section = (
+                "\nLINKEDIN BRAND VOICE (apply to linkedin_post only -- do not apply to x_post):\n"
+                f"{voice_brief}\n"
+            )
+            instagram_voice_section = (
+                "\nINSTAGRAM BRAND VOICE (apply to instagram_caption only):\n"
+                f"{voice_brief}\n"
+            )
+            facebook_voice_section = (
+                "\nFACEBOOK BRAND VOICE (apply to facebook_post only):\n"
+                f"{voice_brief}\n"
+            )
+            sentences = [s.strip() for s in voice_brief.split(". ") if s.strip()]
+            brief_excerpt = ". ".join(sentences[:2])
+            if brief_excerpt and not brief_excerpt.endswith("."):
+                brief_excerpt += "."
+            threads_voice_section = (
+                "\nTHREADS BRAND VOICE (apply to threads_post only -- keep it raw and unpolished; "
+                "voice is for register, not formality):\n"
+                f"{brief_excerpt}\n"
+            )
+        else:
+            linkedin_voice_section = ""
+            instagram_voice_section = ""
+            facebook_voice_section = ""
+            threads_voice_section = ""
 
-    bvp_structure_hints = _build_standalone_voice_injection(brand_voice_profile or {})
-    social_universal_rules = _build_social_universal_rules(
-        brand_voice_profile or {}, tone_list, cadence_instruction
-    )
+        bvp_structure_hints = _build_standalone_voice_injection(brand_voice_profile or {})
+        social_universal_rules = _build_social_universal_rules(
+            brand_voice_profile or {}, tone_list, cadence_instruction
+        )
 
-    prompt = _SOCIAL_STANDALONE_PROMPT.format(
-        bvp_json=bvp_json,
-        linkedin_voice_section=linkedin_voice_section,
-        instagram_voice_section=instagram_voice_section,
-        facebook_voice_section=facebook_voice_section,
-        threads_voice_section=threads_voice_section,
-        bvp_structure_hints=bvp_structure_hints,
-        social_universal_rules=social_universal_rules,
-        brain_dump=brain_dump,
-    )
+        prompt = _SOCIAL_STANDALONE_PROMPT.format(
+            bvp_json=bvp_json,
+            linkedin_voice_section=linkedin_voice_section,
+            instagram_voice_section=instagram_voice_section,
+            facebook_voice_section=facebook_voice_section,
+            threads_voice_section=threads_voice_section,
+            bvp_structure_hints=bvp_structure_hints,
+            social_universal_rules=social_universal_rules,
+            brain_dump=brain_dump,
+        )
 
     if angle:
         display_label = ANGLE_LABELS.get(angle, angle)

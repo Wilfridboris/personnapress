@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 3-29-social-only-assist-mode (2026-08-25)
+
+- `brain_dump` curly-brace format-injection: `str.format(brain_dump=brain_dump)` raises KeyError if user draft contains `{unknown_key}`. Pre-existing pattern across all prompt `.format()` call sites in generate mode. Fix when hardening prompt-building generally.
+- `angle`+`assist` simultaneous use: if a future caller supplies both `angle` and `generation_mode="assist"`, the angle directive is appended to the assist prompt which was not designed to receive it. No current call path combines both; safe to revisit if roadmap/assist integration is ever explored.
+- Double-dash in BVP voice section strings: `"apply to linkedin_post only -- do not apply to x_post"` in the generate-mode BVP injection sections uses `--`. Not touched by this diff; pre-existing.
+
 ## Deferred from: code review of 24-4-post-engagement-metric-breakdown (2026-08-21)
 
 - Sentry breadcrumb on subcode-33 runs unconditionally on every under-100-likes FB hit — will persist in production indefinitely until someone removes it; acceptable for now as the breadcrumb is the diagnostic tool for settling the subcode-33 uncertainty per AC #12

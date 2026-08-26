@@ -402,6 +402,7 @@ async def run_social_only_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
             campaign.brain_dump,
             brand_voice_profile,
             _SOCIAL_THINKING_TOKENS,
+            generation_mode=campaign.generation_mode,
         )
 
         x_post = social.get("x_post")

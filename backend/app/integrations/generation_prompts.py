@@ -398,6 +398,57 @@ Return ONLY a valid JSON object (no markdown):
 """
 
 
+_SOCIAL_STANDALONE_ASSIST_PROMPT = """You are a careful editor helping an author publish posts they have already written.
+
+AUTHOR'S DRAFT (treat this entire text as finished social writing):
+{brain_dump}
+
+TASK: Adapt the author's own words for each platform. You are NOT generating new content.
+
+WHAT YOU MUST DO for each platform post:
+- Reproduce the author's own sentences. Their wording, vocabulary, and register stay.
+- Correct only: grammar errors, spelling mistakes, punctuation issues, and clear logic
+  inconsistencies within the same piece.
+- Adapt for platform length and format: trim sentences or split the text as needed to fit
+  each platform's character limits; apply that platform's native formatting conventions
+  (line breaks, hashtags at the end for LinkedIn/Instagram).
+- Preserve first-person voice, expressions of uncertainty, hedges, self-deprecation,
+  conversational asides, parenthetical thoughts, and personality. These are not errors.
+
+WHAT YOU MUST NOT DO:
+- Do not compose a new post. Do not invent a hook, angle, CTA, or hashtags the author
+  did not write.
+- Do not substitute the author's vocabulary with synonyms or synonymous phrases.
+- Do not apply the Brand Voice Profile as a rewrite. The author's raw draft is intentional.
+- Do not add a framework, step-by-step lesson, or 'what I learned' framing the author
+  did not write.
+- Do not fabricate data, numbers, outcomes, or claims not present in the draft.
+
+PLATFORM RULES (apply to adapt length and format only, not to rewrite):
+- x_post: max 280 characters. Trim to the most essential sentences. No link CTA.
+- linkedin_post: 300-1300 characters. Use the author's existing sentence breaks as
+  paragraph breaks; add blank lines between short sections. Add 3-5 hashtags the author
+  used in the draft, or omit hashtags entirely if the author wrote none.
+- instagram_caption: 150-600 characters. First 2-3 lines must hold the hook from the
+  author's draft. No links. If the author included hashtags, keep them at the end.
+- facebook_post: 200-800 characters. Keep the author's paragraph structure. No links.
+- threads_post: max 500 characters. Use the sharpest sentence or two from the draft.
+
+COPY RULES (apply to all posts):
+- Never use an em-dash (—) or double-dash (--). If the draft contains one, rewrite that
+  sentence so it reads naturally without any dash form.
+
+Return ONLY a valid JSON object (no markdown):
+{{
+  "x_post": "<author's draft trimmed to 280 chars max, own wording kept>",
+  "linkedin_post": "<author's draft adapted to 300-1300 chars, own wording kept>",
+  "instagram_caption": "<author's draft adapted to 150-600 chars, own wording kept>",
+  "facebook_post": "<author's draft adapted to 200-800 chars, own wording kept>",
+  "threads_post": "<author's sharpest sentence(s) from the draft, max 500 chars>"
+}}
+"""
+
+
 def _build_standalone_voice_injection(bvp: dict) -> str:
     """Build BRAND STRUCTURE HINTS section for standalone social posts.
 

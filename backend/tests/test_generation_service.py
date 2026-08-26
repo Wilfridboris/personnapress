@@ -971,3 +971,63 @@ async def test_generate_social_only_threads_platform(mock_llm):
     assert campaign.x_post is None
     assert campaign.linkedin_post is None
     db.commit.assert_called_once()
+
+
+# ── run_social_only_pipeline: assist mode (Story 3.29) ────────────────────────
+
+@pytest.mark.asyncio
+@patch("app.services.generation._llm")
+async def test_run_social_only_pipeline_passes_assist_generation_mode(mock_llm):
+    """When campaign.generation_mode='assist', it is passed to generate_social_standalone."""
+    from app.services.generation import run_social_only_pipeline
+
+    job = _make_job()
+    campaign = _make_campaign()
+    campaign.generation_mode = "assist"
+    client = _make_client(bvp=_BVP)
+    db = _make_db_social_only(job, campaign, client)
+
+    mock_llm.generate_social_standalone = AsyncMock(
+        return_value={
+            "x_post": "My polished post.",
+            "linkedin_post": "My polished LinkedIn post. " * 40,
+            "instagram_caption": "My caption.",
+            "facebook_post": "My Facebook post.",
+            "threads_post": "My Threads post.",
+        }
+    )
+
+    await run_social_only_pipeline(job.id, db)
+
+    call_kwargs = mock_llm.generate_social_standalone.call_args
+    assert call_kwargs is not None
+    assert call_kwargs.kwargs.get("generation_mode") == "assist"
+
+
+@pytest.mark.asyncio
+@patch("app.services.generation._llm")
+async def test_run_social_only_pipeline_passes_generate_mode_as_default(mock_llm):
+    """When campaign.generation_mode=None, generate mode is passed (default path)."""
+    from app.services.generation import run_social_only_pipeline
+
+    job = _make_job()
+    campaign = _make_campaign()
+    campaign.generation_mode = None
+    client = _make_client(bvp=_BVP)
+    db = _make_db_social_only(job, campaign, client)
+
+    mock_llm.generate_social_standalone = AsyncMock(
+        return_value={
+            "x_post": "Generated X post.",
+            "linkedin_post": "Generated LinkedIn post. " * 40,
+            "instagram_caption": "Generated caption.",
+            "facebook_post": "Generated Facebook post.",
+            "threads_post": "Generated Threads post.",
+        }
+    )
+
+    await run_social_only_pipeline(job.id, db)
+
+    call_kwargs = mock_llm.generate_social_standalone.call_args
+    assert call_kwargs is not None
+    assert call_kwargs.kwargs.get("generation_mode") is None

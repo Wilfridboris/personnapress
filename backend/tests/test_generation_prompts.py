@@ -6,6 +6,7 @@ from app.integrations.generation_prompts import (
     _BLOG_PROMPT,
     _FIDELITY_PROMPT,
     _SOCIAL_PROMPT,
+    _SOCIAL_STANDALONE_ASSIST_PROMPT,
     _SOCIAL_STANDALONE_PROMPT,
     _build_social_universal_rules,
     _build_standalone_voice_injection,
@@ -576,3 +577,47 @@ class TestDefaultPromptSoftenedPreservation:
     def test_authored_passage_any_voice(self):
         lower = _BLOG_PROMPT.lower()
         assert "any voice" in lower or "non-first-person" in lower
+
+
+# ── _SOCIAL_STANDALONE_ASSIST_PROMPT tests (Story 3.29) ───────────────────────
+
+class TestSocialStandaloneAssistPrompt:
+    def test_contains_preservation_directive(self):
+        assert "own sentences" in _SOCIAL_STANDALONE_ASSIST_PROMPT or "own wording" in _SOCIAL_STANDALONE_ASSIST_PROMPT
+
+    def test_contains_per_platform_length_directives(self):
+        assert "x_post" in _SOCIAL_STANDALONE_ASSIST_PROMPT
+        assert "linkedin_post" in _SOCIAL_STANDALONE_ASSIST_PROMPT
+        assert "instagram_caption" in _SOCIAL_STANDALONE_ASSIST_PROMPT
+        assert "facebook_post" in _SOCIAL_STANDALONE_ASSIST_PROMPT
+        assert "threads_post" in _SOCIAL_STANDALONE_ASSIST_PROMPT
+
+    def test_contains_copy_rule_no_em_dash(self):
+        assert "em-dash" in _SOCIAL_STANDALONE_ASSIST_PROMPT
+        assert "double-dash" in _SOCIAL_STANDALONE_ASSIST_PROMPT or "--" in _SOCIAL_STANDALONE_ASSIST_PROMPT
+
+    def test_does_not_contain_composition_scaffolding(self):
+        prompt_lower = _SOCIAL_STANDALONE_ASSIST_PROMPT.lower()
+        assert "invent" not in prompt_lower or "do not invent" in prompt_lower
+        assert "compose a new post" not in prompt_lower or "do not compose" in prompt_lower
+
+    def test_instructs_against_em_dash_and_double_hyphen(self):
+        assert "em-dash" in _SOCIAL_STANDALONE_ASSIST_PROMPT
+        assert "--" in _SOCIAL_STANDALONE_ASSIST_PROMPT
+
+    def test_no_double_hyphen_separator_lines(self):
+        import re
+        lines = _SOCIAL_STANDALONE_ASSIST_PROMPT.splitlines()
+        separator_lines = [l for l in lines if re.match(r"^-{2,}\s*$", l.strip())]
+        assert separator_lines == []
+
+    def test_same_json_output_shape_as_standalone_prompt(self):
+        for key in ("x_post", "linkedin_post", "instagram_caption", "facebook_post", "threads_post"):
+            assert f'"{key}"' in _SOCIAL_STANDALONE_ASSIST_PROMPT
+
+    def test_preserves_first_person_voice(self):
+        assert "first-person" in _SOCIAL_STANDALONE_ASSIST_PROMPT
+
+    def test_does_not_apply_bvp_as_rewrite(self):
+        assert "Brand Voice Profile" in _SOCIAL_STANDALONE_ASSIST_PROMPT
+        assert "do not apply the brand voice profile" in _SOCIAL_STANDALONE_ASSIST_PROMPT.lower()
