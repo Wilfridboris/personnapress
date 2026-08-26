@@ -1,5 +1,14 @@
 # Deferred Work
 
+## Deferred from: code review of 23-3-homepage-conversion-redesign (2026-08-26)
+
+- Pillar 1 H2 echoes "Built For" eyebrow label [frontend/app/page.tsx:260] — spec specified this copy via /human-seo-copywriter; refine in next copy iteration
+- Hero CTA links to /dashboard (auth-only route) [frontend/app/page.tsx:237] — pre-existing behavior; the auth middleware handles redirect to signup/login
+- Removed "#workflow" fragment anchor [frontend/app/page.tsx] — the anchor was only used as a self-link on this page; no known external deep-links
+- FAQ "read-only state for 30 days" claim [frontend/app/page.tsx:173] — pre-existing claim from original FAQ; verify product behavior before scaling traffic
+- Pricing CTA labels inconsistent: Start Free / Start Free Trial / Book a Demo [frontend/app/page.tsx:452] — pre-existing; pricing section not in scope for this story's redesign
+- Hero "every word" vs trigger band "every post" copy variation [frontend/app/page.tsx:233,407] — intentional variation to avoid repetition across sections; acceptable in conversion copy
+
 ## Deferred from: code review of fix-rescan-preserve-profile-on-failure (2026-08-25)
 
 - P3 guard removed — client deleted between auth check and `create_job` call now returns 500 instead of 404. Spec task 1.2 explicitly accepted this as an existing TOCTOU window (the old null-write guard was already subject to the same race). Revisit if TOCTOU hardening is done project-wide.
