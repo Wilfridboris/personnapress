@@ -79,8 +79,8 @@ async def test_ingest_returns_403_when_wrong_owner():
 # ── Happy path ────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_ingest_nulls_bvp_creates_job_dispatches_worker():
-    """AC#3: BVP is nulled, job created, worker dispatched, 202 + job_id returned."""
+async def test_ingest_preserves_bvp_creates_job_dispatches_worker():
+    """AC#1: BVP is NOT nulled, job created, worker dispatched, 202 + job_id returned."""
     user_id = uuid.uuid4()
     client = _make_client(user_id=user_id, with_url=True)
     job = _make_job()
@@ -89,7 +89,7 @@ async def test_ingest_nulls_bvp_creates_job_dispatches_worker():
     with (
         patch("app.routers.clients.get_client", new=AsyncMock(return_value=client)),
         patch("app.routers.clients.get_active_ingestion_job_for_client", new=AsyncMock(return_value=None)),
-        patch("app.routers.clients.update_client", new=AsyncMock(return_value=client)) as mock_update,
+        patch("app.routers.clients.update_client", new=AsyncMock()) as mock_update,
         patch("app.routers.clients.create_job", new=AsyncMock(return_value=job)) as mock_create_job,
         patch("app.routers.clients.ingest_worker") as mock_worker,
     ):
@@ -101,8 +101,8 @@ async def test_ingest_nulls_bvp_creates_job_dispatches_worker():
             db=db,
         )
 
-    # BVP nulled
-    mock_update.assert_awaited_once_with(db, client.id, brand_voice_profile=None)
+    # BVP must NOT be nulled by the endpoint
+    mock_update.assert_not_awaited()
     # Job created with correct type
     mock_create_job.assert_awaited_once()
     call_kwargs = mock_create_job.call_args
@@ -125,7 +125,6 @@ async def test_ingest_dispatches_worker_even_without_url():
     with (
         patch("app.routers.clients.get_client", new=AsyncMock(return_value=client)),
         patch("app.routers.clients.get_active_ingestion_job_for_client", new=AsyncMock(return_value=None)),
-        patch("app.routers.clients.update_client", new=AsyncMock(return_value=client)),
         patch("app.routers.clients.create_job", new=AsyncMock(return_value=job)),
         patch("app.routers.clients.ingest_worker") as mock_worker,
     ):
@@ -167,7 +166,6 @@ async def test_ingest_commits_before_background_task():
     with (
         patch("app.routers.clients.get_client", new=AsyncMock(return_value=client)),
         patch("app.routers.clients.get_active_ingestion_job_for_client", new=AsyncMock(return_value=None)),
-        patch("app.routers.clients.update_client", new=AsyncMock(return_value=client)),
         patch("app.routers.clients.create_job", new=AsyncMock(return_value=job)),
         patch("app.routers.clients.ingest_worker"),
     ):
@@ -197,7 +195,6 @@ async def test_ingest_returns_existing_job_if_active():
             "app.routers.clients.get_active_ingestion_job_for_client",
             new=AsyncMock(return_value=existing_job),
         ),
-        patch("app.routers.clients.update_client", new=AsyncMock()) as mock_update,
         patch("app.routers.clients.create_job", new=AsyncMock()) as mock_create,
     ):
         db = AsyncMock()
@@ -209,35 +206,5 @@ async def test_ingest_returns_existing_job_if_active():
         )
 
     assert result == {"job_id": str(existing_job.id)}
-    mock_update.assert_not_awaited()
     mock_create.assert_not_awaited()
     bg.add_task.assert_not_called()
-
-
-# ── update_client None guard (P3) ────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_ingest_returns_404_when_update_client_returns_none():
-    """P3: if update_client returns None (client deleted between auth and write), raise 404."""
-    user_id = uuid.uuid4()
-    client = _make_client(user_id=user_id)
-    bg = MagicMock()
-
-    with (
-        patch("app.routers.clients.get_client", new=AsyncMock(return_value=client)),
-        patch(
-            "app.routers.clients.get_active_ingestion_job_for_client",
-            new=AsyncMock(return_value=None),
-        ),
-        patch("app.routers.clients.update_client", new=AsyncMock(return_value=None)),
-    ):
-        db = AsyncMock()
-        with pytest.raises(HTTPException) as exc_info:
-            await trigger_voice_ingest(
-                client_id=client.id,
-                background_tasks=bg,
-                current_user={"user_id": str(user_id)},
-                db=db,
-            )
-
-    assert exc_info.value.status_code == 404

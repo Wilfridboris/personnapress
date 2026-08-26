@@ -2,7 +2,7 @@
 import sys
 from unittest.mock import MagicMock
 
-for _mod in ("resend", "sentry_sdk", "stripe", "replicate", "psycopg2"):
+for _mod in ("resend", "sentry_sdk", "stripe", "replicate", "psycopg2", "spacy", "textstat"):
     if _mod not in sys.modules:
         sys.modules[_mod] = MagicMock()
 

@@ -125,8 +125,10 @@ async def _run_ingestion(db: AsyncSession, job_id: uuid.UUID, client_id: uuid.UU
     combined_text = combined_text[:MAX_TEXT_CHARS]
 
     # 6. Extract voice profile — calls Gemini with 3-retry logic (Story 2.5)
+    # session=None: skip enrichment-merge so a rescan is always a clean Replace,
+    # and skip the mid-pipeline write so the existing BVP is untouched on failure.
     try:
-        voice_profile = await extract_voice_profile(combined_text, client.id, session=db)
+        voice_profile = await extract_voice_profile(combined_text, client.id, session=None)
     except VoiceExtractionError as exc:
         logger.exception(
             "ingest_worker: voice extraction failed for job %s: %s", job_id, exc

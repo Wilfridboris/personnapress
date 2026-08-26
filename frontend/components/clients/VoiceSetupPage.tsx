@@ -322,7 +322,14 @@ export function VoiceSetupPage({ client }: Props) {
   const [refreshError, setRefreshError] = useState<string | null>(null);
   // Track BVP in state so the review shows updated values after a completed refresh
   const [bvp, setBvp] = useState(client.brand_voice_profile);
+  // Non-blocking notice when a rescan fails but the previous profile was preserved
+  const [rescanFailed, setRescanFailed] = useState(
+    !!client.ingestion_failed && !!client.brand_voice_profile
+  );
   const refreshBtnRef = useRef<HTMLButtonElement>(null);
+  // Always-current bvp reference for use inside effects without adding bvp to deps
+  const bvpRef = useRef(bvp);
+  bvpRef.current = bvp;
 
   const { job } = useJobStatus(activeJobId);
 
@@ -339,6 +346,10 @@ export function VoiceSetupPage({ client }: Props) {
       // AC#4 / AC#6: check error_details to choose next state
       if (job.error_details === "no_content") {
         setView("questionnaire");
+      } else if (bvpRef.current) {
+        // Previous profile preserved on server; stay on review with a notice
+        setView("review");
+        setRescanFailed(true);
       } else {
         setView("failed");
       }
@@ -362,14 +373,13 @@ export function VoiceSetupPage({ client }: Props) {
   const handleRefreshConfirm = async () => {
     setRefreshing(true);
     setRefreshError(null);
-    setBvp(null); // P7: null BVP immediately so old profile isn't visible during the call
+    setRescanFailed(false);
     try {
       const { job_id } = await clientsApi.ingest(client.id);
       setShowRefreshModal(false);
       setActiveJobId(job_id);
       setView("in-progress");
     } catch {
-      setBvp(client.brand_voice_profile); // restore if the call failed
       setRefreshError("Failed to start re-analysis. Please try again.");
     } finally {
       setRefreshing(false);
@@ -398,6 +408,12 @@ export function VoiceSetupPage({ client }: Props) {
       <hr className="border-[#E5E5E5] mb-10" />
 
       {/* Content area */}
+      {rescanFailed && view === "review" && (
+        <p className="text-sm text-[#555555] mb-6">
+          The re-analysis could not be completed. Your previous profile has been kept.
+        </p>
+      )}
+
       {view === "review" && bvp && (
         <ExpandedProfileReview
           bvp={bvp}
@@ -427,7 +443,7 @@ export function VoiceSetupPage({ client }: Props) {
         onClose={() => { setShowRefreshModal(false); setRefreshError(null); }}
         onConfirm={handleRefreshConfirm}
         title="Re-analyze voice profile?"
-        description={`This will update ${client.name}'s voice profile with insights from the new content. Existing values are preserved where possible.`}
+        description={`This will replace ${client.name}'s voice profile with a freshly analyzed version. The previous profile will be kept if the analysis cannot complete.`}
         confirmLabel="Re-analyze"
         confirmVariant="primary"
         isLoading={refreshing}

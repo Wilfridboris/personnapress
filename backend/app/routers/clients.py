@@ -297,8 +297,9 @@ async def trigger_voice_ingest(
 ) -> dict:
     """Trigger (or re-trigger) voice profile ingestion for a client.
 
-    Nulls the existing BVP, creates a pending ingestion job, and dispatches
-    the ingest worker.  Returns ``{job_id}`` immediately (HTTP 202).
+    Creates a pending ingestion job and dispatches the ingest worker.
+    Returns ``{job_id}`` immediately (HTTP 202).  The existing BVP is
+    preserved until a new one is successfully extracted.
     """
     try:
         user_id = uuid.UUID(current_user["user_id"])
@@ -315,11 +316,6 @@ async def trigger_voice_ingest(
     active_job = await get_active_ingestion_job_for_client(db, client_id)
     if active_job:
         return {"job_id": str(active_job.id)}
-
-    # P3: Check update_client return to guard against client deleted between auth and write
-    updated = await update_client(db, client_id, brand_voice_profile=None)
-    if not updated:
-        raise HTTPException(status_code=404, detail=_NOT_FOUND)
 
     # P5: Wrap job creation in try/except to roll back if commit fails
     try:

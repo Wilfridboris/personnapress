@@ -1,5 +1,9 @@
 # Deferred Work
 
+## Deferred from: code review of fix-rescan-preserve-profile-on-failure (2026-08-25)
+
+- P3 guard removed — client deleted between auth check and `create_job` call now returns 500 instead of 404. Spec task 1.2 explicitly accepted this as an existing TOCTOU window (the old null-write guard was already subject to the same race). Revisit if TOCTOU hardening is done project-wide.
+
 ## Deferred from: code review of 3-29-social-only-assist-mode (2026-08-25)
 
 - `brain_dump` curly-brace format-injection: `str.format(brain_dump=brain_dump)` raises KeyError if user draft contains `{unknown_key}`. Pre-existing pattern across all prompt `.format()` call sites in generate mode. Fix when hardening prompt-building generally.

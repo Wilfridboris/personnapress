@@ -355,3 +355,124 @@ async def test_ingest_worker_no_url_skips_scraping(
     mock_scrape.assert_not_called()
     # job still completes via file text
     assert job.status == "complete"
+
+
+# ── ingest_worker: failure preserves existing BVP (AC#3) ─────────────────────
+
+@pytest.mark.asyncio
+@patch("app.workers.ingest.extract_voice_profile", new_callable=AsyncMock)
+@patch("app.workers.ingest.supabase_storage.list_files", new_callable=AsyncMock)
+@patch("app.workers.ingest.scrape_website", new_callable=AsyncMock)
+@patch("app.workers.ingest.AsyncSessionLocal")
+async def test_ingest_worker_failure_preserves_existing_bvp(
+    mock_session_cls,
+    mock_scrape,
+    mock_list_files,
+    mock_voice,
+):
+    """AC#3: a worker failure must not overwrite a pre-existing brand_voice_profile."""
+    from app.workers.ingest import ingest_worker
+    from app.services.ingestion import VoiceExtractionError
+
+    job_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+    job = _make_job(job_id=job_id)
+    prior_bvp = {"tone": ["authoritative"], "cadence": "measured"}
+    client = _make_client(client_id=client_id)
+    client.brand_voice_profile = prior_bvp  # pre-existing profile
+
+    db = _db_sequence(job, client)
+    ctx = AsyncMock()
+    ctx.__aenter__ = AsyncMock(return_value=db)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_session_cls.return_value = ctx
+
+    mock_scrape.return_value = "Some scraped content."
+    mock_list_files.return_value = []
+    mock_voice.side_effect = VoiceExtractionError("Gemini timeout")
+
+    await ingest_worker(job_id, client_id)
+
+    assert job.status == "failed"
+    # Profile must be unchanged — the worker must not overwrite it on failure
+    assert client.brand_voice_profile == prior_bvp
+
+
+# ── ingest_worker: Replace semantics (no enrichment-merge) (AC#4) ────────────
+
+@pytest.mark.asyncio
+@patch("app.workers.ingest.extract_voice_profile", new_callable=AsyncMock)
+@patch("app.workers.ingest.supabase_storage.list_files", new_callable=AsyncMock)
+@patch("app.workers.ingest.scrape_website", new_callable=AsyncMock)
+@patch("app.workers.ingest.AsyncSessionLocal")
+async def test_ingest_worker_calls_extract_with_session_none(
+    mock_session_cls,
+    mock_scrape,
+    mock_list_files,
+    mock_voice,
+):
+    """AC#4: ingest worker calls extract_voice_profile with session=None (Replace, not Enrich)."""
+    from app.workers.ingest import ingest_worker
+
+    job_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+    job = _make_job(job_id=job_id)
+    client = _make_client(client_id=client_id)
+    client.brand_voice_profile = {"tone": ["bold"]}  # pre-existing — must not be merged
+
+    fresh_profile = {"tone": ["calm"], "cadence": "relaxed"}
+    db = _db_sequence(job, client)
+    ctx = AsyncMock()
+    ctx.__aenter__ = AsyncMock(return_value=db)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_session_cls.return_value = ctx
+
+    mock_scrape.return_value = "Fresh content about a new tone."
+    mock_list_files.return_value = []
+    mock_voice.return_value = fresh_profile
+
+    await ingest_worker(job_id, client_id)
+
+    # extract_voice_profile must be called with session=None (not the db session).
+    # Assert kwargs directly so the check fails if session is accidentally passed positionally.
+    assert mock_voice.call_args.kwargs == {"session": None}
+    # On success the fresh profile fully replaces the old one (Replace, not merge)
+    assert client.brand_voice_profile == fresh_profile
+
+
+# ── ingest_worker: no_content early-exit preserves existing BVP (AC#3) ───────
+
+@pytest.mark.asyncio
+@patch("app.workers.ingest.supabase_storage.list_files", new_callable=AsyncMock)
+@patch("app.workers.ingest.scrape_website", new_callable=AsyncMock)
+@patch("app.workers.ingest.AsyncSessionLocal")
+async def test_ingest_worker_no_content_preserves_existing_bvp(
+    mock_session_cls,
+    mock_scrape,
+    mock_list_files,
+):
+    """AC#3: no_content early-exit must not touch a pre-existing brand_voice_profile."""
+    from app.workers.ingest import ingest_worker
+
+    job_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+    job = _make_job(job_id=job_id)
+    prior_bvp = {"tone": ["warm"], "cadence": "conversational"}
+    client = _make_client(client_id=client_id)
+    client.brand_voice_profile = prior_bvp
+
+    db = _db_sequence(job, client)
+    ctx = AsyncMock()
+    ctx.__aenter__ = AsyncMock(return_value=db)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_session_cls.return_value = ctx
+
+    # No content from scrape or files → triggers no_content early exit
+    mock_scrape.return_value = ""
+    mock_list_files.return_value = []
+
+    await ingest_worker(job_id, client_id)
+
+    assert job.status == "failed"
+    assert job.error_details == "no_content"
+    assert client.brand_voice_profile == prior_bvp

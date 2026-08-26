@@ -334,7 +334,9 @@ export function ClientDetail({ client }: Props) {
         ) : jobFailed ? (
           <div>
             <p className="text-sm text-graphite mb-4">
-              {`Couldn't extract content from ${domain || "the website"}. Complete the voice questionnaire to set up your profile.`}
+              {hasVoiceProfile
+                ? `The refresh could not be completed. Your previous profile has been kept. You can also complete the voice questionnaire to replace it.`
+                : `Couldn't extract content from ${domain || "the website"}. Complete the voice questionnaire to set up your profile.`}
             </p>
             <Link
               href={`/clients/${client.id}/voice?mode=questionnaire`}
