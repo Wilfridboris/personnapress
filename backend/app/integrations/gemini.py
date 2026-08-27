@@ -27,6 +27,7 @@ from app.integrations.generation_prompts import (
     _build_standalone_voice_injection,
     _build_template_structure,
     _build_voice_injection,
+    build_quick_read_override,
     _meta_voice_note,
     _strip_fences,
     _md_to_html,
@@ -279,16 +280,7 @@ async def generate_blog(
         word_count_range = _WORD_COUNT_MAP.get(target_word_count or "", "900-1,500 words")
 
         if target_word_count == "300-500":
-            length_override_section = (
-                "QUICK READ MODE (300-500 words):\n"
-                "- Strict word limit: 300-500 words total including all headings and HTML.\n"
-                "- OMIT the <div class=\"tldr\"> block entirely. Do not output it.\n"
-                "- OMIT the <h2>Frequently Asked Questions</h2> and <dl class=\"faq\"> block entirely.\n"
-                "- Write 1-2 H2 body sections only (not 3-4).\n"
-                "- The BLUF intro paragraph and conclusion are still required.\n"
-                "- Every sentence must earn its place. Cut anything that does not give the reader\n"
-                "  a new fact or a specific action."
-            )
+            length_override_section = build_quick_read_override(article_template)
         else:
             length_override_section = ""
 
@@ -322,7 +314,11 @@ async def generate_blog(
         h2_count = result.lower().count("<h2")
         if h2_count < 2:
             logger.warning("generate_blog: Gemini output has fewer than 2 H2 tags (%d found)", h2_count)
-        if '<div class="tldr">' not in result:
+        if (
+            (article_template or "").lower() not in ("listicle", "thought-leadership")
+            and target_word_count != "300-500"
+            and '<div class="tldr">' not in result
+        ):
             h1_close = result.lower().find("</h1>")
             if h1_close != -1:
                 insert_pos = h1_close + len("</h1>")

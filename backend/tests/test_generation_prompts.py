@@ -13,6 +13,7 @@ from app.integrations.generation_prompts import (
     _build_template_structure,
     _build_voice_injection,
     _strip_blog_trailer,
+    build_quick_read_override,
 )
 
 
@@ -371,6 +372,94 @@ class TestWordCountPrompt:
         prompt = self._build_prompt(target_word_count="1500-2500")
         assert "1,500-2,500 words" in prompt
         assert "QUICK READ MODE" not in prompt
+
+    def test_quick_read_listicle_no_h2_directive(self):
+        """Quick Read + Listicle: length_override_section has word-limit only, no H2 directive."""
+        override = build_quick_read_override("listicle")
+        assert "QUICK READ MODE" in override
+        assert "300" in override
+        assert "H2 body sections" not in override
+        assert "Write 1-2" not in override
+        assert "OMIT" not in override
+
+    def test_quick_read_standard_full_block(self):
+        """Quick Read + Standard template: full QUICK READ MODE block is present unchanged."""
+        override = build_quick_read_override("standard")
+        assert "QUICK READ MODE" in override
+        assert "Write 1-2 H2 body sections" in override
+        assert "OMIT the <div" in override
+
+    def test_quick_read_how_to_no_h2_directive(self):
+        """Quick Read + How-To: structural directives stripped, word-limit line present."""
+        override = build_quick_read_override("how-to")
+        assert "QUICK READ MODE" in override
+        assert "H2 body sections" not in override
+        assert "OMIT" not in override
+
+    def test_quick_read_thought_leadership_no_h2_directive(self):
+        """Quick Read + Thought-Leadership: structural directives stripped, word-limit line present."""
+        override = build_quick_read_override("thought-leadership")
+        assert "QUICK READ MODE" in override
+        assert "H2 body sections" not in override
+        assert "OMIT" not in override
+
+    def test_quick_read_none_template_full_block(self):
+        """Quick Read + None template: treated as standard, full block present."""
+        override = build_quick_read_override(None)
+        assert "QUICK READ MODE" in override
+        assert "Write 1-2 H2 body sections" in override
+        assert "OMIT the <div" in override
+
+
+# ── TL;DR injection guard tests: spec-fix-blog-template-injection ─────────────
+
+class TestTldrInjectionGuard:
+    """Tests for the TL;DR post-processing injection guard condition.
+
+    These tests verify the guard logic directly (without calling generate_blog,
+    which requires live LLM credentials). The guard fires when:
+      (article_template or "").lower() not in ("listicle", "thought-leadership")
+      AND target_word_count != "300-500"
+      AND '<div class="tldr">' not in result
+    """
+
+    def _should_inject_tldr(self, article_template, target_word_count, result_html):
+        """Mirror the guard condition from gemini.py / anthropic_client.py."""
+        return (
+            (article_template or "").lower() not in ("listicle", "thought-leadership")
+            and target_word_count != "300-500"
+            and '<div class="tldr">' not in result_html
+        )
+
+    def test_tldr_injection_skipped_for_listicle(self):
+        """Listicle output lacking tldr block must NOT trigger injection."""
+        result = "<h1>10 Tips</h1><ol><li><h3>Item</h3><p>body</p></li></ol>"
+        assert not self._should_inject_tldr("listicle", "600-1000", result)
+
+    def test_tldr_injection_skipped_for_thought_leadership(self):
+        """Thought-Leadership output lacking tldr block must NOT trigger injection."""
+        result = "<h1>Why AI Will Not Replace Strategists</h1><h2>Core argument</h2><p>...</p>"
+        assert not self._should_inject_tldr("thought-leadership", "600-1000", result)
+
+    def test_tldr_injection_skipped_for_quick_read(self):
+        """Quick Read (300-500) standard template must NOT trigger injection."""
+        result = "<h1>Title</h1><h2>Section</h2><p>...</p>"
+        assert not self._should_inject_tldr("standard", "300-500", result)
+
+    def test_tldr_injection_fires_for_standard_non_quick_read(self):
+        """Standard template + non-quick-read must trigger injection when tldr missing."""
+        result = "<h1>Title</h1><h2>Section</h2><p>...</p>"
+        assert self._should_inject_tldr("standard", "600-1000", result)
+
+    def test_tldr_injection_skipped_when_tldr_present(self):
+        """Injection must be skipped when the LLM already included the tldr block."""
+        result = '<h1>Title</h1><div class="tldr"><p><strong>TL;DR:</strong> summary</p></div>'
+        assert not self._should_inject_tldr("standard", "600-1000", result)
+
+    def test_tldr_injection_fires_for_none_template(self):
+        """None article_template (standard default) must trigger injection when tldr missing."""
+        result = "<h1>Title</h1><h2>Section</h2><p>...</p>"
+        assert self._should_inject_tldr(None, "600-1000", result)
 
 
 # ── _build_template_structure tests: Story 3.24 ───────────────────────────────

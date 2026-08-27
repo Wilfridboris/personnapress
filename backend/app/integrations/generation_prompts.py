@@ -548,6 +548,33 @@ SUPPORTING KEYWORDS (mention each at most once, naturally):
     return seo_section, audience_section
 
 
+def build_quick_read_override(article_template: str | None) -> str:
+    """Return the QUICK READ MODE prompt block for 300-500 word targets.
+
+    Non-standard templates receive a word-count-only block; structural
+    directives (H2 count, TL;DR OMIT, FAQ OMIT) are omitted to avoid
+    conflicts with the template's own structure override.
+    """
+    non_standard = article_template and article_template.lower() != "standard"
+    if non_standard:
+        return (
+            "QUICK READ MODE (300-500 words):\n"
+            "- Strict word limit: 300-500 words total including all headings and HTML.\n"
+            "- Every sentence must earn its place. Cut anything that does not give the reader"
+            " a new fact or a specific action."
+        )
+    return (
+        "QUICK READ MODE (300-500 words):\n"
+        "- Strict word limit: 300-500 words total including all headings and HTML.\n"
+        '- OMIT the <div class="tldr"> block entirely. Do not output it.\n'
+        "- OMIT the <h2>Frequently Asked Questions</h2> and <dl class=\"faq\"> block entirely.\n"
+        "- Write 1-2 H2 body sections only (not 3-4).\n"
+        "- The BLUF intro paragraph and conclusion are still required.\n"
+        "- Every sentence must earn its place. Cut anything that does not give the reader\n"
+        "  a new fact or a specific action."
+    )
+
+
 def _build_template_structure(
     article_template: str | None,
     meta_voice_note: str,

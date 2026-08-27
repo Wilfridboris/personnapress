@@ -572,6 +572,11 @@
 ## Deferred from: code review of 20-8-roadmap-post-angle-variation (2026-08-21)
 
 - brain_dump brace injection risk in `.format()` call [generation_prompts.py] — pre-existing pattern across all prompts in the codebase; not introduced by this story
+
+## Deferred from: code review of spec-fix-blog-template-injection (2026-08-27)
+
+- `TestWordCountPrompt._build_prompt` still contains the old single-branch quick-read logic with no `article_template` parameter [backend/tests/test_generation_prompts.py:318-355] — test remains correct for the standard-template path; new tests now call `build_quick_read_override` directly, so the regression gap is partially mitigated; update `_build_prompt` to accept and thread `article_template` in a future test-quality pass
+- `"300-500"` quick-read sentinel string has no shared constant; compared as a bare string literal in `gemini.py`, `anthropic_client.py`, and test helpers [backend/app/integrations/gemini.py, anthropic_client.py, tests/test_generation_prompts.py] — pre-existing pattern matching `_WORD_COUNT_MAP` key strings; extract to a named constant (e.g. `QUICK_READ_WORD_COUNT = "300-500"`) when hardening word-count handling
 - Gemini `response.text` None crash on blocked/empty response [gemini.py] — pre-existing pattern across all Gemini calls; apply a guard when hardening all Gemini response handling
 - Private symbols `_LINKEDIN_ORDER`, `_X_ORDER` imported across module boundary [angles.py] — minor style issue; expose a public API if angles module grows
 - `ANGLE_LABELS` maintained separately in Python (angles.py) and TypeScript (angles.ts) — no compile-time sync enforcement; acceptable at current scale; add a codegen step if taxonomy grows
