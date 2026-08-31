@@ -234,16 +234,16 @@ async def test_create_post_with_image_uses_rest_posts_endpoint():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_create_ugc_post_personal_calls_userinfo():
-    """With org_id=None, create_ugc_post fetches /v2/userinfo and uses urn:li:person."""
+async def test_create_ugc_post_personal_calls_me():
+    """With org_id=None, create_ugc_post fetches /v2/me and uses urn:li:person."""
     from app.integrations.linkedin import create_ugc_post
 
     captured_json = {}
-    userinfo_called = []
+    me_called = []
 
     async def mock_get(url, **kwargs):
-        userinfo_called.append(url)
-        return _mock_response(200, {"sub": "person123"})
+        me_called.append(url)
+        return _mock_response(200, {"id": "person123"})
 
     async def mock_post(url, *, json, **kwargs):
         captured_json.update(json)
@@ -260,12 +260,12 @@ async def test_create_ugc_post_personal_calls_userinfo():
 
     assert result == "urn:li:ugcPost:1"
     assert captured_json["author"] == "urn:li:person:person123"
-    assert any("userinfo" in u for u in userinfo_called), "/v2/userinfo must be called for personal posting"
+    assert any("/v2/me" in u for u in me_called), "/v2/me must be called for personal posting"
 
 
 @pytest.mark.asyncio
-async def test_create_ugc_post_org_skips_userinfo():
-    """With org_id provided, create_ugc_post skips /v2/userinfo and uses urn:li:organization."""
+async def test_create_ugc_post_org_skips_me():
+    """With org_id provided, create_ugc_post skips /v2/me and uses urn:li:organization."""
     from app.integrations.linkedin import create_ugc_post
 
     captured_json = {}
@@ -273,7 +273,7 @@ async def test_create_ugc_post_org_skips_userinfo():
 
     async def mock_get(url, **kwargs):
         called_urls.append(url)
-        return _mock_response(200, {"sub": "should_not_be_called"})
+        return _mock_response(200, {"id": "should_not_be_called"})
 
     async def mock_post(url, *, json, **kwargs):
         captured_json.update(json)
@@ -290,4 +290,4 @@ async def test_create_ugc_post_org_skips_userinfo():
 
     assert result == "urn:li:ugcPost:2"
     assert captured_json["author"] == "urn:li:organization:123456"
-    assert not any("userinfo" in u for u in called_urls), "/v2/userinfo must NOT be called when posting as org"
+    assert not any("/v2/me" in u for u in called_urls), "/v2/me must NOT be called when posting as org"

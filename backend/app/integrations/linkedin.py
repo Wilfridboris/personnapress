@@ -30,19 +30,19 @@ async def exchange_code_for_token(code: str, redirect_uri: str) -> dict:
 
 
 async def _get_linkedin_author_urn(access_token: str, client: httpx.AsyncClient) -> str:
-    """Fetch the authenticated user's sub (person URN) from LinkedIn userinfo."""
+    """Fetch the authenticated user's person ID from /v2/me (r_basicprofile)."""
     resp = await client.get(
-        "https://api.linkedin.com/v2/userinfo",
+        "https://api.linkedin.com/v2/me",
         headers={"Authorization": f"Bearer {access_token}", "LinkedIn-Version": "202602"},
     )
     if resp.status_code == 401:
         raise PlatformError("LinkedIn", 401, "LinkedIn connection expired - reconnect your LinkedIn account in Connections")
     if resp.status_code != 200:
         raise PlatformError("LinkedIn", resp.status_code, "failed to get user profile")
-    sub = resp.json().get("sub", "")
-    if not sub:
-        raise PlatformError("LinkedIn", 422, "LinkedIn profile missing 'sub' field, cannot construct author URN")
-    return sub
+    person_id = resp.json().get("id", "")
+    if not person_id:
+        raise PlatformError("LinkedIn", 422, "LinkedIn profile missing 'id' field, cannot construct author URN")
+    return person_id
 
 
 async def upload_image(access_token: str, author_urn: str, image_bytes: bytes, org_id: str | None = None) -> str:
