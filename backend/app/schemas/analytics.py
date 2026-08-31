@@ -13,7 +13,7 @@ class SeriesPoint(BaseModel):
 
 class BestPost(BaseModel):
     published_post_id: uuid.UUID
-    platform: Literal["facebook_page", "instagram", "threads"]
+    platform: Literal["facebook_page", "instagram", "threads", "linkedin"]
     campaign_title: str
     engagements: Optional[int]
     permalink: Optional[str]
@@ -34,7 +34,7 @@ class ClientSummaryResponse(BaseModel):
 
 class PostMetricItem(BaseModel):
     published_post_id: uuid.UUID
-    platform: Literal["facebook_page", "instagram", "threads"]
+    platform: Literal["facebook_page", "instagram", "threads", "linkedin"]
     campaign_title: str
     campaign_excerpt: Optional[str]
     latest_impressions: Optional[int]

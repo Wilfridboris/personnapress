@@ -7,6 +7,11 @@ type UnavailabilityReason =
   | "page_under_100_likes"
   | "permission_missing"
   | "no_snapshot"
+  | "scope_missing"
+  | "member_post_unsupported"
+  | "no_data_yet"
+  | "token_expired"
+  | "unknown"
   | string
   | null;
 
@@ -19,6 +24,18 @@ const REASON_COPY: Record<string, string> = {
     "Facebook only provides post insights for Pages with 100+ likes. Analytics will appear here once this Page reaches that threshold.",
   permission_missing:
     "Analytics permissions have not been granted for this platform. Reconnect the platform and enable insights permissions to start tracking.",
+  // LinkedIn reason codes (Story 25.1) — keys must exactly match backend unavailable_reason
+  // strings from linkedin_metrics.py (AC #9a). Do not rename without updating both sides.
+  scope_missing:
+    "LinkedIn analytics permissions are missing. Reconnect your LinkedIn account and grant analytics access.",
+  member_post_unsupported:
+    "Analytics for LinkedIn personal posts are not yet available. Company page analytics are fully supported.",
+  no_data_yet:
+    "LinkedIn analytics data is not yet available. Stats usually appear within a few hours of publishing.",
+  token_expired:
+    "Your LinkedIn connection has expired. Reconnect your account to resume analytics collection.",
+  unknown:
+    "LinkedIn analytics are temporarily unavailable. Data will resume collecting on the next check.",
 };
 
 const GENERIC_COPY = "Analytics not available for this platform.";

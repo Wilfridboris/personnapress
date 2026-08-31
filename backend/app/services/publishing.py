@@ -140,6 +140,50 @@ async def _capture_meta_post(
         )
 
 
+async def _capture_linkedin_post(
+    db: AsyncSession,
+    campaign,
+    urn: str,
+) -> None:
+    """Best-effort persistence of a published LinkedIn post URN and permalink. Never raises.
+
+    URN decision (AC #2):
+      - create_post_with_image uses /rest/posts and returns a share URN (urn:li:share:{id})
+        via the x-restli-id response header. organizationalEntityShareStatistics accepts
+        share URNs reliably via the `shares` param.
+      - create_ugc_post uses /v2/ugcPosts and returns a ugcPost URN (urn:li:ugcPost:{id}).
+        organizationalEntityShareStatistics also accepts ugcPost URNs in theory, but the
+        `ugcPosts` param is documented as buggy. For ugcPost URNs we fall back to org-
+        aggregate stats in linkedin_metrics.py (_fetch_org_stats without a `shares` param).
+    Store whichever URN was returned; the integration layer handles the per-post vs
+    aggregate routing transparently.
+
+    permalink is the standard LinkedIn feed update URL:
+      https://www.linkedin.com/feed/update/{urn}
+    This URL is valid for both share and ugcPost URNs (LinkedIn's own UI redirects it).
+    """
+    if not urn:
+        logger.warning("_capture_linkedin_post: empty URN for campaign=%s — skipping persistence", campaign.id)
+        return
+    try:
+        permalink: Optional[str] = f"https://www.linkedin.com/feed/update/{urn}"
+        await upsert_published_post(
+            db,
+            campaign_id=campaign.id,
+            client_id=campaign.client_id,
+            platform="linkedin",
+            platform_post_id=urn,
+            permalink=permalink,
+            published_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+    except Exception:
+        logger.error(
+            "_capture_linkedin_post failed campaign=%s urn=%s",
+            campaign.id, urn,
+            exc_info=True,
+        )
+
+
 async def _refresh_token_if_needed(cred: dict, db: AsyncSession, client_id: UUID) -> dict:
     """Refresh the GitHub installation token if within 5 minutes of expiry."""
     expires_at = cred.get("expires_at", "")
@@ -607,6 +651,7 @@ async def dispatch_publish_for_platform(
                 return {platform: "skipped"}
             li_target = creds.get("target", "personal")
             li_org_id = creds.get("org_id") if li_target == "organization" else None
+            li_post_urn: str = ""
             if campaign.image_url:
                 try:
                     async with httpx.AsyncClient(timeout=15.0) as _img_client:
@@ -618,7 +663,9 @@ async def dispatch_publish_for_platform(
                     else:
                         author_urn = ""
                     image_urn = await linkedin_integration.upload_image(creds["access_token"], author_urn, img_resp.content, org_id=li_org_id)
-                    await linkedin_integration.create_post_with_image(
+                    # create_post_with_image uses /rest/posts and returns a share URN
+                    # (urn:li:share:{id}) via x-restli-id — preferred for per-post stats.
+                    li_post_urn = await linkedin_integration.create_post_with_image(
                         creds["access_token"], author_urn, campaign.linkedin_post, image_urn, org_id=li_org_id
                     )
                 except Exception as exc:
@@ -626,13 +673,17 @@ async def dispatch_publish_for_platform(
                         "social image upload failed for campaign %s on linkedin: %s -- falling back to text-only post",
                         campaign_id, exc,
                     )
-                    await linkedin_integration.create_ugc_post(
+                    # create_ugc_post uses /v2/ugcPosts and returns a ugcPost URN;
+                    # linkedin_metrics falls back to org-aggregate stats for these.
+                    li_post_urn = await linkedin_integration.create_ugc_post(
                         creds["access_token"], campaign.blog_html or "", campaign.linkedin_post, org_id=li_org_id
                     )
             else:
-                await linkedin_integration.create_ugc_post(
+                li_post_urn = await linkedin_integration.create_ugc_post(
                     creds["access_token"], campaign.blog_html or "", campaign.linkedin_post, org_id=li_org_id
                 )
+            # Fire-and-forget capture (AD-A4 / AD-A10): never raises, never rolls back publish.
+            await _capture_linkedin_post(db, campaign, li_post_urn)
         elif platform == "instagram":
             if not campaign.image_url:
                 logger.debug("dispatch_publish_for_platform: skipping instagram (no image_url) campaign=%s", campaign_id)
@@ -787,6 +838,7 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                     await asyncio.sleep(5.0 - (now - last_linkedin_publish_time))
                 li_target = creds.get("target", "personal")
                 li_org_id = creds.get("org_id") if li_target == "organization" else None
+                li_post_urn: str = ""
                 if campaign.image_url:
                     try:
                         async with httpx.AsyncClient(timeout=15.0) as _img_client:
@@ -798,7 +850,9 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                         else:
                             author_urn = ""
                         image_urn = await linkedin_integration.upload_image(creds["access_token"], author_urn, img_resp.content, org_id=li_org_id)
-                        await linkedin_integration.create_post_with_image(
+                        # create_post_with_image uses /rest/posts and returns a share URN
+                        # (urn:li:share:{id}) via x-restli-id — preferred for per-post stats.
+                        li_post_urn = await linkedin_integration.create_post_with_image(
                             creds["access_token"], author_urn, campaign.linkedin_post, image_urn, org_id=li_org_id
                         )
                     except Exception as exc:
@@ -806,13 +860,17 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                             "social image upload failed for campaign %s on linkedin: %s -- falling back to text-only post",
                             campaign_id, exc,
                         )
-                        await linkedin_integration.create_ugc_post(
+                        # create_ugc_post uses /v2/ugcPosts and returns a ugcPost URN;
+                        # linkedin_metrics falls back to org-aggregate stats for these.
+                        li_post_urn = await linkedin_integration.create_ugc_post(
                             creds["access_token"], campaign.blog_html or "", campaign.linkedin_post, org_id=li_org_id
                         )
                 else:
-                    await linkedin_integration.create_ugc_post(
+                    li_post_urn = await linkedin_integration.create_ugc_post(
                         creds["access_token"], campaign.blog_html or "", campaign.linkedin_post, org_id=li_org_id
                     )
+                # Fire-and-forget capture (AD-A4 / AD-A10): never raises, never rolls back publish.
+                await _capture_linkedin_post(db, campaign, li_post_urn)
                 last_linkedin_publish_time = asyncio.get_running_loop().time()
 
             elif platform == "instagram":

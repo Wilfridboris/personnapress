@@ -31,12 +31,12 @@ from app.db.repositories.jobs import create_job, update_job
 from app.db.repositories.models import PublishedPost, utcnow
 from app.db.repositories.platform_connections import get_connection_for_platform
 from app.db.repositories.post_metrics import bulk_insert_snapshots
-from app.integrations import meta_metrics
+from app.integrations import linkedin_metrics, meta_metrics
 
 logger = logging.getLogger(__name__)
 
 # ── Decaying cadence (AD-A6) ──────────────────────────────────────────────────
-# For Meta reads (free), the cadence bounds DB growth rather than cost.
+# For reads (free-tier APIs), the cadence bounds DB growth rather than cost.
 # Format: (max_age, poll_interval) — a post is "due" if it falls in this age bucket
 # and its last snapshot is older than the interval.
 # Tune this constant; it is the single knob for polling frequency.
@@ -44,11 +44,13 @@ CADENCE: list[tuple[timedelta, timedelta]] = [
     (timedelta(hours=24), timedelta(hours=1)),   # first 24 h: poll every hour
     (timedelta(days=7),   timedelta(days=1)),    # day 1-7:   poll daily
     (timedelta(days=90),  timedelta(weeks=1)),   # day 7-90:  poll weekly
-    # beyond 90 days: no longer polled (post not returned by select_due_meta_posts)
+    # beyond 90 days: no longer polled (post not returned by _select_due_posts)
 ]
 
-# Meta platforms handled by this worker
-_META_PLATFORMS = ("facebook_page", "instagram", "threads")
+# All metrics-capable platforms handled by this worker.
+# Renamed from _META_PLATFORMS (was Meta-only) to _METRICS_PLATFORMS to reflect
+# that LinkedIn company-page posts are now collected alongside Meta (Story 25.1).
+_METRICS_PLATFORMS = ("facebook_page", "instagram", "threads", "linkedin")
 
 
 def is_due(
@@ -94,10 +96,10 @@ async def metrics_poll() -> None:
 
 
 async def _run_sweep(db) -> None:
-    """Select due Meta posts, resolve creds per client, fetch, and bulk-insert snapshots."""
+    """Select due metrics posts, resolve creds per client, fetch, and bulk-insert snapshots."""
     now = datetime.now(timezone.utc)
 
-    due_posts = await _select_due_meta_posts(db, now)
+    due_posts = await _select_due_posts(db, now)
     if not due_posts:
         logger.info("metrics_poll: no due posts")
         return
@@ -122,14 +124,18 @@ async def _run_sweep(db) -> None:
             sentry_sdk.capture_exception(exc)
 
 
-async def _select_due_meta_posts(db, now: datetime) -> list[PublishedPost]:
-    """Return Meta published_posts that are within the 90-day horizon and due for a poll.
+async def _select_due_posts(db, now: datetime) -> list[PublishedPost]:
+    """Return metrics-capable published_posts within the 90-day horizon that are due for a poll.
+
+    Covers all platforms in _METRICS_PLATFORMS: Meta (facebook_page, instagram, threads)
+    and LinkedIn company-page posts (Story 25.1). Personal LinkedIn posts are not in
+    _METRICS_PLATFORMS; they are handled separately in Story 25-2.
 
     Uses a LEFT JOIN on post_metrics to get each post's latest captured_at without
     loading full history (AD-A2).
     """
     cutoff = now - timedelta(days=90)
-    platform_list = ", ".join(f"'{p}'" for p in _META_PLATFORMS)
+    platform_list = ", ".join(f"'{p}'" for p in _METRICS_PLATFORMS)
 
     result = await db.execute(
         text(
@@ -198,7 +204,16 @@ async def _process_batch(
     creds_json = decrypt_credential(conn.encrypted_credentials)
     creds = json.loads(creds_json)
 
-    snapshots = await meta_metrics.fetch(posts, creds, platform)
+    # Route to the correct integration by platform.
+    # LinkedIn uses linkedin_metrics (per-post share-URN stats + org-aggregate fallback).
+    # Meta platforms (facebook_page, instagram, threads) use meta_metrics as before.
+    # Personal LinkedIn posts are skipped inside linkedin_metrics._fetch_one
+    # (returns unavailable_reason="member_post_unsupported"); no worker-level skip needed.
+    if platform == "linkedin":
+        snapshots = await linkedin_metrics.fetch(posts, creds, platform)
+    else:
+        snapshots = await meta_metrics.fetch(posts, creds, platform)
+
     if snapshots:
         await bulk_insert_snapshots(db, snapshots)
         await db.commit()
@@ -208,5 +223,5 @@ async def _process_batch(
         len(snapshots), client_id, platform,
     )
 
-    # Small stagger between platforms to be polite to Meta's rate limits
+    # Small stagger between per-client batches; per-item staggering is handled inside each fetch().
     await asyncio.sleep(0.5)

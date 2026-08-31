@@ -9,12 +9,13 @@ import { PlatformUnavailableState } from "./PlatformUnavailableState";
 import type { PostMetricItem, SeriesPoint } from "@/hooks/usePostMetrics";
 import { fmt } from "@/lib/formatters";
 
-type PlatformFilter = "all" | "facebook_page" | "instagram" | "threads";
+type PlatformFilter = "all" | "facebook_page" | "instagram" | "threads" | "linkedin";
 
 const PLATFORM_NOUNS: Record<string, { comments: string; shares: string }> = {
   facebook_page: { comments: "Comments", shares: "Shares" },
   instagram:     { comments: "Comments", shares: "Shares" },
   threads:       { comments: "Replies",  shares: "Reposts" },
+  linkedin:      { comments: "Comments", shares: "Shares" },
 };
 
 function fmtComponent(n: number | null | undefined): string {
@@ -53,6 +54,7 @@ const FILTER_OPTIONS: { value: PlatformFilter; label: string; platform?: string 
   { value: "facebook_page", label: "Facebook", platform: "facebook_page" },
   { value: "instagram", label: "Instagram", platform: "instagram" },
   { value: "threads", label: "Threads", platform: "threads" },
+  { value: "linkedin", label: "LinkedIn", platform: "linkedin" },
 ];
 
 function trendLabel(series: SeriesPoint[]): string {

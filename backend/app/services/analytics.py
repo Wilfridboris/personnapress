@@ -12,8 +12,9 @@ from app.schemas.analytics import (
     SeriesPoint,
 )
 
-# Platforms that may produce metrics in this epic (Meta only for now)
-_META_PLATFORMS = ("facebook_page", "instagram", "threads")
+# All metrics-capable platforms (Meta + LinkedIn company pages, Story 25.1).
+# Renamed from _METRICS_PLATFORMS to reflect inclusion of LinkedIn.
+_METRICS_PLATFORMS = ("facebook_page", "instagram", "threads", "linkedin")
 
 
 async def get_client_summary(
@@ -63,7 +64,7 @@ async def get_client_summary(
                 ) AS best_post_id
             FROM latest
         """),
-        {"client_id": str(client_id), "platforms": list(_META_PLATFORMS)},
+        {"client_id": str(client_id), "platforms": list(_METRICS_PLATFORMS)},
     )
     row = result.mappings().first()
 
@@ -156,7 +157,7 @@ async def get_client_post_metrics(
               AND pp.platform = ANY(:platforms)
             ORDER BY pp.created_at DESC
         """),
-        {"client_id": str(client_id), "platforms": list(_META_PLATFORMS)},
+        {"client_id": str(client_id), "platforms": list(_METRICS_PLATFORMS)},
     )
     posts = posts_result.mappings().all()
 
