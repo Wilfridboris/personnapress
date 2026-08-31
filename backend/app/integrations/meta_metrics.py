@@ -1,9 +1,10 @@
 """Meta Graph API insights integration for Facebook Page, Instagram, and Threads posts.
 
 Normalized metric mapping (AD-A3 convention):
-  impressions  <- FB: post_impressions | IG: views (fallback reach) | Threads: views
-  engagements  <- FB: reactions+comments+shares | IG: likes+comments+saved+shares | Threads: likes+replies+reposts+quotes
-  likes        <- FB: LIKE subtype from post_reactions_by_type_total | IG: likes | Threads: likes
+  impressions  <- FB: post_media_view (probe candidate, likely NULL — see Story 24.5 Dev Notes)
+                     | IG: views (fallback reach) | Threads: views
+  engagements  <- FB: sum(post_reactions_*_total)+comments+shares (NULL-safe) | IG: likes+comments+saved+shares | Threads: likes+replies+reposts+quotes
+  likes        <- FB: sum of post_reactions_*_total individual counters | IG: likes | Threads: likes
   comments     <- FB: comments.summary(true).total_count (object-edge) | IG: comments | Threads: replies
   shares       <- FB: shares.count (object-edge) | IG: shares | Threads: reposts
 
@@ -12,17 +13,31 @@ Story 24.4 amendment (AD-A7): the normalized set now includes a bounded set of
   AD-A7 previously allowed only (impressions, engagements). engagements formula is
   unchanged; saves (IG) is NOT promoted — it stays inside engagements + raw.
 
+Story 24.5 (Meta API drift fix):
+  - FB: removed deprecated post_impressions/post_engaged_users/post_reactions_by_type_total.
+    Reactions mapped via individual post_reactions_*_total counters (June 2026 deprecation).
+    post_media_view included as a probe for impressions — expected NULL per Meta docs.
+    impressions = NULL is the primary outcome; engagements = reactions+comments+shares.
+  - Threads: fixed host from graph.facebook.com -> graph.threads.com (THREADS_GRAPH_BASE).
+    Fixed _threads_metrics_dict to read values[0].value (list form, matching FB/IG).
+  - Constants: both FB/IG base and Threads base now derived from meta.py (single source of truth).
+
 FB Page insights require 100+ page likes; below that threshold the API returns an
   error and we record unavailable_reason="page_under_100_likes" (no fabricated zeros).
 
 Instagram `impressions` was removed in Graph v21 (Jan 2025); `views` is the replacement.
+Instagram continues to work at v25 — no metric set changes needed (Story 24.5 AC #7).
 
 Threads endpoint/metric names: VERIFY against live Threads API at deploy time.
+  Requires threads_manage_insights permission.
   The endpoint and field names below are correct as of Aug 2026 but Meta evolves them.
 
 Facebook Page Insights metric set post-June-2026-deprecation:
-  VERIFY: run GET /{post_id}/insights?metric=<FB_METRICS> with a real post to confirm
-  the metrics below are still available after the June 2026 Insights API update.
+  post_impressions, post_engaged_users, post_reactions_by_type_total are all INVALID
+  as of June 15 2026 (Meta Page Insights deprecation). The valid per-post metrics are
+  the individual post_reactions_*_total counters plus the speculative post_media_view.
+  If no views metric returns 200, impressions is NULL (primary expected outcome, not fallback).
+  Do NOT use post_impressions or page_impressions_unique (page-level reach, not per-post).
 
 Facebook comments/shares are NOT available from the insights endpoint:
   They come from a second object-edge call GET /{post_id}?fields=comments.summary(true),shares
@@ -40,22 +55,46 @@ from typing import Optional
 import httpx
 import sentry_sdk
 
+from app.integrations.meta import META_GRAPH_BASE, THREADS_GRAPH_BASE
+
 logger = logging.getLogger(__name__)
 
 SUPPORTS_METRICS = True
 META_PLATFORMS = frozenset({"facebook_page", "instagram", "threads"})
 
-META_GRAPH_VERSION = "v21.0"
-_GRAPH_BASE = f"https://graph.facebook.com/{META_GRAPH_VERSION}"
-
-# Facebook Page post metric set (post-June-2026-deprecation; verify at deploy)
-_FB_METRICS = "post_impressions,post_engaged_users,post_reactions_by_type_total"
+# Facebook Page post metric set (post-June-2026-deprecation).
+# post_impressions, post_engaged_users, and post_reactions_by_type_total are all
+# invalid after Meta's June 15 2026 Page Insights deprecation — the API rejects the
+# entire call if any deprecated metric is present (#100 "not a valid insights metric").
+# post_media_view is a speculative probe for per-post views; expected to return NULL
+# on standard-tier tokens (Meta docs show no confirmed per-post impressions metric).
+# Reactions via individual per-type counters are the only confirmed valid per-post metrics.
+_FB_METRICS = (
+    "post_reactions_like_total,"
+    "post_reactions_love_total,"
+    "post_reactions_wow_total,"
+    "post_reactions_haha_total,"
+    "post_reactions_sorry_total,"
+    "post_reactions_anger_total,"
+    "post_media_view"
+)
 
 # Instagram media metric set (impressions removed in v21; views is the replacement)
 _IG_METRICS = "views,reach,likes,comments,saved,shares"
 
 # Threads media metric set (verify field names against live API at deploy time)
 _THREADS_METRICS = "views,likes,replies,reposts,quotes"
+
+# Per-type Facebook reaction counters (replaces deprecated post_reactions_by_type_total).
+# If Meta adds a new reaction type (e.g. post_reactions_care_total), add it here.
+_FB_REACTION_METRICS = frozenset({
+    "post_reactions_like_total",
+    "post_reactions_love_total",
+    "post_reactions_wow_total",
+    "post_reactions_haha_total",
+    "post_reactions_sorry_total",
+    "post_reactions_anger_total",
+})
 
 # Unavailability reason codes (machine-readable; consumed by Story 24-3)
 _REASON_PAGE_UNDER_100_LIKES = "page_under_100_likes"
@@ -103,16 +142,19 @@ def extract_components_from_raw(platform: str, raw: dict) -> tuple[Optional[int]
         return None, None, None
 
     if platform == "facebook_page":
-        likes = None
+        # likes = sum of all individual post_reactions_*_total counters (see _FB_REACTION_METRICS).
+        # post_reactions_by_type_total is deprecated (June 2026); use per-type counters.
+        reaction_total = 0
+        has_any_reaction = False
         for item in raw.get("data", []):
-            if item.get("name") == "post_reactions_by_type_total":
-                values = item.get("values", [{}])
-                val = values[0].get("value", {}) if values else {}
-                if isinstance(val, dict):
-                    raw_like = val.get("LIKE")
-                    if raw_like is not None:
-                        likes = _int_or_none(raw_like)
-                break
+            if item.get("name") in _FB_REACTION_METRICS:
+                values = item.get("values", [])
+                val = values[0].get("value", 0) if values and isinstance(values[0], dict) else 0
+                v = _int_or_none(val)
+                if v is not None:
+                    reaction_total += v
+                    has_any_reaction = True
+        likes = reaction_total if has_any_reaction else None
         obj = raw.get("_object", {})
         comments = None
         shares = None
@@ -197,7 +239,7 @@ async def _fetch_one(
 async def _fetch_facebook(client, post, creds: dict, now: datetime) -> MetricSnapshot:
     token = creds["page_access_token"]
     resp = await client.get(
-        f"{_GRAPH_BASE}/{post.platform_post_id}/insights",
+        f"{META_GRAPH_BASE}/{post.platform_post_id}/insights",
         params={"metric": _FB_METRICS, "access_token": token},
     )
     raw = _safe_json(resp)
@@ -226,7 +268,7 @@ async def _fetch_facebook(client, post, creds: dict, now: datetime) -> MetricSna
     obj_data: dict = {}
     try:
         obj_resp = await client.get(
-            f"{_GRAPH_BASE}/{post.platform_post_id}",
+            f"{META_GRAPH_BASE}/{post.platform_post_id}",
             params={"fields": "comments.summary(true),shares", "access_token": token},
         )
         if obj_resp.status_code == 200:
@@ -292,35 +334,45 @@ def _fb_unavailable_reason(error: dict) -> Optional[str]:
 
 
 def _map_facebook_snapshot(post, raw: dict, now: datetime) -> MetricSnapshot:
-    """Map a FB insights API response to normalized columns.
+    """Map a FB insights API response to normalized columns (post-June-2026-deprecation).
 
     raw["data"] is a list of {name, values} dicts. Each metric has a list of
     values with {value, end_time}; we take the first (most recent period).
     raw["_object"] (if present) carries comments.summary and shares from the
     second object-edge call (see _fetch_facebook).
+
+    impressions <- post_media_view if present in data, else NULL (primary expected outcome).
+      post_media_view is a speculative probe — Meta removed per-post impressions in June 2026.
+      NULL impressions is NOT an unavailable row: engagements are still real and recorded.
+      Do not set unavailable_reason for NULL impressions.
+
+    likes <- sum(_FB_REACTION_METRICS counters) — individual integers, summed.
+    engagements <- reactions + comments + shares (NULL-safe; no post_engaged_users anymore).
     """
     metrics_by_name: dict[str, object] = {}
     for item in raw.get("data", []):
         name = item.get("name", "")
         values = item.get("values", [{}])
-        val = values[0].get("value", 0) if values else 0
+        val = values[0].get("value", 0) if values and isinstance(values[0], dict) else 0
         metrics_by_name[name] = val
 
-    impressions = _int_or_none(metrics_by_name.get("post_impressions"))
+    # Impressions: probe candidate post_media_view; NULL is the primary expected outcome.
+    impressions = _int_or_none(metrics_by_name.get("post_media_view"))
 
-    # Prefer post_engaged_users (broader signal) over reactions; use explicit key presence
-    # check so a legitimate zero doesn't fall through to the reactions fallback.
-    if "post_engaged_users" in metrics_by_name:
-        engagements = _int_or_none(metrics_by_name["post_engaged_users"])
-    else:
-        reactions_val = metrics_by_name.get("post_reactions_by_type_total")
-        if isinstance(reactions_val, dict):
-            total = sum(v for v in reactions_val.values() if isinstance(v, int))
-            engagements = total or None
-        else:
-            engagements = _int_or_none(reactions_val)
+    # likes = sum of all individual reaction counters (see _FB_REACTION_METRICS).
+    reaction_total = sum(
+        _int_or_none(metrics_by_name.get(m)) or 0
+        for m in _FB_REACTION_METRICS
+    )
+    likes_from_reactions = reaction_total or None
 
-    likes, comments, shares = extract_components_from_raw("facebook_page", raw)
+    # comments and shares come from the object-edge call stored in raw["_object"].
+    _, comments, shares = extract_components_from_raw("facebook_page", raw)
+    likes = likes_from_reactions
+
+    # engagements = reactions + comments + shares (NULL-safe; no fabricated zeros).
+    engagement_total = (likes or 0) + (comments or 0) + (shares or 0)
+    engagements = engagement_total or None
 
     return MetricSnapshot(
         published_post_id=post.id,
@@ -341,7 +393,7 @@ def _map_facebook_snapshot(post, raw: dict, now: datetime) -> MetricSnapshot:
 async def _fetch_instagram(client, post, creds: dict, now: datetime) -> MetricSnapshot:
     token = creds["page_access_token"]
     resp = await client.get(
-        f"{_GRAPH_BASE}/{post.platform_post_id}/insights",
+        f"{META_GRAPH_BASE}/{post.platform_post_id}/insights",
         params={"metric": _IG_METRICS, "access_token": token},
     )
     raw = _safe_json(resp)
@@ -427,10 +479,12 @@ def _ig_metrics_dict(raw: dict) -> dict[str, int]:
 # ── Threads ───────────────────────────────────────────────────────────────────
 
 async def _fetch_threads(client, post, creds: dict, now: datetime) -> MetricSnapshot:
-    # Threads uses user_access_token (not page_access_token)
+    # Threads uses user_access_token (not page_access_token).
+    # Requires threads_manage_insights permission.
+    # Host: graph.threads.com/v1.0 (NOT graph.facebook.com — Threads tokens are invalid there).
     token = creds["user_access_token"]
     resp = await client.get(
-        f"{_GRAPH_BASE}/{post.platform_post_id}/insights",
+        f"{THREADS_GRAPH_BASE}/{post.platform_post_id}/insights",
         params={"metric": _THREADS_METRICS, "access_token": token},
     )
     raw = _safe_json(resp)
@@ -505,10 +559,18 @@ def _map_threads_snapshot(post, raw: dict, now: datetime) -> MetricSnapshot:
 
 
 def _threads_metrics_dict(raw: dict) -> dict[str, int]:
+    """Parse Threads insights payload into a name->int mapping.
+
+    Threads insights uses the same list form as FB/IG:
+      {"data": [{"name": "likes", "values": [{"value": 100}]}, ...]}
+    NOT the flat {"name": "likes", "value": 100} form.
+    Read values[0].value (list form) — the old item.get("value") path was wrong.
+    """
     result: dict[str, int] = {}
     for item in raw.get("data", []):
         name = item.get("name", "")
-        val = item.get("value", 0)
+        values = item.get("values", [])
+        val = values[0].get("value", 0) if values and isinstance(values[0], dict) else 0
         result[name] = int(val) if val else 0
     return result
 

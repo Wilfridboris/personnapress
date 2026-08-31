@@ -176,6 +176,7 @@ export function PostMetricsTable({ items, isLoading }: Props) {
           No posts match this filter.
         </div>
       ) : (
+        <>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border border-border">
             <thead>
@@ -308,6 +309,12 @@ export function PostMetricsTable({ items, isLoading }: Props) {
             </tbody>
           </table>
         </div>
+        {displayed.some(item => item.platform === "facebook_page" && item.latest_impressions == null && item.unavailable_reason == null) && (
+          <p className="mt-2 text-xs text-graphite font-mono">
+            Facebook no longer reports per-post impressions for these posts (Meta API change, June 2026).
+          </p>
+        )}
+        </>
       )}
     </section>
   );

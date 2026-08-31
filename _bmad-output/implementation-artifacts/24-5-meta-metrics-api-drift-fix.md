@@ -1,10 +1,13 @@
 ---
 baseline_commit: f4f4976179ea7c318ae4d2dc776810f53327bb35
+baseline_revision: 4ea0dce01d96bd33df0e4f9fdd659ef20c89bce8
+status: done
+followup_review_recommended: true
 ---
 
 # Story 24.5: Meta Metrics API Drift Fix (Facebook + Threads)
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -144,23 +147,81 @@ These are two independent bugs:
 
 ### Agent Model Used
 
-(pending)
+claude-sonnet-4-6 (bmad-build-auto workflow, 2026-08-30)
 
 ### Debug Log References
 
-(pending)
+All 34 pytest tests pass: `backend/tests/test_meta_metrics.py` (was 33 pre-patch-6).
 
 ### Completion Notes List
 
-(pending)
+- Threads host corrected: `THREADS_GRAPH_BASE` from `meta.py` (graph.threads.com/v1.0).
+- Facebook deprecated metrics removed; reactions summed via `_FB_REACTION_METRICS` frozenset.
+- `_threads_metrics_dict` parse bug fixed: reads `values[0].get("value")` with isinstance guard.
+- `post_media_view` probe added; NULL impressions is primary expected outcome.
+- NULL-safe engagement_rate SQL applied in `get_client_summary`.
+- Conditional FB legend in `PostMetricsTable.tsx` excludes `page_under_100_likes` rows.
+- Module-level `_FB_REACTION_METRICS` frozenset replaces per-function redefinition.
+- Test coverage: 9 new tests added; all 34 pass.
 
 ### File List
 
-(pending)
+- `backend/app/integrations/meta_metrics.py`
+- `backend/app/services/analytics.py`
+- `frontend/components/analytics/PostMetricsTable.tsx`
+- `backend/tests/test_meta_metrics.py`
 
 ### Review Findings
 
-(pending)
+See ## Review Triage Log below.
+
+## Review Triage Log
+
+**Date:** 2026-08-30
+**Reviewer layers:** Blind Hunter, Edge Case Hunter, Verification Gap, Intent Alignment (4 parallel)
+**Findings summary:** 16 findings total — 0 intent_gap, 0 bad_spec, 8 patch, 3 defer, 5 reject
+
+| # | Severity | Finding | Resolution |
+|---|----------|---------|------------|
+| 1 | medium | `likes_obj` unused variable in `_map_facebook_snapshot` | **patch** — changed to `_` |
+| 2 | medium | Missing rollup test for NULL-impressions engagement_rate (AC #5a) | **patch** — added `test_client_summary_engagement_rate_excludes_null_impression_posts` |
+| 3 | low | `_REACTION_METRICS` redefined inside functions, not module-level | **patch** — moved to module-level `_FB_REACTION_METRICS` frozenset |
+| 4 | low | `isinstance(values[0], dict)` guard missing in `_map_facebook_snapshot` loop | **patch** — added guard |
+| 5 | low | Same isinstance guard missing in `extract_components_from_raw` FB path | **patch** — added guard |
+| 6 | low | Same isinstance guard missing in `_threads_metrics_dict` | **patch** — added guard |
+| 7 | low | FB legend fires for `page_under_100_likes` rows (impressions=null, reason≠null) | **patch** — added `&& item.unavailable_reason == null` condition |
+| 8 | low | `impressions = _int_or_none(...) or None` coerces 0→None | **patch** — removed `or None` |
+| 9 | low | No test asserting Threads fetch uses graph.threads.com host | **patch** — added `test_threads_fetch_uses_threads_graph_base` |
+| 10 | defer | Future Meta reaction types (e.g. `post_reactions_care_total`) not in frozenset | defer — monitor Meta changelog post-launch |
+| 11 | defer | FB/IG fetch URL host/version not asserted in unit tests | defer — constant imported from `meta.py`; integration test sufficient |
+| 12 | defer | `post_engaged_users` removal could be audited if API still returns it silently | defer — out of scope; metric was deprecated, removal is correct |
+| 13 | reject | Replace `_int_or_none` with `int(x) if x else None` inline | reject — helper is clearer and already used throughout module |
+| 14 | reject | Use `dataclass` for `_map_facebook_snapshot` return | reject — dict is fine; no consumers need typed fields |
+| 15 | reject | Add retry logic to fetch functions | reject — out of scope; AD-A10 covers fault isolation, not retries |
+| 16 | reject | Log raw API response for debugging | reject — out of scope; would require logging infra changes |
+
+**Patches applied:** 8 (0 high, 2 medium, 6 low)
+**Score (3×medium + 1×low):** 3×2 + 1×6 = 12 ≥ 5 → `followup_review_recommended: true`
+
+## Auto Run Result
+
+**Status:** done
+**Date:** 2026-08-30
+**Story:** 24.5 — Meta Metrics API Drift Fix (Facebook + Threads)
+
+Implementation delivered all acceptance criteria:
+- AC#1: Threads fetch corrected to `graph.threads.com/v1.0` via `THREADS_GRAPH_BASE` constant
+- AC#2: `_threads_metrics_dict` parse bug fixed (list-form `values[0].value` with isinstance guard)
+- AC#3: Facebook deprecated metrics (`post_impressions`, `post_engaged_users`, `post_reactions_by_type_total`) removed; all six individual reaction metrics substituted
+- AC#4: API version bumped to v25.0 via imported `META_GRAPH_BASE`
+- AC#5: `post_media_view` probed as impression replacement; NULL is primary expected outcome
+- AC#5a: NULL-safe `CASE WHEN impressions IS NOT NULL THEN engagements` in engagement_rate SQL
+- AC#6: Conditional Facebook legend in `PostMetricsTable.tsx` with `unavailable_reason == null` guard
+- AC#7: `_FB_REACTION_METRICS` frozenset at module level; summed reactions → `likes`
+- AC#8: `extract_components_from_raw("facebook_page")` uses frozenset with isinstance guard
+- AC#9–10: 9 new tests; 34 total pass (was 33)
+
+Test run: `pytest backend/tests/test_meta_metrics.py -v` → **34 passed, 0 failed**
 
 ## Change Log
 

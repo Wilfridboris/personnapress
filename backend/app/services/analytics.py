@@ -51,7 +51,7 @@ async def get_client_summary(
                 SUM(shares) AS total_shares,
                 CASE
                     WHEN SUM(impressions) > 0
-                    THEN SUM(engagements)::float / SUM(impressions)::float
+                    THEN SUM(CASE WHEN impressions IS NOT NULL THEN engagements ELSE NULL END)::float / SUM(impressions)::float
                     ELSE NULL
                 END AS engagement_rate,
                 MAX(captured_at) AS freshest_captured_at,

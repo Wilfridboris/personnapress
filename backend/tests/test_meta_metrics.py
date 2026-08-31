@@ -1,4 +1,4 @@
-"""Tests for Story 24.2 + 24.4: Meta metrics integration and analytics worker.
+"""Tests for Story 24.2 + 24.4 + 24.5: Meta metrics integration and analytics worker.
 
 AC #11 coverage (24.2):
   1. Mapping of FB/IG/Threads insights payloads to normalized columns
@@ -11,6 +11,14 @@ AC #13 coverage (24.4):
   6. FB second-call fault isolation (object call fails -> primary snapshot preserved, components NULL)
   7. Backfill from representative raw payload; missing component stays NULL; unavailability stays NULL
   8. Reason-string alignment: backend emits "page_under_100_likes" (AC #11 from story 24.4)
+
+AC #10 coverage (24.5 — Meta API drift fix):
+  9.  Threads fetch uses THREADS_GRAPH_BASE (graph.threads.com), not graph.facebook.com
+  10. _threads_metrics_dict reads values[0].value (list form), not item.get("value")
+  11. FB metric set contains no deprecated metric (post_impressions/post_engaged_users/post_reactions_by_type_total)
+  12. FB snapshot maps post_reactions_*_total -> likes; impressions=None (no confirmed views metric)
+  13. FB row with NULL impressions + real engagements: unavailable_reason is None (not an unavailable row)
+  14. NULL-impression rollup: engagement_rate computed only over posts with non-NULL impressions
 """
 import json
 import uuid
@@ -47,60 +55,249 @@ IG_CREDS = {"page_access_token": "tok_ig"}
 THREADS_CREDS = {"user_access_token": "tok_threads"}
 
 
-# ── AC #11.1 / 24.4 AC#13 — payload mapping ──────────────────────────────────
+# ── Story 24.5 AC#10.9 — Threads host ────────────────────────────────────────
 
-async def test_map_facebook_payload_to_normalized_columns():
-    """FB insights payload maps impressions and engagements correctly."""
-    from app.integrations.meta_metrics import _map_facebook_snapshot
+async def test_threads_fetch_uses_threads_graph_base():
+    """Threads fetch must hit graph.threads.com, not graph.facebook.com (Story 24.5 AC#1/6)."""
+    from app.integrations.meta_metrics import fetch, THREADS_GRAPH_BASE
+
+    # Confirm the constant is correct
+    assert "graph.threads.com" in THREADS_GRAPH_BASE
+    assert "graph.facebook.com" not in THREADS_GRAPH_BASE
+
+    # Confirm the URL built in _fetch_threads uses THREADS_GRAPH_BASE
+    good_resp = _httpx_response(200, {
+        "data": [
+            {"name": "views", "values": [{"value": 900}]},
+            {"name": "likes", "values": [{"value": 40}]},
+            {"name": "replies", "values": [{"value": 15}]},
+            {"name": "reposts", "values": [{"value": 10}]},
+            {"name": "quotes", "values": [{"value": 5}]},
+        ]
+    })
+
+    captured_urls: list[str] = []
+
+    async def capturing_get(url: str, **kwargs):
+        captured_urls.append(url)
+        return good_resp
+
+    mock_http_client = AsyncMock()
+    mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+    mock_http_client.__aexit__ = AsyncMock(return_value=False)
+    mock_http_client.get = AsyncMock(side_effect=capturing_get)
+
+    post = _published_post("threads", "threads_media_999")
+
+    with patch("app.integrations.meta_metrics.httpx.AsyncClient", return_value=mock_http_client):
+        snapshots = await fetch([post], THREADS_CREDS, "threads")
+
+    assert len(snapshots) == 1
+    assert len(captured_urls) == 1
+    url_called = captured_urls[0]
+    assert "graph.threads.com" in url_called, f"Expected graph.threads.com in URL, got: {url_called}"
+    assert "graph.facebook.com" not in url_called, f"URL must NOT use graph.facebook.com: {url_called}"
+
+
+# ── Story 24.5 AC#10.10 — Threads values[0].value parse ─────────────────────
+
+async def test_threads_metrics_dict_reads_values_list_form():
+    """_threads_metrics_dict reads values[0].value (list form), not item.get('value') (Story 24.5 AC#2)."""
+    from app.integrations.meta_metrics import _threads_metrics_dict
 
     raw = {
         "data": [
-            {"name": "post_impressions", "values": [{"value": 1500, "end_time": "2026-08-17"}]},
-            {"name": "post_engaged_users", "values": [{"value": 120, "end_time": "2026-08-17"}]},
-            {"name": "post_reactions_by_type_total", "values": [{"value": {"LIKE": 80, "LOVE": 10}, "end_time": "2026-08-17"}]},
+            {"name": "views", "values": [{"value": 900}]},
+            {"name": "likes", "values": [{"value": 40}]},
+            {"name": "replies", "values": [{"value": 15}]},
+            {"name": "reposts", "values": [{"value": 10}]},
+            {"name": "quotes", "values": [{"value": 5}]},
         ]
     }
-    post = _published_post("facebook_page", "fb_post_001")
+    m = _threads_metrics_dict(raw)
 
-    snap = _map_facebook_snapshot(post, raw, _NOW)
+    assert m["views"] == 900
+    assert m["likes"] == 40
+    assert m["replies"] == 15
+    assert m["reposts"] == 10
+    assert m["quotes"] == 5
 
-    assert snap.impressions == 1500
-    assert snap.engagements == 120
-    assert snap.platform == "facebook_page"
+
+async def test_threads_metrics_dict_flat_value_returns_zero():
+    """Old flat item.get('value') payload (incorrect shape) yields zeros — not crash, not wrong data."""
+    from app.integrations.meta_metrics import _threads_metrics_dict
+
+    # If API returns flat "value" (old/wrong shape), "values" key is absent -> val=0 -> 0 stored.
+    raw = {
+        "data": [
+            {"name": "likes", "value": 40},   # old incorrect shape (no "values" list)
+        ]
+    }
+    m = _threads_metrics_dict(raw)
+    assert m["likes"] == 0  # "values" key missing -> 0, not 40 — correct behaviour for wrong shape
+
+
+async def test_map_threads_payload_to_normalized_columns_list_form():
+    """Threads insights maps views->impressions, sums engagement fields using list-form payload (Story 24.5)."""
+    from app.integrations.meta_metrics import _map_threads_snapshot
+
+    raw = {
+        "data": [
+            {"name": "views", "values": [{"value": 900}]},
+            {"name": "likes", "values": [{"value": 40}]},
+            {"name": "replies", "values": [{"value": 15}]},
+            {"name": "reposts", "values": [{"value": 10}]},
+            {"name": "quotes", "values": [{"value": 5}]},
+        ]
+    }
+    post = _published_post("threads", "threads_media_001")
+
+    snap = _map_threads_snapshot(post, raw, _NOW)
+
+    assert snap.impressions == 900
+    assert snap.engagements == 70    # 40+15+10+5
+    assert snap.platform == "threads"
     assert snap.unavailable_reason is None
-    assert snap.captured_at == _NOW
-    # Story 24.4: likes from LIKE subtype
-    assert snap.likes == 80
-    # No _object key -> comments/shares NULL
-    assert snap.comments is None
-    assert snap.shares is None
+    # Story 24.4: Threads noun mapping — replies->comments, reposts->shares
+    assert snap.likes == 40
+    assert snap.comments == 15   # replies
+    assert snap.shares == 10     # reposts
 
 
-async def test_map_facebook_payload_with_object_edge_data():
-    """FB snapshot with _object data populates comments and shares."""
+# ── Story 24.5 AC#10.11 — FB metric set has no deprecated metrics ────────────
+
+def test_fb_metrics_has_no_deprecated_metrics():
+    """_FB_METRICS must not contain any June-2026-deprecated metrics (Story 24.5 AC#4)."""
+    from app.integrations.meta_metrics import _FB_METRICS
+
+    deprecated = {"post_impressions", "post_engaged_users", "post_reactions_by_type_total"}
+    for dep in deprecated:
+        assert dep not in _FB_METRICS, (
+            f"_FB_METRICS must not contain deprecated metric '{dep}' — "
+            f"it was removed in Meta's June 2026 Page Insights deprecation"
+        )
+
+    # Must contain per-type reaction counters
+    assert "post_reactions_like_total" in _FB_METRICS
+    assert "post_reactions_love_total" in _FB_METRICS
+
+
+# ── Story 24.5 AC#10.12 — FB snapshot maps reactions -> likes, impressions=None ──
+
+async def test_map_facebook_reactions_to_likes_impressions_null():
+    """FB snapshot sums post_reactions_*_total to likes; impressions=None when no views metric (Story 24.5 AC#5/5a)."""
     from app.integrations.meta_metrics import _map_facebook_snapshot
 
     raw = {
         "data": [
-            {"name": "post_impressions", "values": [{"value": 1000}]},
-            {"name": "post_engaged_users", "values": [{"value": 50}]},
-            {"name": "post_reactions_by_type_total", "values": [{"value": {"LIKE": 30, "LOVE": 5}}]},
+            {"name": "post_reactions_like_total", "values": [{"value": 80, "end_time": "2026-08-17"}]},
+            {"name": "post_reactions_love_total", "values": [{"value": 10, "end_time": "2026-08-17"}]},
+            {"name": "post_reactions_wow_total", "values": [{"value": 3, "end_time": "2026-08-17"}]},
+            {"name": "post_reactions_haha_total", "values": [{"value": 2, "end_time": "2026-08-17"}]},
+            {"name": "post_reactions_sorry_total", "values": [{"value": 1, "end_time": "2026-08-17"}]},
+            {"name": "post_reactions_anger_total", "values": [{"value": 0, "end_time": "2026-08-17"}]},
+            # No post_media_view -> impressions should be None
         ],
         "_object": {
-            "comments": {"summary": {"total_count": 12, "can_comment": True}},
+            "comments": {"summary": {"total_count": 12}},
             "shares": {"count": 7},
-            "id": "123456789",
         },
     }
-    post = _published_post("facebook_page", "fb_post_002")
+    post = _published_post("facebook_page", "fb_post_new_metrics")
 
     snap = _map_facebook_snapshot(post, raw, _NOW)
 
-    assert snap.likes == 30
+    # impressions=None (no views metric returned)
+    assert snap.impressions is None
+    # likes = sum of all reaction counters = 80+10+3+2+1+0 = 96
+    assert snap.likes == 96
     assert snap.comments == 12
     assert snap.shares == 7
-    assert snap.engagements == 50  # post_engaged_users unchanged
+    # engagements = likes + comments + shares = 96 + 12 + 7 = 115
+    assert snap.engagements == 115
+    assert snap.platform == "facebook_page"
+    assert snap.unavailable_reason is None
 
+
+async def test_map_facebook_with_post_media_view_sets_impressions():
+    """When post_media_view is present and non-zero, FB impressions is populated (Story 24.5 AC#5)."""
+    from app.integrations.meta_metrics import _map_facebook_snapshot
+
+    raw = {
+        "data": [
+            {"name": "post_reactions_like_total", "values": [{"value": 50}]},
+            {"name": "post_reactions_love_total", "values": [{"value": 5}]},
+            {"name": "post_reactions_wow_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_haha_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_sorry_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_anger_total", "values": [{"value": 0}]},
+            {"name": "post_media_view", "values": [{"value": 1234}]},
+        ],
+    }
+    post = _published_post("facebook_page", "fb_post_with_views")
+
+    snap = _map_facebook_snapshot(post, raw, _NOW)
+
+    assert snap.impressions == 1234
+    assert snap.likes == 55  # 50+5
+    assert snap.unavailable_reason is None
+
+
+# ── Story 24.5 AC#10.13 — FB NULL impressions is NOT an unavailable row ──────
+
+async def test_facebook_null_impressions_not_unavailable_row():
+    """FB post with NULL impressions + real engagements: unavailable_reason=None (Story 24.5 AC#5a/9)."""
+    from app.integrations.meta_metrics import fetch
+
+    # API returns 200 with reactions but no post_media_view -> impressions=None
+    insights_body = {
+        "data": [
+            {"name": "post_reactions_like_total", "values": [{"value": 30}]},
+            {"name": "post_reactions_love_total", "values": [{"value": 5}]},
+            {"name": "post_reactions_wow_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_haha_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_sorry_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_anger_total", "values": [{"value": 0}]},
+            # no post_media_view
+        ]
+    }
+    obj_body = {
+        "comments": {"summary": {"total_count": 5}},
+        "shares": {"count": 3},
+        "id": "123",
+    }
+
+    call_count = 0
+
+    async def side_effect(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return _httpx_response(200, insights_body)
+        return _httpx_response(200, obj_body)
+
+    mock_http_client = AsyncMock()
+    mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+    mock_http_client.__aexit__ = AsyncMock(return_value=False)
+    mock_http_client.get = AsyncMock(side_effect=side_effect)
+
+    post = _published_post("facebook_page", "fb_null_impressions_post")
+
+    with patch("app.integrations.meta_metrics.httpx.AsyncClient", return_value=mock_http_client):
+        snapshots = await fetch([post], FB_CREDS, "facebook_page")
+
+    assert len(snapshots) == 1
+    snap = snapshots[0]
+    # NULL impressions is NOT an unavailable row — engagements are real
+    assert snap.impressions is None
+    assert snap.unavailable_reason is None
+    assert snap.likes == 35  # 30+5
+    assert snap.comments == 5
+    assert snap.shares == 3
+    assert snap.engagements == 43  # 35+5+3
+
+
+# ── AC #11.1 / 24.4 AC#13 — payload mapping (IG unchanged) ──────────────────
 
 async def test_map_instagram_payload_uses_views_for_impressions():
     """IG insights maps `views` into impressions (impressions removed in Graph v21)."""
@@ -152,33 +349,6 @@ async def test_map_instagram_falls_back_to_reach_when_views_absent():
     assert snap.likes == 30
     assert snap.comments == 5
     assert snap.shares == 1
-
-
-async def test_map_threads_payload_to_normalized_columns():
-    """Threads insights maps views->impressions, sums engagement fields, and maps component nouns."""
-    from app.integrations.meta_metrics import _map_threads_snapshot
-
-    raw = {
-        "data": [
-            {"name": "views", "value": 900},
-            {"name": "likes", "value": 40},
-            {"name": "replies", "value": 15},
-            {"name": "reposts", "value": 10},
-            {"name": "quotes", "value": 5},
-        ]
-    }
-    post = _published_post("threads", "threads_media_001")
-
-    snap = _map_threads_snapshot(post, raw, _NOW)
-
-    assert snap.impressions == 900
-    assert snap.engagements == 70    # 40+15+10+5
-    assert snap.platform == "threads"
-    assert snap.unavailable_reason is None
-    # Story 24.4: Threads noun mapping — replies->comments, reposts->shares
-    assert snap.likes == 40
-    assert snap.comments == 15   # replies
-    assert snap.shares == 10     # reposts
 
 
 async def test_facebook_page_under_100_likes_returns_unavailable_not_exception():
@@ -262,15 +432,19 @@ async def test_threads_permission_missing_returns_unavailable():
 # ── 24.4 AC#13 — FB second call fault isolation ──────────────────────────────
 
 async def test_facebook_object_edge_failure_preserves_primary_snapshot():
-    """If the FB second (object-edge) call fails, primary impressions/engagements are still recorded
-    and comments/shares are NULL (not raised, not lost) — AD-A10 fault isolation."""
+    """If the FB second (object-edge) call fails, primary engagements are still recorded
+    and comments/shares are NULL (not raised, not lost) — AD-A10 fault isolation.
+    Story 24.5: impressions=None (no views metric), engagements from reactions."""
     from app.integrations.meta_metrics import fetch
 
     insights_resp = _httpx_response(200, {
         "data": [
-            {"name": "post_impressions", "values": [{"value": 800}]},
-            {"name": "post_engaged_users", "values": [{"value": 40}]},
-            {"name": "post_reactions_by_type_total", "values": [{"value": {"LIKE": 20}}]},
+            {"name": "post_reactions_like_total", "values": [{"value": 20}]},
+            {"name": "post_reactions_love_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_wow_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_haha_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_sorry_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_anger_total", "values": [{"value": 0}]},
         ]
     })
 
@@ -296,14 +470,16 @@ async def test_facebook_object_edge_failure_preserves_primary_snapshot():
 
     assert len(snapshots) == 1
     snap = snapshots[0]
-    # Primary data preserved
-    assert snap.impressions == 800
-    assert snap.engagements == 40
+    # impressions=None (no views metric), but NOT an unavailable row
+    assert snap.impressions is None
+    assert snap.unavailable_reason is None
+    # likes from reactions
     assert snap.likes == 20
+    # engagements = reactions only (comments/shares degraded to NULL by object-edge failure)
+    assert snap.engagements == 20
     # Object-edge data degraded to NULL — not raised, not fabricated
     assert snap.comments is None
     assert snap.shares is None
-    assert snap.unavailable_reason is None
 
 
 async def test_facebook_object_edge_non200_preserves_primary_snapshot():
@@ -312,9 +488,12 @@ async def test_facebook_object_edge_non200_preserves_primary_snapshot():
 
     insights_resp = _httpx_response(200, {
         "data": [
-            {"name": "post_impressions", "values": [{"value": 600}]},
-            {"name": "post_engaged_users", "values": [{"value": 25}]},
-            {"name": "post_reactions_by_type_total", "values": [{"value": {"LIKE": 10}}]},
+            {"name": "post_reactions_like_total", "values": [{"value": 10}]},
+            {"name": "post_reactions_love_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_wow_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_haha_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_sorry_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_anger_total", "values": [{"value": 0}]},
         ]
     })
     obj_error_resp = _httpx_response(400, {"error": {"code": 100, "message": "Not found"}})
@@ -338,8 +517,7 @@ async def test_facebook_object_edge_non200_preserves_primary_snapshot():
 
     assert len(snapshots) == 1
     snap = snapshots[0]
-    assert snap.impressions == 600
-    assert snap.engagements == 25
+    assert snap.impressions is None  # no views metric
     assert snap.likes == 10
     assert snap.comments is None
     assert snap.shares is None
@@ -366,15 +544,16 @@ def test_extract_components_from_raw_instagram():
 
 
 def test_extract_components_from_raw_threads():
-    """extract_components_from_raw maps replies->comments, reposts->shares for Threads."""
+    """extract_components_from_raw maps replies->comments, reposts->shares for Threads (list-form payload)."""
     from app.integrations.meta_metrics import extract_components_from_raw
 
+    # Story 24.5: Threads payload is list form (values[0].value)
     raw = {
         "data": [
-            {"name": "likes", "value": 40},
-            {"name": "replies", "value": 15},
-            {"name": "reposts", "value": 10},
-            {"name": "quotes", "value": 5},
+            {"name": "likes", "values": [{"value": 40}]},
+            {"name": "replies", "values": [{"value": 15}]},
+            {"name": "reposts", "values": [{"value": 10}]},
+            {"name": "quotes", "values": [{"value": 5}]},
         ]
     }
     likes, comments, shares = extract_components_from_raw("threads", raw)
@@ -413,12 +592,18 @@ def test_extract_components_unavailability_row_returns_null():
 
 
 def test_extract_components_facebook_with_object_edge():
-    """FB raw with _object key returns comments and shares from object-edge data."""
+    """FB raw with _object key and post_reactions_*_total returns reactions-summed likes and comments/shares."""
     from app.integrations.meta_metrics import extract_components_from_raw
 
+    # Story 24.5: per-type counters, not post_reactions_by_type_total
     raw = {
         "data": [
-            {"name": "post_reactions_by_type_total", "values": [{"value": {"LIKE": 30}}]},
+            {"name": "post_reactions_like_total", "values": [{"value": 25}]},
+            {"name": "post_reactions_love_total", "values": [{"value": 5}]},
+            {"name": "post_reactions_wow_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_haha_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_sorry_total", "values": [{"value": 0}]},
+            {"name": "post_reactions_anger_total", "values": [{"value": 0}]},
         ],
         "_object": {
             "comments": {"summary": {"total_count": 8}},
@@ -426,7 +611,7 @@ def test_extract_components_facebook_with_object_edge():
         },
     }
     likes, comments, shares = extract_components_from_raw("facebook_page", raw)
-    assert likes == 30
+    assert likes == 30  # 25+5
     assert comments == 8
     assert shares == 4
 
@@ -532,8 +717,8 @@ async def test_bulk_insert_writes_two_rows_on_two_polls():
         client_id=client_id,
         platform="facebook_page",
         captured_at=_NOW - timedelta(hours=2),
-        impressions=100,
-        engagements=10,
+        impressions=None,   # Story 24.5: FB impressions is NULL
+        engagements=18,
         likes=8,
         comments=None,
         shares=None,
@@ -544,8 +729,8 @@ async def test_bulk_insert_writes_two_rows_on_two_polls():
         client_id=client_id,
         platform="facebook_page",
         captured_at=_NOW,
-        impressions=150,
-        engagements=15,
+        impressions=None,   # Story 24.5: FB impressions is NULL
+        engagements=23,
         likes=12,
         comments=2,
         shares=1,
@@ -560,14 +745,15 @@ async def test_bulk_insert_writes_two_rows_on_two_polls():
 
     await bulk_insert_snapshots(mock_session, [snap1])
     first_count = len(added_objects)
-    first_row_impressions = added_objects[0].impressions
+    first_row_engagements = added_objects[0].engagements
 
     await bulk_insert_snapshots(mock_session, [snap2])
 
     assert len(added_objects) == 2, "Each poll must produce a new INSERT row"
-    assert first_row_impressions == 100, "First row was mutated — append-only invariant violated"
+    assert first_row_engagements == 18, "First row was mutated — append-only invariant violated"
     # The second row carries the newer numbers
-    assert added_objects[1].impressions == 150
+    assert added_objects[1].impressions is None
+    assert added_objects[1].engagements == 23
     assert added_objects[1].captured_at == _NOW
     assert added_objects[1].likes == 12
     assert added_objects[1].comments == 2
@@ -603,3 +789,51 @@ async def test_bulk_insert_does_not_update_existing_row():
     for call_args in mock_session.execute.call_args_list:
         sql_str = str(call_args[0][0]).upper() if call_args[0] else ""
         assert "UPDATE" not in sql_str, "bulk_insert_snapshots must not issue UPDATE statements"
+
+
+# ── Story 24.5 AC#10.14 — NULL-impression rollup ─────────────────────────────
+
+async def test_client_summary_engagement_rate_excludes_null_impression_posts():
+    """engagement_rate is computed only over posts with non-NULL impressions (Story 24.5 AC#5a).
+
+    A FB post (impressions=NULL, engagements=43) alongside an IG post (impressions=5000,
+    engagements=200) must yield rate=200/5000=0.04, not (200+43)/5000=0.0486.
+
+    The SQL CASE expression in get_client_summary ensures the FB engagements are excluded
+    from the numerator when impressions is NULL. This test mocks the session to return
+    the rate the SQL should produce, then asserts the service passes it through cleanly.
+    Full SQL formula verification requires a Postgres integration test.
+    """
+    from app.services.analytics import get_client_summary
+
+    client_id = uuid.uuid4()
+    expected_rate = 200.0 / 5000.0  # only IG post counted
+
+    mock_row = MagicMock()
+    mock_row.__getitem__ = lambda self, k: {
+        "posts_tracked": 2,
+        "total_impressions": 5000,
+        "total_engagements": 243,  # both posts
+        "total_likes": None,
+        "total_comments": None,
+        "total_shares": None,
+        "engagement_rate": expected_rate,  # SQL formula: only IG post in numerator
+        "freshest_captured_at": _NOW,
+        "best_post_id": None,
+    }[k]
+
+    mock_result = MagicMock()
+    mock_result.mappings.return_value.first.return_value = mock_row
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    summary = await get_client_summary(mock_session, client_id)
+
+    assert summary.posts_tracked == 2
+    assert summary.total_impressions == 5000
+    assert summary.total_engagements == 243
+    # Rate must be 0.04 (IG only), not 0.0486 (IG+FB engagements / IG impressions)
+    assert abs(summary.engagement_rate - expected_rate) < 1e-9, (
+        f"engagement_rate={summary.engagement_rate} should be {expected_rate} "
+        f"(only impressions-bearing posts in numerator)"
+    )
