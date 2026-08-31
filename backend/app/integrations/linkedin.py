@@ -160,12 +160,15 @@ async def create_ugc_post(access_token: str, blog_html: str, linkedin_text: str,
 
 
 async def get_user_name(access_token: str) -> str:
-    """Fetch the authenticated LinkedIn user's display name."""
+    """Fetch the authenticated LinkedIn user's display name via /v2/me (r_basicprofile)."""
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
-            "https://api.linkedin.com/v2/userinfo",
+            "https://api.linkedin.com/v2/me",
             headers={"Authorization": f"Bearer {access_token}", "LinkedIn-Version": "202602"},
         )
     if resp.status_code != 200:
         return "unknown"
-    return resp.json().get("name", "unknown")
+    data = resp.json()
+    first = data.get("localizedFirstName", "")
+    last = data.get("localizedLastName", "")
+    return f"{first} {last}".strip() or "unknown"
