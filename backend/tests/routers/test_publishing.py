@@ -1052,6 +1052,7 @@ async def test_connections_list_linkedin_org_capable_true_for_org_scoped_blob():
 
     li_item = next(i for i in response["items"] if i["platform"] == "linkedin")
     assert li_item["linkedin_org_capable"] is True
+    assert li_item["linkedin_member_capable"] is False
     # Confirm secrets are not leaked
     assert "access_token" not in li_item
     assert "scopes" not in li_item
@@ -1080,4 +1081,35 @@ async def test_connections_list_linkedin_org_capable_false_for_legacy_blob():
         )
 
     li_item = next(i for i in response["items"] if i["platform"] == "linkedin")
+    assert li_item["linkedin_org_capable"] is False
+    assert li_item["linkedin_member_capable"] is False
+
+
+@pytest.mark.asyncio
+async def test_connections_list_linkedin_member_capable_true_for_analytics_scope():
+    """Connections list returns linkedin_member_capable=True when blob has r_member_postAnalytics in scopes."""
+    from app.routers.publishing import list_platform_connections
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+
+    creds = {
+        "access_token": "tok",
+        "name": "Carol",
+        "scopes": "openid,profile,w_member_social,r_member_postAnalytics",
+    }
+    li_conn = _make_linkedin_connection(client_id=client.id, creds=creds)
+
+    with (
+        patch("app.routers.publishing.get_client", AsyncMock(return_value=client)),
+        patch("app.routers.publishing.get_connections_for_client", AsyncMock(return_value=[li_conn])),
+    ):
+        response = await list_platform_connections(
+            client_id=client.id,
+            current_user={"user_id": str(user_id)},
+            db=AsyncMock(),
+        )
+
+    li_item = next(i for i in response["items"] if i["platform"] == "linkedin")
+    assert li_item["linkedin_member_capable"] is True
     assert li_item["linkedin_org_capable"] is False

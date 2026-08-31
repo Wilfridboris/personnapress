@@ -1,5 +1,27 @@
 # Deferred Work
 
+## Deferred from: code review of 25-2-linkedin-personal-profile-analytics (2026-08-31)
+
+- F5. All-metrics 400/5xx misclassified as `no_data_yet` [backend/app/integrations/linkedin_metrics.py — `_fetch_member_one`]: when every metric call in the fan-out fails (e.g. LinkedIn returns 400 on all `_MEMBER_METRIC_TYPES`), the resulting snapshot has all-None metrics and `unavailable_reason=None`, so the dashboard shows "no data yet" rather than a transient-failure reason. AC #8 specifies per-metric skip semantics only; distinguishing full-fan-out failure from genuine empty data requires a new reason code and spec change. Accepted as out-of-spec; file a new story if misclassification becomes a user complaint.
+
+## Deferred from: analytics gap analysis after 24-5 + 25-1 (2026-08-30)
+
+Cross-cutting gaps found while reviewing the post-analytics feature end-to-end (Epic 24 + 25) once 24-5 and 25-1 landed. Theme: code is fixed, but OAuth grants and the verify-loop are not closed — a correct integration still returns N/A if the stored token never carried the analytics scope.
+
+**Tier 1 — blocks the feature actually working:**
+- G1. [FIXED 2026-08-30] LinkedIn OAuth authorize URL now requests the analytics scopes [frontend/app/api/auth/linkedin/route.ts]. Added `r_member_postAnalytics` (member analytics, Story 25-2 — requested unconditionally so analytics re-consent is a single grant) and upgraded read-only `r_organization_admin` → `rw_organization_admin` (required by organizationalEntityShareStatistics for 25-1 org analytics). `.env.example` doc updated. REMAINING under G2/G3: this only fixes the scope *request* — existing connections must still re-consent (G2), and prod must be verified to confirm the org-stats call stops 403ing (G3).
+- G2. Re-consent rollout for new scopes. Existing LinkedIn + Threads connections were authorized before the analytics scopes existed, so their stored tokens lack them → analytics stays N/A until each user reconnects. Reactive handling exists (`token_insufficient_scope` in [frontend/components/publishing/PlatformConnectionCard.tsx:162]) but there is no proactive "reconnect to enable analytics" nudge. Needs a small UX story.
+
+**Tier 2 — verify / harden:**
+- G3. 24-5 fix never verified in production. It is committed/done but no live 30-min poll cycle was confirmed to yield real numbers (Threads populating, FB engagements present, IG intact). Deploy to the prod server + restart scheduler + confirm a fresh `post_metrics` snapshot has real data. Closes the loop on the original N/A report.
+- G4. Instagram insights scope unconfirmed. `instagram_manage_insights` appears in no OAuth scope request; the documented Meta permission set [frontend/.env.local.example:24-25] lists `instagram_basic, instagram_content_publish, pages_show_list, pages_read_engagement, pages_manage_posts, business_management` but NOT `instagram_manage_insights`. IG produced no error rows only because no IG posts have been polled; a real IG post may fail with a permission error. Verify the Meta OAuth scope includes it.
+- G5. 25-1 carries `followup_review_recommended: true` with a fragile manual URL-encoding workaround (httpx double-encodes `List()` parens → URL built by hand in `_fetch_org_stats`). Run code-review on 25-1 next cycle. [backend/app/integrations/linkedin_metrics.py]
+- G6. No silent-failure monitoring. The original drift bug rotted undetected for weeks until Boris noticed N/A manually. Add a Sentry alert / health check when a platform's recent snapshots are ~100% `unavailable_reason` for N cycles, so the next API deprecation is caught early. Addresses the whole class of failure. [backend/app/workers/analytics.py]
+
+**Tier 3 — accept / minor:**
+- G7. Posts older than the 90-day cadence horizon stay N/A forever (never re-polled) [backend/app/workers/analytics.py CADENCE]. Expected behavior; note if history backfill is ever requested.
+- G8. X/Twitter has no analytics collection at all — published-to but not measured. Confirm this is an intentional scope boundary (X API analytics is gated/expensive) vs. a future story.
+
 ## Deferred from: code review of 23-3-homepage-conversion-redesign (2026-08-26)
 
 - Pillar 1 H2 echoes "Built For" eyebrow label [frontend/app/page.tsx:260] — spec specified this copy via /human-seo-copywriter; refine in next copy iteration

@@ -323,6 +323,7 @@ export interface PlatformConnectionStatus {
   linkedin_target?: "personal" | "organization";
   linkedin_org_name?: string;
   linkedin_org_capable?: boolean;
+  linkedin_member_capable?: boolean;
 }
 
 export interface ConnectionCreatePayload {

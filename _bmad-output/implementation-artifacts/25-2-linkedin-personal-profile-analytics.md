@@ -4,9 +4,9 @@ baseline_commit: a33c7dbb2abab162579d40f2a6543d1c71776b51
 
 # Story 25.2: LinkedIn Personal Profile Analytics (member path)
 
-Status: backlog
+Status: done
 
-<!-- BACKLOG: blocked on LinkedIn access. Requires the Community Management API product approved on the app AND the r_member_postAnalytics scope granted (current grant is write-only w_member_social). Flip to ready-for-dev only after both are in place. Depends on 25-1. -->
+<!-- UNBLOCKED 2026-08-30: the new LinkedIn app was granted r_member_postAnalytics (member post-analytics read scope) alongside the org scopes, and 25-1 landed the shared LinkedIn plumbing (commit 5ff3356). The former blocker (scope not held) is resolved. Remaining items are in-story operational steps, NOT blockers: per-user re-consent to grant the new scope, and flipping LINKEDIN_MEMBER_METRICS_ENABLED. Depends on 25-1 (done). -->
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -20,12 +20,12 @@ so that I can measure my personal LinkedIn presence next to my company-page and 
 
 Second LinkedIn story of Epic 25, and the **member/personal-profile** branch of the spine's LinkedIn split (AD-A8). It depends on **25-1** having landed the shared LinkedIn plumbing: `integrations/linkedin_metrics.py`, LinkedIn post-id capture in `services/publishing.py`, the `"linkedin"` platform wired into the harvester + read path + dashboard. This story adds the **member path** on top of that plumbing and flips personal-profile posts from the "not available" state (rendered by 25-1) to real metrics.
 
-**Why this is blocked (and separate from 25-1):** personal-post analytics uses a different endpoint, `memberCreatorPostAnalytics`, which requires **all** of:
-1. The **Community Management API** product approved on the LinkedIn app (Development Tier is a build/test sandbox; production requires LinkedIn app review, including a verified company Page, use-case description, and a screencast).
-2. The **`r_member_postAnalytics`** scope. The app's current LinkedIn grant is write-only `w_member_social`; the read analytics scope is not held. (The architecture spine names this `r_member_social`; current LinkedIn docs specify `r_member_postAnalytics` for `memberCreatorPostAnalytics` — treat `r_member_postAnalytics` as authoritative and verify at build.)
-3. Per-user member consent — each user must reconnect LinkedIn to grant the new scope.
+**Why this is separate from 25-1 (no longer blocked):** personal-post analytics uses a different endpoint, `memberCreatorPostAnalytics`, and a different scope than the org path. Access is now in place:
+1. **`r_member_postAnalytics` scope — GRANTED** on the new LinkedIn app (2026-08-30), alongside the org scopes. (The architecture spine names this `r_member_social`; current LinkedIn docs specify `r_member_postAnalytics` for `memberCreatorPostAnalytics` — treat `r_member_postAnalytics` as authoritative and verify at build.)
+2. **Community Management API product** — granted at Developer Tier on the new app. If production member analytics returns 403 insufficient-product at build, confirm the product is fully approved (verified Page + use-case). Not treated as a blocker for starting this story.
+3. **Per-user member consent** — each user must reconnect LinkedIn so the stored connection carries the new scope (older connections predate it). This is handled in-story via AC #1's scope-detection + graceful degradation, not a pre-req.
 
-Until all three hold, the member path stays behind `LINKEDIN_MEMBER_METRICS_ENABLED` (default false) and personal posts keep 25-1's AD-A5 "not available" state. This story is the work to do **once approval lands**.
+The member path ships behind `LINKEDIN_MEMBER_METRICS_ENABLED` (default false). While the flag is false, or a connection lacks the scope, personal posts keep 25-1's AD-A5 "not available" state. Flip the flag on once per-user re-consent has rolled out.
 
 ## Acceptance Criteria
 
@@ -55,22 +55,22 @@ Until all three hold, the member path stays behind `LINKEDIN_MEMBER_METRICS_ENAB
 
 ## Tasks / Subtasks
 
-- [ ] Task 1 — OAuth scope + capability detection (AC: #1, #2)
-  - [ ] Add `r_member_postAnalytics` to the LinkedIn authorize scope set (frontend authorize URL + any backend constant). Verify the exact scope string against LinkedIn docs at build.
-  - [ ] Persist granted scopes (existing `scopes` field) and derive a `member_metrics_capable` flag (mirror `org_capable` in `_extract_linkedin_target`).
-  - [ ] Add `LINKEDIN_MEMBER_METRICS_ENABLED` handling (config already reserved by 25-1/spine; default false).
-- [ ] Task 2 — Member metrics integration (AC: #3, #4, #8)
-  - [ ] Extend `backend/app/integrations/linkedin_metrics.py` with a member branch calling `memberCreatorPostAnalytics` (single-post `entity` lookup); map per AC #4; unavailable-reason mapping per AC #8.
-  - [ ] Keep org and member branches behind one `fetch` entry, selected by the post's publish target.
-- [ ] Task 3 — Member post-id capture (AC: #5)
-  - [ ] Ensure `_capture_linkedin_post` (from 25-1) covers personal-profile posts; extend if 25-1 scoped capture to org only.
-- [ ] Task 4 — Harvester target-branch routing (AC: #6, #8)
-  - [ ] In `workers/analytics.py`, branch LinkedIn posts on stored publish target: org -> org path; personal -> member path (flag+scope gated), else record unavailable.
-- [ ] Task 5 — Dashboard member rendering (AC: #7)
-  - [ ] Enabled+scoped: personal posts render real metrics through the existing `PostMetricsTable` row + `MetricsSummaryCards` best-post (no new component; LinkedIn `PlatformIcon` already present).
-  - [ ] Not enabled/scoped: add `REASON_COPY` keys (`member_metrics_disabled`, `member_scope_missing`, `consent_revoked`) in `PlatformUnavailableState.tsx`, matching backend reason strings exactly.
-  - [ ] Reconnect hint: extend `PlatformUnavailableState` with an optional keyboard-focusable link to `/connections` inside the tooltip (reuse story 5.8 pattern), preserving existing tooltip a11y; or copy-only fallback. No emoji; Paper Style only (no glass/`dark:`).
-- [ ] Task 6 — Tests (AC: #10)
+- [x] Task 1 — OAuth scope + capability detection (AC: #1, #2)
+  - [x] Add `r_member_postAnalytics` to the LinkedIn authorize scope set (frontend authorize URL + any backend constant). Verify the exact scope string against LinkedIn docs at build. (Scope already requested in `frontend/app/api/auth/linkedin/route.ts` via the G1 enablement change; verified against LinkedIn Member Post Statistics docs — `r_member_postAnalytics` is authoritative for `memberCreatorPostAnalytics`.)
+  - [x] Persist granted scopes (existing `scopes` field) and derive a `member_metrics_capable` flag (mirror `org_capable` in `_extract_linkedin_target`). Added `member_capable` to `_extract_linkedin_target` (now a 4-tuple) and exposed `linkedin_member_capable` on the connections list item; added `linkedin_member_capable` to the frontend `ConnectionResponse` type.
+  - [x] Add `LINKEDIN_MEMBER_METRICS_ENABLED` handling (config already reserved by 25-1/spine; default false). Integration now reads the flag to gate the member path; refreshed config + `.env.example` comments.
+- [x] Task 2 — Member metrics integration (AC: #3, #4, #8)
+  - [x] Extend `backend/app/integrations/linkedin_metrics.py` with a member branch calling `memberCreatorPostAnalytics` (single-post `entity` lookup); map per AC #4; unavailable-reason mapping per AC #8. Per-metric fan-out (the finder returns one metric per call), `entity=(share:...)`/`(ugc:...)` encoding, `aggregation=TOTAL`, version 202608.
+  - [x] Keep org and member branches behind one `fetch` entry, selected by the post's publish target (`_fetch_one` routes on `creds["target"]`).
+- [x] Task 3 — Member post-id capture (AC: #5)
+  - [x] Ensure `_capture_linkedin_post` (from 25-1) covers personal-profile posts; extend if 25-1 scoped capture to org only. Verified 25-1's capture is target-agnostic (personal posts already persist with `platform="linkedin"`); added a personal-target capture regression test.
+- [x] Task 4 — Harvester target-branch routing (AC: #6, #8)
+  - [x] In `workers/analytics.py`, branch LinkedIn posts on stored publish target: org -> org path; personal -> member path (flag+scope gated), else record unavailable. Realized in the integration's `_fetch_one` (the same call the worker makes for `platform="linkedin"`); personal posts are already selected by the sweep (`platform="linkedin"` in `_METRICS_PLATFORMS`), poll on the same cadence/stagger, and keep per-item fault isolation.
+- [x] Task 5 — Dashboard member rendering (AC: #7)
+  - [x] Enabled+scoped: personal posts render real metrics through the existing `PostMetricsTable` row + `MetricsSummaryCards` best-post (no new component; LinkedIn `PlatformIcon` already present). No frontend change needed — member snapshots are ordinary `platform="linkedin"` rows.
+  - [x] Not enabled/scoped: add `REASON_COPY` keys (`member_metrics_disabled`, `member_scope_missing`, `consent_revoked`) in `PlatformUnavailableState.tsx`, matching backend reason strings exactly.
+  - [x] Reconnect hint: extend `PlatformUnavailableState` with an optional keyboard-focusable link to `/connections` inside the tooltip (reuse story 5.8 pattern), preserving existing tooltip a11y; or copy-only fallback. Added a `RECONNECT_REASONS`-driven link inside the tooltip (`scope_missing`, `member_scope_missing`, `consent_revoked`, `token_expired`); keyboard-focusable with visible focus ring + `aria-label`. No emoji; Paper Style only.
+- [x] Task 6 — Tests (AC: #10)
 
 ## Dev Notes
 
@@ -109,25 +109,60 @@ Until all three hold, the member path stays behind `LINKEDIN_MEMBER_METRICS_ENAB
 
 ### Agent Model Used
 
-(pending)
+claude-opus-4-8 (bmad-dev-story workflow)
 
 ### Debug Log References
 
-(pending)
+- Verified `memberCreatorPostAnalytics` request/response shape against LinkedIn Member Post Statistics docs (li-lms-2026-08): single-post `entity` finder (`q=entity`), one `queryType` metric per call, `aggregation=TOTAL`, flat `elements[].metricType` string + `count`, `entity=(share:...)`/`(ugc:...)` encoding.
+- `pytest tests/test_linkedin_metrics.py` -> 41 passed (25-1 regressions + new member suite).
+- `vitest run PlatformUnavailableState.test.tsx` -> 7 passed.
+- All other observed test failures (3 GitHub/Webflow router tests, 7 PlatformConnectionCard WordPress-flow tests, 2 generation-service worker tests under a broad `-k` selection) reproduce identically on the clean 25-1 tree (`git stash`) and are unrelated to this story — network-dependent and pre-existing test-ordering pollution.
 
 ### Completion Notes List
 
-(pending)
+- **Member endpoint verified at build (per AGENTS.md / AC note):** `GET /rest/memberCreatorPostAnalytics?q=entity&entity=(share:{urn})&queryType={METRIC}&aggregation=TOTAL`. The finder returns ONE metric per call, so a full snapshot fans out to one GET per metric type (`_MEMBER_METRIC_TYPES`). Scope `r_member_postAnalytics` confirmed authoritative (spine's `r_member_social` is superseded).
+- **Routing (AC #6):** the org-vs-member branch lives in `linkedin_metrics._fetch_one` keyed on `creds["target"]`, consistent with the 25-1 design; the harvester already selects personal posts (`platform="linkedin"`) and routes them here. No worker restructure needed.
+- **Gating (AC #1/#2):** flag off -> `member_metrics_disabled` (no API call); connection missing `r_member_postAnalytics` -> `member_scope_missing` (no API call). Both keep 25-1's "not available" state and now show a reconnect affordance.
+- **Fault isolation (AC #8):** auth/consent (401/403) degrades the whole post (`token_expired` / `consent_revoked` / `scope_missing`); a single-metric 400/500 is skipped so remaining metrics still snapshot; all-empty -> `no_data_yet`; unexpected exceptions still bubble to the outer `fetch()` Sentry capture. Org path, read path, and sweep untouched.
+- **Mapping (AC #4):** impressions <- IMPRESSION (fallback MEMBERS_REACHED); engagements <- REACTION+COMMENT+RESHARE+POST_SAVE+LINK_CLICKS (NULL-safe); likes<-REACTION, comments<-COMMENT, shares<-RESHARE; all counts preserved in `raw.memberCreatorPostAnalytics`.
+- **Capture (AC #5):** 25-1's `_capture_linkedin_post` is already target-agnostic — personal posts persist with `platform="linkedin"`; added a regression test rather than new code.
+- **Dashboard (AC #7):** enabled+scoped personal posts render as ordinary metrics rows through the existing `PostMetricsTable`/`MetricsSummaryCards` (no new component). Added the three `REASON_COPY` keys (exact backend parity) and an in-tooltip, keyboard-focusable reconnect link to `/connections` for reconnect-eligible reasons, preserving the tooltip's Escape/outside-click a11y. Paper Style only — no glass/`dark:`/motion, no emoji.
+- **Read path (AC #9):** member posts are first-class (`platform="linkedin"`, no new platform value); `services/analytics.py` is target-agnostic — no change.
+- The member path ships behind `LINKEDIN_MEMBER_METRICS_ENABLED` (default false). Flip on after per-user LinkedIn re-consent has rolled out.
 
 ### File List
 
-(pending)
+- backend/app/integrations/linkedin_metrics.py — added member branch (`_fetch_member_one`, `_fetch_member_metric`, `_member_entity_param`, `_map_member_snapshot`, `_member_unavailable`, `_member_unavailable_reason`, `_safe_json`), member reason codes, metric-type list, settings import; replaced the personal-post `member_post_unsupported` stub with the member path; docstring rewrite.
+- backend/app/routers/publishing.py — `_extract_linkedin_target` now returns `member_capable` (4-tuple); connections list exposes `linkedin_member_capable`.
+- backend/app/core/config.py — refreshed `LINKEDIN_MEMBER_METRICS_ENABLED` comment (implementation complete; flip after re-consent).
+- backend/.env.example — refreshed flag comment.
+- backend/tests/test_linkedin_metrics.py — updated the personal-target test for the new `member_metrics_disabled` behavior; added the Story 25.2 member-path suite (entity encoding, mapping, flag/scope gating, happy path share/ugc, no-data, 401/403/scope-hint, per-metric skip, reason mapper, org-vs-member routing, version header, personal capture, capability detection).
+- frontend/components/analytics/PlatformUnavailableState.tsx — added `member_metrics_disabled`/`member_scope_missing`/`consent_revoked` reason copy + `RECONNECT_REASONS` in-tooltip reconnect link to `/connections`.
+- frontend/lib/types.ts — added `linkedin_member_capable?` to `ConnectionResponse`.
+- frontend/__tests__/components/analytics/PlatformUnavailableState.test.tsx — new test file (member reason copy, reconnect-link presence/absence, tooltip toggle a11y).
+
+Pre-existing enablement (already modified in the working tree before this story; supports Task 1's authorize-URL subtask, left as-is):
+- frontend/app/api/auth/linkedin/route.ts — authorize URL requests `r_member_postAnalytics` (+ `rw_organization_admin`).
+- frontend/.env.example — LinkedIn scope-gate comment.
+- _bmad-output/implementation-artifacts/deferred-work.md — analytics gap-analysis (G1 records this scope change).
 
 ### Review Findings
 
-(pending)
+Reviewed 2026-08-31 by BMAD code-review workflow (three-agent: Blind Hunter + Edge Case Hunter + Verification Gap Reviewer).
+
+| ID | Severity | File | Finding | Resolution |
+|----|----------|------|---------|------------|
+| F1 | LOW | `linkedin_metrics.py` — `_member_unavailable_reason` | Dead branch: elements-check after 401/403 returns was unreachable | Removed dead branch |
+| F2 | MEDIUM | `linkedin_metrics.py` — `_member_unavailable_reason` | Wrong reason code: 403-with-scope hint returned `scope_missing` (org code) instead of `member_scope_missing` | Fixed return to `_REASON_MEMBER_SCOPE_MISSING`; corrected three test assertions + renamed test |
+| F3 | HIGH | `PlatformUnavailableState.tsx` | ARIA violation: `role="tooltip"` on panel containing interactive `<a>` link — tooltip role prohibits interactive children | Removed `role="tooltip"` from disclosure panel |
+| F4 | LOW | `frontend/__tests__/.../PlatformUnavailableState.test.tsx` | Untracked test file not staged for commit | Staged with `git add` |
+| F5 | LOW | `linkedin_metrics.py` — all-metrics-fail path | All-metrics 400/5xx → empty snapshot classified as `no_data_yet` rather than a distinct unavailability reason | **Deferred**: AC #8 explicitly permits single-metric skip; full-failure distinction not in spec scope |
+| F6 | LOW | `tests/routers/test_publishing.py` | `linkedin_member_capable` field added to response but not asserted in existing org/legacy tests; no positive-case test | Added `linkedin_member_capable` assertions to both existing tests; added new positive-case test (`r_member_postAnalytics` → `True`) |
+| F7 | LOW | `tests/test_linkedin_metrics.py` — `test_member_fetch_single_metric_400_is_skipped` | Dead `queryType=PREMIUM_CTA_CLICKS` URL branch (not in `_MEMBER_METRIC_TYPES`) | Removed dead branch, kept `POST_SEND` check |
 
 ## Change Log
 
 - 2026-08-20: Story 25.2 drafted as backlog (LinkedIn personal-profile analytics; member path; blocked on Community Management API approval + r_member_postAnalytics scope; depends on 25-1).
 - 2026-08-20: web-uiux-architect pass — expanded AC #7 into metrics-vs-unavailable-vs-reconnect rendering against the actual Paper Style components, added `REASON_COPY` parity + tooltip reconnect-link guidance, Task 5 detail, and a UI/UX Consistency dev note; confirmed no glass/dark/motion.
+- 2026-08-31: Implemented the member path. Added `memberCreatorPostAnalytics` integration (per-metric fan-out, entity encoding, TOTAL aggregation, 202608) gated by `LINKEDIN_MEMBER_METRICS_ENABLED` + connection scope; member reason codes (`member_metrics_disabled`, `member_scope_missing`, `consent_revoked`, plus API-failure `scope_missing`/`consent_revoked`/`token_expired`/`no_data_yet`/`unknown`); `member_capable` capability detection exposed as `linkedin_member_capable`; frontend `REASON_COPY` keys + in-tooltip reconnect link to `/connections`. Verified endpoint shape against LinkedIn docs. Tests: 41 backend + 7 frontend pass; no new regressions (all other failures pre-exist on clean tree). Status -> review.
+- 2026-08-31: Code review pass. Fixed F1 (dead branch), F2 (wrong reason code + 3 test assertions), F3 (ARIA role="tooltip" violation), F4 (staged untracked test file), F6 (added linkedin_member_capable assertions + positive test), F7 (dead PREMIUM_CTA_CLICKS test branch). F5 deferred (all-metrics-fail classification — out of spec scope). Status -> done.

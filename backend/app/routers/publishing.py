@@ -54,16 +54,24 @@ router = APIRouter(prefix="", tags=["publishing"])
 ALL_PLATFORMS = ["wordpress", "webflow", "x", "linkedin", "github_pages", "instagram", "facebook_page", "threads"]
 
 
-def _extract_linkedin_target(encrypted_credentials: str) -> tuple[str, Optional[str], bool]:
-    """Return (target, org_name, org_capable) from a LinkedIn credential blob. Defaults to personal."""
+def _extract_linkedin_target(encrypted_credentials: str) -> tuple[str, Optional[str], bool, bool]:
+    """Return (target, org_name, org_capable, member_capable) from a LinkedIn credential blob.
+
+    Defaults to personal. `org_capable` reflects whether the connection can post/read as an
+    organization (w_organization_social). `member_capable` reflects whether the connection
+    holds r_member_postAnalytics, the scope memberCreatorPostAnalytics requires for personal
+    post analytics. Connections that predate the scope grant read False and degrade gracefully.
+    """
     try:
         data = json.loads(decrypt_credential(encrypted_credentials))
+        scopes = data.get("scopes") or ""
         target = data.get("target", "personal")
         org_name = data.get("org_name") or None
-        org_capable = "w_organization_social" in (data.get("scopes") or "")
-        return target, org_name, org_capable
+        org_capable = "w_organization_social" in scopes
+        member_capable = "r_member_postAnalytics" in scopes
+        return target, org_name, org_capable, member_capable
     except Exception:
-        return "personal", None, False
+        return "personal", None, False, False
 
 
 def _extract_identifier(platform: str, encrypted_credentials: str) -> Optional[str]:
@@ -159,11 +167,12 @@ async def list_platform_connections(
                 item["github_detection"] = _extract_github_detection(pc.encrypted_credentials)
                 item["direct_commit_default"] = _extract_direct_commit_default(pc.encrypted_credentials)
             if platform == "linkedin":
-                target, org_name, org_capable = _extract_linkedin_target(pc.encrypted_credentials)
+                target, org_name, org_capable, member_capable = _extract_linkedin_target(pc.encrypted_credentials)
                 item["linkedin_target"] = target
                 if org_name:
                     item["linkedin_org_name"] = org_name
                 item["linkedin_org_capable"] = org_capable
+                item["linkedin_member_capable"] = member_capable
             items.append(item)
         elif platform == "wordpress" and "wordpress-com" in connected_map:
             # WordPress.com connection shown under the wordpress card

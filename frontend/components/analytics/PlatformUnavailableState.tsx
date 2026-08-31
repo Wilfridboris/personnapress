@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useId, useCallback } from "react";
-import { Info } from "lucide-react";
+import { Info, ExternalLink } from "lucide-react";
 
 type UnavailabilityReason =
   | "page_under_100_likes"
@@ -9,6 +9,9 @@ type UnavailabilityReason =
   | "no_snapshot"
   | "scope_missing"
   | "member_post_unsupported"
+  | "member_metrics_disabled"
+  | "member_scope_missing"
+  | "consent_revoked"
   | "no_data_yet"
   | "token_expired"
   | "unknown"
@@ -24,12 +27,19 @@ const REASON_COPY: Record<string, string> = {
     "Facebook only provides post insights for Pages with 100+ likes. Analytics will appear here once this Page reaches that threshold.",
   permission_missing:
     "Analytics permissions have not been granted for this platform. Reconnect the platform and enable insights permissions to start tracking.",
-  // LinkedIn reason codes (Story 25.1) — keys must exactly match backend unavailable_reason
-  // strings from linkedin_metrics.py (AC #9a). Do not rename without updating both sides.
+  // LinkedIn reason codes (Story 25.1 org path + Story 25.2 member path) — keys must exactly
+  // match backend unavailable_reason strings from linkedin_metrics.py (AC #9a). Do not rename
+  // without updating both sides.
   scope_missing:
     "LinkedIn analytics permissions are missing. Reconnect your LinkedIn account and grant analytics access.",
   member_post_unsupported:
     "Analytics for LinkedIn personal posts are not yet available. Company page analytics are fully supported.",
+  member_metrics_disabled:
+    "Personal LinkedIn post analytics are not enabled yet. They will appear here once the feature is turned on.",
+  member_scope_missing:
+    "Personal LinkedIn post analytics need an updated permission. Reconnect LinkedIn to grant analytics access.",
+  consent_revoked:
+    "LinkedIn analytics access was revoked for this account. Reconnect LinkedIn to resume personal post analytics.",
   no_data_yet:
     "LinkedIn analytics data is not yet available. Stats usually appear within a few hours of publishing.",
   token_expired:
@@ -37,6 +47,15 @@ const REASON_COPY: Record<string, string> = {
   unknown:
     "LinkedIn analytics are temporarily unavailable. Data will resume collecting on the next check.",
 };
+
+// Reasons a user can fix by reconnecting LinkedIn — these surface a reconnect link inside the
+// tooltip (AC #7). Reuses the story 5.8 reconnect-hint pattern; the link points to /connections.
+const RECONNECT_REASONS = new Set<string>([
+  "scope_missing",
+  "member_scope_missing",
+  "consent_revoked",
+  "token_expired",
+]);
 
 const GENERIC_COPY = "Analytics not available for this platform.";
 
@@ -51,6 +70,7 @@ export function PlatformUnavailableState({ reason }: Props) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const wrapperRef = useRef<HTMLSpanElement>(null);
   const tooltipCopy = getTooltipCopy(reason);
+  const showReconnect = typeof reason === "string" && RECONNECT_REASONS.has(reason);
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -91,10 +111,19 @@ export function PlatformUnavailableState({ reason }: Props) {
           {open && (
             <span
               id={tooltipId}
-              role="tooltip"
               className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-ink text-paper text-xs font-mono p-2 shadow-brutal-sm"
             >
               {tooltipCopy}
+              {showReconnect && (
+                <a
+                  href="/connections"
+                  aria-label="Reconnect LinkedIn in Connections to enable personal analytics"
+                  className="mt-1.5 inline-flex items-center gap-1 text-paper underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper"
+                >
+                  Reconnect in Connections
+                  <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
+                </a>
+              )}
               <span className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-ink" />
             </span>
           )}

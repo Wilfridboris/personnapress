@@ -202,20 +202,21 @@ async def test_fetch_one_ugcpost_falls_back_to_aggregate():
     )
 
 
-# ── 4. Personal target returns member_post_unsupported ────────────────────────
+# ── 4. Personal target with flag OFF -> member_metrics_disabled (Story 25.2) ──
 
 @pytest.mark.asyncio
-async def test_fetch_one_personal_target_returns_member_unsupported():
-    """target=personal -> unavailable_reason=member_post_unsupported, no API call."""
+async def test_fetch_one_personal_target_flag_off_returns_member_disabled():
+    """target=personal + LINKEDIN_MEMBER_METRICS_ENABLED False -> member_metrics_disabled, no API call."""
     from app.integrations.linkedin_metrics import _fetch_one
 
     post = _published_post()
     client = MagicMock()
     client.get = AsyncMock()  # should never be called
 
-    snap = await _fetch_one(client, post, _PERSONAL_CREDS, _NOW)
+    with patch("app.integrations.linkedin_metrics.settings.LINKEDIN_MEMBER_METRICS_ENABLED", False):
+        snap = await _fetch_one(client, post, _PERSONAL_CREDS, _NOW)
 
-    assert snap.unavailable_reason == "member_post_unsupported"
+    assert snap.unavailable_reason == "member_metrics_disabled"
     assert snap.impressions is None
     assert snap.engagements is None
     client.get.assert_not_called()
@@ -640,3 +641,420 @@ def test_worker_metrics_platforms_includes_linkedin():
     assert "facebook_page" in _METRICS_PLATFORMS
     assert "instagram" in _METRICS_PLATFORMS
     assert "threads" in _METRICS_PLATFORMS
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Story 25.2 — LinkedIn personal-profile (member) analytics
+# ══════════════════════════════════════════════════════════════════════════════
+
+_MEMBER_CREDS = {
+    "access_token": "tok_member",
+    "org_id": None,
+    "target": "personal",
+    "scopes": "openid profile w_member_social r_member_postAnalytics",
+}
+
+_MEMBER_CREDS_NO_SCOPE = {
+    "access_token": "tok_member",
+    "org_id": None,
+    "target": "personal",
+    "scopes": "openid profile w_member_social",  # predates the analytics scope grant
+}
+
+# A representative memberCreatorPostAnalytics per-metric total (li-lms-2026-08 flat form).
+def _member_metric_response(metric: str, count: int) -> httpx.Response:
+    body = {
+        "elements": [
+            {
+                "count": count,
+                "metricType": metric,
+                "targetEntity": {"share": "urn:li:share:7214567890123456789"},
+            }
+        ],
+        "paging": {"count": 10, "start": 0, "links": []},
+    }
+    return _httpx_response(200, body)
+
+
+def _member_counts_fake(counts: dict):
+    """Build a fake client.get that returns per-metric totals from a {metric: count} dict.
+
+    Metrics not present in the dict return an empty elements list (no data)."""
+    captured_urls: list[str] = []
+
+    async def fake_get(url, params=None, headers=None, **kwargs):
+        captured_urls.append(url)
+        # queryType={METRIC} is the last recognizable segment of the URL
+        metric = None
+        for part in url.split("&"):
+            if part.startswith("queryType="):
+                metric = part.split("=", 1)[1]
+                break
+        if metric in counts:
+            return _member_metric_response(metric, counts[metric])
+        return _httpx_response(200, {"elements": []})
+
+    return fake_get, captured_urls
+
+
+# ── Member 1. entity param encoding ───────────────────────────────────────────
+
+def test_member_entity_param_share_and_ugc():
+    from app.integrations.linkedin_metrics import _member_entity_param
+
+    assert _member_entity_param("urn:li:share:123") == "(share:urn%3Ali%3Ashare%3A123)"
+    assert _member_entity_param("urn:li:ugcPost:456") == "(ugc:urn%3Ali%3AugcPost%3A456)"
+    assert _member_entity_param("urn:li:activity:789") is None
+    assert _member_entity_param("") is None
+
+
+# ── Member 2. snapshot mapping ────────────────────────────────────────────────
+
+def test_map_member_snapshot_full():
+    """Collected member counts map to normalized columns (AC #4)."""
+    from app.integrations.linkedin_metrics import _map_member_snapshot
+
+    counts = {
+        "IMPRESSION": 2000,
+        "MEMBERS_REACHED": 1800,
+        "REACTION": 50,
+        "COMMENT": 10,
+        "RESHARE": 5,
+        "POST_SAVE": 3,
+        "LINK_CLICKS": 20,
+        "POST_SEND": 7,
+        "FOLLOWER_GAINED_FROM_CONTENT": 2,
+        "PROFILE_VIEW_FROM_CONTENT": 15,
+    }
+    post = _published_post(target="personal")
+    snap = _map_member_snapshot(post, counts, _NOW)
+
+    assert snap.impressions == 2000               # IMPRESSION preferred
+    assert snap.likes == 50                        # REACTION
+    assert snap.comments == 10                     # COMMENT
+    assert snap.shares == 5                         # RESHARE
+    # engagements = REACTION + COMMENT + RESHARE + POST_SAVE + LINK_CLICKS
+    assert snap.engagements == 50 + 10 + 5 + 3 + 20
+    assert snap.unavailable_reason is None
+    assert snap.platform == "linkedin"
+    # All raw counts preserved
+    assert snap.raw["memberCreatorPostAnalytics"]["POST_SEND"] == 7
+    assert snap.raw["memberCreatorPostAnalytics"]["PROFILE_VIEW_FROM_CONTENT"] == 15
+
+
+def test_map_member_snapshot_impression_fallback_to_members_reached():
+    """IMPRESSION absent -> impressions falls back to MEMBERS_REACHED."""
+    from app.integrations.linkedin_metrics import _map_member_snapshot
+
+    counts = {"MEMBERS_REACHED": 1800, "REACTION": 4}
+    post = _published_post(target="personal")
+    snap = _map_member_snapshot(post, counts, _NOW)
+    assert snap.impressions == 1800
+    assert snap.engagements == 4
+
+
+def test_map_member_snapshot_no_engagement_yields_none():
+    """No engagement metrics -> engagements None, not fabricated zero (AD-A5)."""
+    from app.integrations.linkedin_metrics import _map_member_snapshot
+
+    counts = {"IMPRESSION": 100}
+    post = _published_post(target="personal")
+    snap = _map_member_snapshot(post, counts, _NOW)
+    assert snap.impressions == 100
+    assert snap.engagements is None
+    assert snap.likes is None
+
+
+# ── Member 3. flag gating ─────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_member_scope_missing_no_api_call():
+    """Flag on but connection lacks r_member_postAnalytics -> member_scope_missing, no API call."""
+    from app.integrations.linkedin_metrics import _fetch_one
+
+    post = _published_post(platform_post_id="urn:li:ugcPost:123", target="personal")
+    client = MagicMock()
+    client.get = AsyncMock()
+
+    with patch("app.integrations.linkedin_metrics.settings.LINKEDIN_MEMBER_METRICS_ENABLED", True):
+        snap = await _fetch_one(client, post, _MEMBER_CREDS_NO_SCOPE, _NOW)
+
+    assert snap.unavailable_reason == "member_scope_missing"
+    client.get.assert_not_called()
+
+
+# ── Member 4. happy path: flag on + scope present ─────────────────────────────
+
+@pytest.mark.asyncio
+async def test_member_fetch_maps_metrics_share_urn():
+    """Flag on + scope + share URN -> memberCreatorPostAnalytics per metric -> mapped snapshot."""
+    from app.integrations.linkedin_metrics import _fetch_one
+
+    post = _published_post(platform_post_id="urn:li:share:7214567890123456789", target="personal")
+    counts = {"IMPRESSION": 900, "REACTION": 12, "COMMENT": 3, "RESHARE": 1, "LINK_CLICKS": 4}
+    fake_get, captured_urls = _member_counts_fake(counts)
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=fake_get)
+
+    with patch("app.integrations.linkedin_metrics.settings.LINKEDIN_MEMBER_METRICS_ENABLED", True):
+        snap = await _fetch_one(client, post, _MEMBER_CREDS, _NOW)
+
+    assert snap.unavailable_reason is None
+    assert snap.impressions == 900
+    assert snap.engagements == 12 + 3 + 1 + 4
+    assert snap.likes == 12
+    # calls hit the member endpoint with share entity encoding
+    assert all("memberCreatorPostAnalytics" in u for u in captured_urls)
+    assert any("entity=(share:urn%3Ali%3Ashare%3A7214567890123456789)" in u for u in captured_urls)
+    assert any("queryType=IMPRESSION" in u for u in captured_urls)
+
+
+@pytest.mark.asyncio
+async def test_member_fetch_ugcpost_uses_ugc_entity():
+    """ugcPost URN -> entity uses (ugc:...) encoding."""
+    from app.integrations.linkedin_metrics import _fetch_one
+
+    post = _published_post(platform_post_id="urn:li:ugcPost:9876543210987654321", target="personal")
+    fake_get, captured_urls = _member_counts_fake({"IMPRESSION": 10})
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=fake_get)
+
+    with patch("app.integrations.linkedin_metrics.settings.LINKEDIN_MEMBER_METRICS_ENABLED", True):
+        snap = await _fetch_one(client, post, _MEMBER_CREDS, _NOW)
+
+    assert snap.unavailable_reason is None
+    assert any("entity=(ugc:urn%3Ali%3AugcPost%3A9876543210987654321)" in u for u in captured_urls)
+
+
+@pytest.mark.asyncio
+async def test_member_fetch_all_empty_returns_no_data_yet():
+    """Flag on + scope + share URN but every metric returns no data -> no_data_yet."""
+    from app.integrations.linkedin_metrics import _fetch_one
+
+    post = _published_post(platform_post_id="urn:li:share:1", target="personal")
+    fake_get, _ = _member_counts_fake({})  # nothing -> all empty
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=fake_get)
+
+    with patch("app.integrations.linkedin_metrics.settings.LINKEDIN_MEMBER_METRICS_ENABLED", True):
+        snap = await _fetch_one(client, post, _MEMBER_CREDS, _NOW)
+
+    assert snap.unavailable_reason == "no_data_yet"
+
+
+# ── Member 5. auth/consent errors ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_member_fetch_401_token_expired():
+    from app.integrations.linkedin_metrics import _fetch_one
+
+    post = _published_post(platform_post_id="urn:li:share:1", target="personal")
+
+    async def fake_get(url, params=None, headers=None, **kwargs):
+        return _httpx_response(401, {"message": "Unauthorized"})
+
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=fake_get)
+
+    with patch("app.integrations.linkedin_metrics.settings.LINKEDIN_MEMBER_METRICS_ENABLED", True):
+        snap = await _fetch_one(client, post, _MEMBER_CREDS, _NOW)
+
+    assert snap.unavailable_reason == "token_expired"
+
+
+@pytest.mark.asyncio
+async def test_member_fetch_403_consent_revoked():
+    """403 without a scope/permission hint -> consent_revoked (scope was pre-flight verified)."""
+    from app.integrations.linkedin_metrics import _fetch_one
+
+    post = _published_post(platform_post_id="urn:li:share:1", target="personal")
+
+    async def fake_get(url, params=None, headers=None, **kwargs):
+        return _httpx_response(403, {"message": "Access denied for this member"})
+
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=fake_get)
+
+    with patch("app.integrations.linkedin_metrics.settings.LINKEDIN_MEMBER_METRICS_ENABLED", True):
+        snap = await _fetch_one(client, post, _MEMBER_CREDS, _NOW)
+
+    assert snap.unavailable_reason == "consent_revoked"
+
+
+@pytest.mark.asyncio
+async def test_member_fetch_403_scope_hint_member_scope_missing():
+    """403 whose body names a scope/permission gap -> member_scope_missing (not the org scope_missing)."""
+    from app.integrations.linkedin_metrics import _fetch_one
+
+    post = _published_post(platform_post_id="urn:li:share:1", target="personal")
+
+    async def fake_get(url, params=None, headers=None, **kwargs):
+        return _httpx_response(403, {"message": "Not enough permissions - missing scope"})
+
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=fake_get)
+
+    with patch("app.integrations.linkedin_metrics.settings.LINKEDIN_MEMBER_METRICS_ENABLED", True):
+        snap = await _fetch_one(client, post, _MEMBER_CREDS, _NOW)
+
+    assert snap.unavailable_reason == "member_scope_missing"
+
+
+@pytest.mark.asyncio
+async def test_member_fetch_single_metric_400_is_skipped():
+    """A 400 on one metric is skipped (AD-A10); remaining metrics still produce a snapshot."""
+    from app.integrations.linkedin_metrics import _fetch_one
+
+    post = _published_post(platform_post_id="urn:li:share:1", target="personal")
+
+    async def fake_get(url, params=None, headers=None, **kwargs):
+        if "queryType=POST_SEND" in url:
+            return _httpx_response(400, {"message": "unsupported"})
+        if "queryType=IMPRESSION" in url:
+            return _member_metric_response("IMPRESSION", 500)
+        if "queryType=REACTION" in url:
+            return _member_metric_response("REACTION", 8)
+        return _httpx_response(200, {"elements": []})
+
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=fake_get)
+
+    with patch("app.integrations.linkedin_metrics.settings.LINKEDIN_MEMBER_METRICS_ENABLED", True):
+        snap = await _fetch_one(client, post, _MEMBER_CREDS, _NOW)
+
+    assert snap.unavailable_reason is None
+    assert snap.impressions == 500
+    assert snap.engagements == 8
+
+
+# ── Member 6. reason mapper unit ──────────────────────────────────────────────
+
+def test_member_unavailable_reason_mapping():
+    from app.integrations.linkedin_metrics import _member_unavailable_reason
+
+    assert _member_unavailable_reason(401, {}) == "token_expired"
+    assert _member_unavailable_reason(403, {"message": "denied"}) == "consent_revoked"
+    assert _member_unavailable_reason(403, {"message": "missing scope"}) == "member_scope_missing"
+    assert _member_unavailable_reason(200, {"elements": []}) == "unknown"
+    assert _member_unavailable_reason(500, {}) == "unknown"
+
+
+# ── Member 7. harvester target-branch routing (org vs member) ─────────────────
+
+@pytest.mark.asyncio
+async def test_target_branch_org_vs_member_routing():
+    """org creds -> org stats endpoint; personal creds -> member endpoint (AC #6)."""
+    from app.integrations.linkedin_metrics import _fetch_one
+
+    # Org branch
+    org_post = _published_post(platform_post_id="urn:li:share:111", target="organization")
+    org_urls: list[str] = []
+
+    async def org_get(url, params=None, headers=None, **kwargs):
+        org_urls.append(url)
+        return _httpx_response(200, _SAMPLE_ORG_STATS)
+
+    org_client = MagicMock()
+    org_client.get = AsyncMock(side_effect=org_get)
+    org_snap = await _fetch_one(org_client, org_post, _ORG_CREDS, _NOW)
+    assert org_snap.unavailable_reason is None
+    assert all("organizationalEntityShareStatistics" in u for u in org_urls)
+    assert all("memberCreatorPostAnalytics" not in u for u in org_urls)
+
+    # Member branch
+    member_post = _published_post(platform_post_id="urn:li:share:222", target="personal")
+    fake_get, member_urls = _member_counts_fake({"IMPRESSION": 5})
+    member_client = MagicMock()
+    member_client.get = AsyncMock(side_effect=fake_get)
+    with patch("app.integrations.linkedin_metrics.settings.LINKEDIN_MEMBER_METRICS_ENABLED", True):
+        member_snap = await _fetch_one(member_client, member_post, _MEMBER_CREDS, _NOW)
+    assert member_snap.unavailable_reason is None
+    assert all("memberCreatorPostAnalytics" in u for u in member_urls)
+    assert all("organizationalEntityShareStatistics" not in u for u in member_urls)
+
+
+# ── Member 8. version header on member calls ──────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_member_fetch_sends_linkedin_version_header():
+    from app.integrations.linkedin_metrics import _fetch_one
+
+    post = _published_post(platform_post_id="urn:li:share:1", target="personal")
+    captured_headers: list[dict] = []
+
+    async def fake_get(url, params=None, headers=None, **kwargs):
+        captured_headers.append(dict(headers or {}))
+        if "queryType=IMPRESSION" in url:
+            return _member_metric_response("IMPRESSION", 1)
+        return _httpx_response(200, {"elements": []})
+
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=fake_get)
+
+    with patch("app.integrations.linkedin_metrics.settings.LINKEDIN_MEMBER_METRICS_ENABLED", True):
+        await _fetch_one(client, post, _MEMBER_CREDS, _NOW)
+
+    assert captured_headers
+    assert captured_headers[0].get("LinkedIn-Version") == "202608"
+    assert captured_headers[0].get("X-Restli-Protocol-Version") == "2.0.0"
+
+
+# ── Member 9. personal-post capture (AC #5) ───────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_capture_personal_linkedin_post_persisted():
+    """A personal (target=personal) LinkedIn publish still persists a published_posts row (AC #5)."""
+    from app.services.publishing import dispatch_publish_for_platform
+
+    campaign_id = uuid.uuid4()
+    fake_urn = "urn:li:ugcPost:5555555555555555555"
+
+    mock_campaign = MagicMock()
+    mock_campaign.id = campaign_id
+    mock_campaign.client_id = uuid.uuid4()
+    mock_campaign.linkedin_post = "Personal profile post"
+    mock_campaign.blog_html = "<p>Test</p>"
+    mock_campaign.image_url = None  # text-only -> create_ugc_post path
+
+    mock_db = MagicMock()
+    mock_conn = MagicMock()
+    mock_conn.encrypted_credentials = b"encrypted"
+
+    creds_dict = {"access_token": "tok_member", "target": "personal", "org_id": None}
+
+    with patch("app.services.publishing.get_campaign", return_value=mock_campaign), \
+         patch("app.services.publishing.get_connection_for_platform", return_value=mock_conn), \
+         patch("app.services.publishing.decrypt_credential", return_value=json.dumps(creds_dict)), \
+         patch("app.integrations.linkedin.create_ugc_post", new_callable=AsyncMock, return_value=fake_urn), \
+         patch("app.services.publishing.upsert_published_post", new_callable=AsyncMock) as mock_upsert:
+
+        result = await dispatch_publish_for_platform(mock_db, campaign_id, "linkedin")
+
+    assert result.get("linkedin") == "success"
+    mock_upsert.assert_awaited_once()
+    call_kwargs = mock_upsert.call_args.kwargs
+    assert call_kwargs.get("platform") == "linkedin"
+    assert call_kwargs.get("platform_post_id") == fake_urn
+
+
+# ── Member 10. capability detection in connections list (AC #1) ───────────────
+
+def test_extract_linkedin_target_member_capable():
+    """_extract_linkedin_target derives member_capable from r_member_postAnalytics scope."""
+    from unittest.mock import patch as _patch
+    from app.routers.publishing import _extract_linkedin_target
+
+    with _patch(
+        "app.routers.publishing.decrypt_credential",
+        return_value=json.dumps({"target": "personal", "scopes": "openid r_member_postAnalytics"}),
+    ):
+        target, org_name, org_capable, member_capable = _extract_linkedin_target(b"x")
+    assert member_capable is True
+    assert target == "personal"
+
+    with _patch(
+        "app.routers.publishing.decrypt_credential",
+        return_value=json.dumps({"target": "personal", "scopes": "openid w_member_social"}),
+    ):
+        _, _, _, member_capable2 = _extract_linkedin_target(b"x")
+    assert member_capable2 is False

@@ -1,11 +1,34 @@
-"""LinkedIn organization analytics integration (company-page posts only).
+"""LinkedIn post analytics integration (company-page org path + personal-profile member path).
 
-Metric mapping (AD-A3):
+Two branches, selected by the connection's stored `target`:
+  - target == "organization" -> org path: organizationalEntityShareStatistics (Story 25.1)
+  - target != "organization" -> member path: memberCreatorPostAnalytics (Story 25.2)
+
+Org metric mapping (AD-A3):
   impressions  <- totalShareStatistics.impressionCount (fallback: uniqueImpressionsCount)
   engagements  <- likeCount + commentCount + shareCount + clickCount
   likes        <- likeCount
   comments     <- commentCount
   shares       <- shareCount
+
+Member metric mapping (AD-A3, Story 25.2):
+  impressions  <- IMPRESSION (fallback: MEMBERS_REACHED)
+  engagements  <- REACTION + COMMENT + RESHARE + POST_SAVE + LINK_CLICKS (NULL-safe)
+  likes        <- REACTION
+  comments     <- COMMENT
+  shares       <- RESHARE
+  All member metric counts (incl. POST_SEND, FOLLOWER_GAINED_FROM_CONTENT,
+  PROFILE_VIEW_FROM_CONTENT) are preserved in raw.memberCreatorPostAnalytics.
+
+Member endpoint: GET /rest/memberCreatorPostAnalytics
+  q=entity
+  entity=(share:urn%3Ali%3Ashare%3A{id})   for share URNs
+  entity=(ugc:urn%3Ali%3AugcPost%3A{id})   for ugcPost URNs
+  queryType={METRIC}   one metric per call — the finder returns a single metric type,
+                       so a full snapshot fans out to one GET per metric (aggregation=TOTAL).
+  aggregation=TOTAL    single lifetime data point per metric.
+  Scope: r_member_postAnalytics. Gated by LINKEDIN_MEMBER_METRICS_ENABLED (default False).
+  Response (li-lms-2026-08): elements[].count + flat elements[].metricType string.
 
 Stats endpoint: GET /rest/organizationalEntityShareStatistics
   q=organizationalEntity
@@ -27,8 +50,7 @@ Version header: LinkedIn-Version: 202608 (202508 sunset Aug 17 2026)
 X-Restli-Protocol-Version: 2.0.0
 12-month rolling window; no pagination; no new packages.
 
-Personal-profile posts (target != "organization") are skipped here;
-unavailable_reason = "member_post_unsupported". Story 25-2 owns them.
+Version header: LinkedIn-Version: 202608 (li-lms-2026-08). Applies to both branches.
 """
 
 import asyncio
@@ -40,6 +62,7 @@ from typing import Optional
 import httpx
 import sentry_sdk
 
+from app.core.config import settings
 from app.integrations.meta_metrics import MetricSnapshot  # reuse dataclass
 
 logger = logging.getLogger(__name__)
@@ -59,10 +82,33 @@ _LI_HEADERS = {
 # Machine-readable unavailability reason codes (must match REASON_COPY keys in
 # frontend/components/analytics/PlatformUnavailableState.tsx exactly — AC #9a).
 _REASON_SCOPE_MISSING = "scope_missing"
-_REASON_MEMBER_POST_UNSUPPORTED = "member_post_unsupported"
 _REASON_NO_DATA_YET = "no_data_yet"
 _REASON_TOKEN_EXPIRED = "token_expired"
 _REASON_UNKNOWN = "unknown"
+# Member-path reason codes (Story 25.2). Same parity contract with the frontend.
+_REASON_MEMBER_DISABLED = "member_metrics_disabled"      # feature flag off
+_REASON_MEMBER_SCOPE_MISSING = "member_scope_missing"    # connection predates the scope grant
+_REASON_CONSENT_REVOKED = "consent_revoked"              # scope present, LinkedIn denies analytics
+
+# Member analytics scope (memberCreatorPostAnalytics). See frontend authorize URL.
+_MEMBER_SCOPE = "r_member_postAnalytics"
+
+# Metric types fetched per personal post (AC #4). The finder returns one metric per call,
+# so this list is the fan-out. Order is irrelevant; all counts land in raw.
+# IMPRESSION/MEMBERS_REACHED feed impressions; REACTION/COMMENT/RESHARE/POST_SAVE/LINK_CLICKS
+# feed engagements; the remainder are preserved in raw only.
+_MEMBER_METRIC_TYPES = (
+    "IMPRESSION",
+    "MEMBERS_REACHED",
+    "REACTION",
+    "COMMENT",
+    "RESHARE",
+    "POST_SAVE",
+    "LINK_CLICKS",
+    "POST_SEND",
+    "FOLLOWER_GAINED_FROM_CONTENT",
+    "PROFILE_VIEW_FROM_CONTENT",
+)
 
 
 async def fetch(
@@ -70,7 +116,7 @@ async def fetch(
     creds: dict,
     platform_arg: str,
 ) -> list[MetricSnapshot]:
-    """Fetch organizationalEntityShareStatistics for a batch of LinkedIn posts.
+    """Fetch analytics for a batch of LinkedIn posts (org or member path per connection target).
 
     Fault-isolated per item (AD-A10): one post failing is caught, logged to Sentry,
     and skipped. The sweep continues for all other posts.
@@ -110,9 +156,9 @@ async def _fetch_one(
     Credential shape (from linkedin_oauth_callback / _extract_linkedin_target):
       access_token, name, scopes, target, org_id, org_name
 
-    Routing:
-      - target != "organization" -> member_post_unsupported (25-2 owns this)
-      - share URN (urn:li:share:*) -> per-post stats scoped to that URN
+    Routing (AC #6):
+      - target != "organization" -> member path (Story 25.2), flag + scope gated
+      - share URN (urn:li:share:*) -> per-post org stats scoped to that URN
       - ugcPost URN or other      -> org-aggregate stats (fallback, AC #5)
     """
     access_token: str = creds.get("access_token", "")
@@ -120,16 +166,8 @@ async def _fetch_one(
     target: str = creds.get("target", "personal")
 
     if target != "organization":
-        # Personal-profile posts: owned by Story 25-2. The LINKEDIN_MEMBER_METRICS_ENABLED
-        # flag in config.py will gate that path; it remains False until 25-2 ships.
-        return MetricSnapshot(
-            published_post_id=post.id,
-            client_id=post.client_id,
-            platform="linkedin",
-            captured_at=now,
-            raw={},
-            unavailable_reason=_REASON_MEMBER_POST_UNSUPPORTED,
-        )
+        # Personal-profile posts route to the member path (Story 25.2).
+        return await _fetch_member_one(client, post, creds, now)
 
     post_urn: str = getattr(post, "platform_post_id", "") or ""
     is_share_urn = post_urn.startswith("urn:li:share:")
@@ -178,6 +216,206 @@ async def _fetch_one(
         )
 
     return _map_snapshot(post, raw, now)
+
+
+# ── Member path (personal-profile posts, Story 25.2) ──────────────────────────
+
+async def _fetch_member_one(
+    client: httpx.AsyncClient,
+    post,
+    creds: dict,
+    now: datetime,
+) -> MetricSnapshot:
+    """Fetch memberCreatorPostAnalytics for a single personal-profile post.
+
+    Gating (AC #1, #2):
+      - LINKEDIN_MEMBER_METRICS_ENABLED False -> member_metrics_disabled (no API call)
+      - connection lacks r_member_postAnalytics -> member_scope_missing (no API call)
+    Both keep the 25-1 "not available" state; the frontend surfaces a reconnect hint.
+
+    Fault isolation (AD-A10): an auth/consent failure (401/403) degrades the whole post to
+    an unavailable snapshot; a transient/unsupported failure on a single metric (400/500) is
+    skipped so the remaining metrics still produce a snapshot. Never raises to the caller.
+    """
+    if not settings.LINKEDIN_MEMBER_METRICS_ENABLED:
+        return _member_unavailable(post, now, _REASON_MEMBER_DISABLED, {})
+
+    scopes = creds.get("scopes") or ""
+    if _MEMBER_SCOPE not in scopes:
+        return _member_unavailable(post, now, _REASON_MEMBER_SCOPE_MISSING, {})
+
+    access_token: str = creds.get("access_token", "")
+    post_urn: str = getattr(post, "platform_post_id", "") or ""
+    entity_param = _member_entity_param(post_urn)
+    if entity_param is None:
+        # Neither a share nor a ugcPost URN — nothing the member finder can key on.
+        logger.info("member metrics: unroutable URN post=%s", post_urn)
+        return _member_unavailable(post, now, _REASON_UNKNOWN, {})
+
+    counts: dict[str, int] = {}
+    for metric in _MEMBER_METRIC_TYPES:
+        try:
+            count = await _fetch_member_metric(client, access_token, entity_param, metric)
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            if status in (401, 403):
+                # Auth/consent failure affects every metric for this post — stop and record it.
+                body = _safe_json(exc.response)
+                reason = _member_unavailable_reason(status, body)
+                logger.info(
+                    "member metrics unavailable post=%s status=%s reason=%s",
+                    post_urn, status, reason,
+                )
+                return _member_unavailable(post, now, reason, body)
+            # Transient/unsupported single metric: skip it, keep the rest (AD-A10).
+            logger.info(
+                "member metric %s failed status=%s post=%s (skipped)",
+                metric, status, post_urn,
+            )
+            continue
+        if count is not None:
+            counts[metric] = count
+
+    if not counts:
+        return _member_unavailable(post, now, _REASON_NO_DATA_YET, {})
+
+    return _map_member_snapshot(post, counts, now)
+
+
+async def _fetch_member_metric(
+    client: httpx.AsyncClient,
+    access_token: str,
+    entity_param: str,
+    metric: str,
+) -> Optional[int]:
+    """GET a single member metric total for one post. Returns the count or None.
+
+    URL is built manually: LinkedIn's Restli entity finder needs the literal parentheses
+    of entity=(share:...) / entity=(ugc:...) — httpx's params= dict would percent-encode
+    them and the parser would reject the request.
+    """
+    url = (
+        f"{_LI_BASE}/memberCreatorPostAnalytics"
+        f"?q=entity&entity={entity_param}"
+        f"&queryType={metric}&aggregation=TOTAL"
+    )
+    resp = await client.get(
+        url,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            **_LI_HEADERS,
+        },
+    )
+    resp.raise_for_status()
+    body = _safe_json(resp)
+    elements = body.get("elements", [])
+    if not elements:
+        return None
+    # aggregation=TOTAL yields one element; sum defensively if the API returns more.
+    total = 0
+    found = False
+    for el in elements:
+        c = _int_or_none(el.get("count"))
+        if c is not None:
+            total += c
+            found = True
+    return total if found else None
+
+
+def _member_entity_param(post_urn: str) -> Optional[str]:
+    """Build the memberCreatorPostAnalytics `entity` value for a post URN.
+
+    share URN   -> (share:{urn-encoded})
+    ugcPost URN -> (ugc:{urn-encoded})   (the finder keys ugcPost URNs under `ugc`)
+    """
+    if not post_urn:
+        return None
+    enc = urllib.parse.quote(post_urn, safe="")
+    if post_urn.startswith("urn:li:share:"):
+        return f"(share:{enc})"
+    if post_urn.startswith("urn:li:ugcPost:"):
+        return f"(ugc:{enc})"
+    return None
+
+
+def _map_member_snapshot(post, counts: dict, now: datetime) -> MetricSnapshot:
+    """Map collected memberCreatorPostAnalytics counts to normalized columns (AC #4).
+
+    impressions <- IMPRESSION (fallback MEMBERS_REACHED)
+    engagements <- REACTION + COMMENT + RESHARE + POST_SAVE + LINK_CLICKS (NULL-safe)
+    likes       <- REACTION
+    comments    <- COMMENT
+    shares      <- RESHARE
+    All raw counts (incl. POST_SEND, FOLLOWER_GAINED_FROM_CONTENT, PROFILE_VIEW_FROM_CONTENT)
+    are preserved under raw.memberCreatorPostAnalytics. Absent metrics stay None (AD-A5).
+    """
+    impressions = counts.get("IMPRESSION")
+    if impressions is None:
+        impressions = counts.get("MEMBERS_REACHED")
+
+    reactions = _int_or_none(counts.get("REACTION"))
+    comments = _int_or_none(counts.get("COMMENT"))
+    reshares = _int_or_none(counts.get("RESHARE"))
+    post_saves = _int_or_none(counts.get("POST_SAVE"))
+    link_clicks = _int_or_none(counts.get("LINK_CLICKS"))
+
+    engagement_total = (
+        (reactions or 0) + (comments or 0) + (reshares or 0)
+        + (post_saves or 0) + (link_clicks or 0)
+    )
+    engagements = engagement_total or None
+
+    return MetricSnapshot(
+        published_post_id=post.id,
+        client_id=post.client_id,
+        platform="linkedin",
+        captured_at=now,
+        impressions=_int_or_none(impressions),
+        engagements=engagements,
+        likes=reactions,
+        comments=comments,
+        shares=reshares,
+        raw={"memberCreatorPostAnalytics": counts},
+    )
+
+
+def _member_unavailable(post, now: datetime, reason: str, raw: dict) -> MetricSnapshot:
+    """Build an unavailability snapshot for a personal-profile post."""
+    return MetricSnapshot(
+        published_post_id=post.id,
+        client_id=post.client_id,
+        platform="linkedin",
+        captured_at=now,
+        raw=raw,
+        unavailable_reason=reason,
+    )
+
+
+def _member_unavailable_reason(status_code: int, body: dict) -> str:
+    """Map a member-path HTTP status / body to a machine-readable reason (AC #8).
+
+    401 -> token_expired. 403 -> consent_revoked, unless the body names a scope/permission
+    gap (then member_scope_missing). Everything else -> unknown.
+    The connection-level scope is checked before any call, so a 403 here means the member
+    revoked app consent or the Community Management product is not fully approved.
+    """
+    if status_code == 401:
+        return _REASON_TOKEN_EXPIRED
+    if status_code == 403:
+        msg = str(body).lower()
+        if "scope" in msg or "permission" in msg:
+            return _REASON_MEMBER_SCOPE_MISSING
+        return _REASON_CONSENT_REVOKED
+    return _REASON_UNKNOWN
+
+
+def _safe_json(resp: httpx.Response) -> dict:
+    """Parse a response body as JSON, returning {} on failure."""
+    try:
+        parsed = resp.json()
+        return parsed if isinstance(parsed, dict) else {"_raw": parsed}
+    except Exception:
+        return {}
 
 
 async def _fetch_org_stats(

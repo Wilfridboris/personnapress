@@ -77,9 +77,10 @@ class Settings(BaseSettings):
     ANALYTICS_ENABLED: bool = True
 
     # LinkedIn member (personal-profile) post analytics gate (Story 25-2).
-    # Default false: personal-profile analytics require r_member_postAnalytics scope
-    # and LinkedIn app review; org-path analytics (Story 25.1) are always on when
-    # ANALYTICS_ENABLED is True. Set true only after 25-2 implementation is complete.
+    # Default false: personal-profile analytics require the r_member_postAnalytics scope,
+    # which older connections predate. Org-path analytics (Story 25.1) are always on when
+    # ANALYTICS_ENABLED is True. Flip true once users have reconnected LinkedIn to grant the
+    # scope; connections lacking it degrade gracefully to the "not available" state.
     LINKEDIN_MEMBER_METRICS_ENABLED: bool = False
 
 
