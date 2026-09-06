@@ -4,6 +4,7 @@ import { useState } from "react";
 import { campaignsApi, jobsApi, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
+import { HARD_LIMITS } from "@/lib/platformLimits";
 import type { Campaign } from "@/lib/types";
 
 interface RetryPanelProps {
@@ -28,6 +29,18 @@ const PLATFORM_LABELS: Record<string, string> = {
   facebook_page: "Facebook Page",
   threads: "Threads",
 };
+
+function getErrorCopy(platform: string, error: string): string {
+  if (error === "over_limit") {
+    const limit = HARD_LIMITS[platform];
+    const label = PLATFORM_LABELS[platform] ?? platform;
+    if (limit !== undefined) {
+      return `Your ${label} post is over the ${limit} character limit. Shorten it and retry.`;
+    }
+    return `Your ${label} post is over the character limit. Shorten it and retry.`;
+  }
+  return error;
+}
 
 export function RetryPanel({
   campaign,
@@ -96,7 +109,7 @@ export function RetryPanel({
             {isSuccess ? (
               <p className="text-xs text-[#2E4F2E]">Published</p>
             ) : (
-              <p className="text-xs text-[#8B0000]">{error}</p>
+              <p className="text-xs text-[#8B0000]">{getErrorCopy(platform, error)}</p>
             )}
           </div>
           {!isSuccess && !SYNTHETIC_KEYS.has(platform) && (

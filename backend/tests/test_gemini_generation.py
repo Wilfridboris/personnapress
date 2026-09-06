@@ -598,18 +598,32 @@ async def test_generate_social_returns_posts(mock_client):
 
 @pytest.mark.asyncio
 @patch("app.integrations.gemini._client")
-async def test_generate_social_truncates_x_post_at_280(mock_client):
+async def test_generate_social_x_over_limit_repairs_not_truncates(mock_client):
+    """X post over 280 chars triggers a repair call; no ellipsis appended."""
     from app.integrations.gemini import generate_social
 
-    long_x = "x" * 300
+    long_x = "x" * 300   # over 280
+    repaired_x = "x" * 270  # repair returns something within limit
+
     data = json.dumps({
         "x_post": long_x, "linkedin_post": "LinkedIn post " * 40,
         "instagram_caption": "A" * 200, "facebook_post": "B" * 250, "threads_post": "C" * 100,
     })
-    mock_client.aio.models.generate_content = _mock_aio_generate(data)
+
+    call_count = 0
+
+    async def mock_generate(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return _make_response(data)
+        return _make_response(repaired_x)
+
+    mock_client.aio.models.generate_content = mock_generate
     result = await generate_social("brain dump", "Title", _VALID_BVP)
-    assert len(result["x_post"]) == 280
-    assert result["x_post"].endswith("…")
+    assert result["x_post"] == repaired_x
+    assert "…" not in result["x_post"]
+    assert call_count == 2
 
 
 @pytest.mark.asyncio
@@ -1170,10 +1184,45 @@ async def test_generate_social_standalone_happy_path(mock_client):
 
 @pytest.mark.asyncio
 @patch("app.integrations.gemini._client")
-async def test_generate_social_standalone_linkedin_over_2500_truncated(mock_client):
+async def test_generate_social_standalone_linkedin_over_3000_triggers_repair(mock_client):
+    """LinkedIn post over 3000 chars triggers exactly one repair call; no truncation."""
     from app.integrations.gemini import generate_social_standalone
 
-    long_ln = "L" * 2600
+    over_limit_li = "L" * 3050  # over 3000 hard limit
+    repaired_li = "L" * 2900   # within 3000 after repair
+
+    data = json.dumps({
+        "x_post": "Short post but at least 70 characters to be valid for standalone.",
+        "linkedin_post": over_limit_li,
+        "instagram_caption": "I" * 200,
+        "facebook_post": "F" * 300,
+        "threads_post": "T" * 100,
+    })
+
+    call_count = 0
+
+    async def mock_generate(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return _make_response(data)
+        return _make_response(repaired_li)
+
+    mock_client.aio.models.generate_content = mock_generate
+    result = await generate_social_standalone("brain dump", _VALID_BVP)
+
+    assert call_count == 2, "Expected exactly one repair call for over-limit LinkedIn post"
+    assert result["linkedin_post"] == repaired_li
+    assert "…" not in result["linkedin_post"]
+
+
+@pytest.mark.asyncio
+@patch("app.integrations.gemini._client")
+async def test_generate_social_standalone_linkedin_2600_within_hard_limit(mock_client):
+    """LinkedIn post of 2600 chars is within the 3000 hard limit; no repair or truncation."""
+    from app.integrations.gemini import generate_social_standalone
+
+    long_ln = "L" * 2600  # 2600 < 3000 hard limit -- no repair needed
     data = json.dumps({
         "x_post": "Short X post that meets the minimum length requirement for standalone.",
         "linkedin_post": long_ln,
@@ -1183,8 +1232,9 @@ async def test_generate_social_standalone_linkedin_over_2500_truncated(mock_clie
     })
     mock_client.aio.models.generate_content = _mock_aio_generate(data)
     result = await generate_social_standalone("brain dump", _VALID_BVP)
-    assert len(result["linkedin_post"]) == 2500
-    assert result["linkedin_post"].endswith("…")
+    # 2600 chars: within the 3000 hard limit, passed through unchanged
+    assert result["linkedin_post"] == long_ln
+    assert "…" not in result["linkedin_post"]
 
 
 @pytest.mark.asyncio
@@ -1377,78 +1427,82 @@ async def test_generate_social_no_threads_voice_section_when_no_voice_brief(mock
 
 @pytest.mark.asyncio
 @patch("app.integrations.gemini._client")
-async def test_generate_social_hard_truncates_instagram_at_600(mock_client):
+async def test_generate_social_instagram_601_chars_within_hard_limit(mock_client):
+    """Instagram 601 chars is well within the 2200 hard limit; passes through unchanged."""
     from app.integrations.gemini import generate_social
 
-    long_ig = "I" * 601
+    ig_601 = "I" * 601  # 601 < 2200 hard limit
     data = json.dumps({
         "x_post": "Short post.",
         "linkedin_post": "L" * 400,
-        "instagram_caption": long_ig,
+        "instagram_caption": ig_601,
         "facebook_post": "F" * 300,
         "threads_post": "T" * 100,
     })
     mock_client.aio.models.generate_content = _mock_aio_generate(data)
     result = await generate_social("brain dump", "Title", _VALID_BVP)
-    assert len(result["instagram_caption"]) == 600
-    assert result["instagram_caption"].endswith("…")
+    assert result["instagram_caption"] == ig_601
+    assert "…" not in result["instagram_caption"]
 
 
 @pytest.mark.asyncio
 @patch("app.integrations.gemini._client")
-async def test_generate_social_hard_truncates_facebook_at_800(mock_client):
+async def test_generate_social_facebook_801_chars_within_hard_limit(mock_client):
+    """Facebook 801 chars is well within the 63206 hard limit; passes through unchanged."""
     from app.integrations.gemini import generate_social
 
-    long_fb = "F" * 801
+    fb_801 = "F" * 801  # 801 < 63206 hard limit
     data = json.dumps({
         "x_post": "Short post.",
         "linkedin_post": "L" * 400,
         "instagram_caption": "I" * 200,
-        "facebook_post": long_fb,
+        "facebook_post": fb_801,
         "threads_post": "T" * 100,
     })
     mock_client.aio.models.generate_content = _mock_aio_generate(data)
     result = await generate_social("brain dump", "Title", _VALID_BVP)
-    assert len(result["facebook_post"]) == 800
-    assert result["facebook_post"].endswith("…")
+    assert result["facebook_post"] == fb_801
+    assert "…" not in result["facebook_post"]
 
 
 @pytest.mark.asyncio
 @patch("app.integrations.gemini._client")
-async def test_generate_social_standalone_hard_truncates_instagram_at_600(mock_client):
+async def test_generate_social_standalone_instagram_601_within_hard_limit(mock_client):
+    """Standalone: Instagram 601 chars within 2200 hard limit; unchanged."""
     from app.integrations.gemini import generate_social_standalone
 
-    long_ig = "I" * 601
+    ig_601 = "I" * 601
     data = json.dumps({
         "x_post": "Short post but at least 70 characters to be valid for standalone.",
         "linkedin_post": "L" * 1300,
-        "instagram_caption": long_ig,
+        "instagram_caption": ig_601,
         "facebook_post": "F" * 300,
         "threads_post": "T" * 100,
     })
     mock_client.aio.models.generate_content = _mock_aio_generate(data)
     result = await generate_social_standalone("brain dump", _VALID_BVP)
-    assert len(result["instagram_caption"]) == 600
-    assert result["instagram_caption"].endswith("…")
+    assert result["instagram_caption"] == ig_601
+    assert "…" not in result["instagram_caption"]
 
 
 @pytest.mark.asyncio
 @patch("app.integrations.gemini._client")
-async def test_generate_social_standalone_hard_truncates_facebook_at_800(mock_client):
+async def test_generate_social_standalone_facebook_801_within_hard_limit(mock_client):
+    """Standalone: Facebook 801 chars within 63206 hard limit; unchanged."""
     from app.integrations.gemini import generate_social_standalone
 
-    long_fb = "F" * 801
+    fb_801 = "F" * 801
     data = json.dumps({
         "x_post": "Short post but at least 70 characters to be valid for standalone.",
         "linkedin_post": "L" * 1300,
         "instagram_caption": "I" * 200,
-        "facebook_post": long_fb,
+        "facebook_post": fb_801,
         "threads_post": "T" * 100,
     })
     mock_client.aio.models.generate_content = _mock_aio_generate(data)
     result = await generate_social_standalone("brain dump", _VALID_BVP)
-    assert len(result["facebook_post"]) == 800
-    assert result["facebook_post"].endswith("…")
+    assert result["facebook_post"] == fb_801
+    assert "…" not in result["facebook_post"]
 
 
 # ── generate_blog: assist mode (Story 3.28) ───────────────────────────────────

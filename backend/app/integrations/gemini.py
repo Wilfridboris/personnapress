@@ -34,6 +34,7 @@ from app.integrations.generation_prompts import (
     _strip_blog_trailer,
 )
 from app.services.angles import ANGLE_LABELS, KNOWN_CODES, _LINKEDIN_ORDER, _X_ORDER
+from app.services.platform_limits import HARD_LIMITS, over_limit, sentence_boundary_truncate
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,50 @@ _client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 _MODEL = settings.GEMINI_MODEL
 logger.info("Gemini model: %s", _MODEL)
+
+
+_PLATFORM_DISPLAY_NAMES: dict[str, str] = {
+    "x": "X (Twitter)",
+    "linkedin": "LinkedIn",
+    "instagram": "Instagram",
+    "facebook_page": "Facebook",
+    "threads": "Threads",
+}
+
+
+async def _repair_post(platform: str, text: str, caller: str) -> str:
+    """Issue one repair call to shorten an over-limit post.
+
+    If the model's repaired text is still over limit, falls back to
+    sentence_boundary_truncate. Exactly one repair attempt -- no loops.
+    No ellipsis appended. No em-dashes or double-dashes in prompt (project rule).
+    """
+    limit = HARD_LIMITS[platform]
+    display_name = _PLATFORM_DISPLAY_NAMES.get(platform, platform)
+    repair_prompt = (
+        f"Shorten this {display_name} post to under {limit} characters. "
+        "Preserve the opening hook, the core point, and the writer's voice. "
+        "Return only the post text, no commentary."
+        f"\n\n{text}"
+    )
+    try:
+        response = await _client.aio.models.generate_content(
+            model=_MODEL,
+            contents=repair_prompt,
+        )
+        repaired = response.text.strip()
+        if over_limit(platform, repaired) == 0 and repaired:
+            logger.info("%s: repair_applied platform=%s original_len=%d repaired_len=%d", caller, platform, len(text), len(repaired))
+            return repaired
+        logger.warning(
+            "%s: repair still over limit for %s (%d chars), falling back to sentence boundary",
+            caller, platform, len(repaired),
+        )
+    except Exception as exc:
+        logger.warning("%s: repair call failed for %s: %s -- falling back to sentence boundary", caller, platform, exc)
+
+    return sentence_boundary_truncate(text, limit, platform=platform)
+
 
 _BVP_PROMPT_TEMPLATE = """Analyze the following text and extract a Brand Voice Profile.
 
@@ -551,20 +596,20 @@ async def generate_social(
     for key in ("x_post", "linkedin_post", "instagram_caption", "facebook_post", "threads_post"):
         data[key] = data[key].replace("—", ", ")
 
-    if len(data["x_post"]) > 280:
+    if over_limit("x", data["x_post"]) > 0:
         logger.warning(
-            "generate_social: X post exceeded 280 chars (%d), truncating",
-            len(data["x_post"]),
+            "generate_social: X post exceeded %d chars (%d), attempting repair",
+            HARD_LIMITS["x"], len(data["x_post"]),
         )
-        data["x_post"] = data["x_post"][:279] + "…"
+        data["x_post"] = await _repair_post("x", data["x_post"], "generate_social")
 
     ln_len = len(data["linkedin_post"])
-    if ln_len > 1300:
+    if over_limit("linkedin", data["linkedin_post"]) > 0:
         logger.warning(
-            "generate_social: LinkedIn post exceeded 1300 chars (%d), truncating",
-            ln_len,
+            "generate_social: LinkedIn post exceeded %d chars (%d), attempting repair",
+            HARD_LIMITS["linkedin"], ln_len,
         )
-        data["linkedin_post"] = data["linkedin_post"][:1299] + "…"
+        data["linkedin_post"] = await _repair_post("linkedin", data["linkedin_post"], "generate_social")
     elif ln_len < 300:
         logger.warning(
             "generate_social: LinkedIn post length %d is below expected 300 chars",
@@ -577,11 +622,12 @@ async def generate_social(
             "generate_social: instagram_caption length %d is below expected 150 chars",
             ig_len,
         )
-    elif ig_len > 600:
+    elif over_limit("instagram", data["instagram_caption"]) > 0:
         logger.warning(
-            "generate_social: instagram_caption exceeded 600 chars (%d), truncating", ig_len,
+            "generate_social: instagram_caption exceeded %d chars (%d), attempting repair",
+            HARD_LIMITS["instagram"], ig_len,
         )
-        data["instagram_caption"] = data["instagram_caption"][:599] + "…"
+        data["instagram_caption"] = await _repair_post("instagram", data["instagram_caption"], "generate_social")
 
     fb_len = len(data["facebook_post"])
     if fb_len < 200:
@@ -589,18 +635,19 @@ async def generate_social(
             "generate_social: facebook_post length %d is below expected 200 chars",
             fb_len,
         )
-    elif fb_len > 800:
+    elif over_limit("facebook_page", data["facebook_post"]) > 0:
         logger.warning(
-            "generate_social: facebook_post exceeded 800 chars (%d), truncating", fb_len,
+            "generate_social: facebook_post exceeded %d chars (%d), attempting repair",
+            HARD_LIMITS["facebook_page"], fb_len,
         )
-        data["facebook_post"] = data["facebook_post"][:799] + "…"
+        data["facebook_post"] = await _repair_post("facebook_page", data["facebook_post"], "generate_social")
 
-    if len(data["threads_post"]) > 500:
+    if over_limit("threads", data["threads_post"]) > 0:
         logger.warning(
-            "generate_social: threads_post exceeded 500 chars (%d), truncating",
-            len(data["threads_post"]),
+            "generate_social: threads_post exceeded %d chars (%d), attempting repair",
+            HARD_LIMITS["threads"], len(data["threads_post"]),
         )
-        data["threads_post"] = data["threads_post"][:499] + "…"
+        data["threads_post"] = await _repair_post("threads", data["threads_post"], "generate_social")
 
     return data
 
@@ -730,20 +777,20 @@ async def generate_social_standalone(
     for key in ("x_post", "linkedin_post", "instagram_caption", "facebook_post", "threads_post"):
         data[key] = data[key].replace("—", ", ")
 
-    if len(data["x_post"]) > 280:
+    if over_limit("x", data["x_post"]) > 0:
         logger.warning(
-            "generate_social_standalone: X post exceeded 280 chars (%d), truncating",
-            len(data["x_post"]),
+            "generate_social_standalone: X post exceeded %d chars (%d), attempting repair",
+            HARD_LIMITS["x"], len(data["x_post"]),
         )
-        data["x_post"] = data["x_post"][:279] + "…"
+        data["x_post"] = await _repair_post("x", data["x_post"], "generate_social_standalone")
 
     ln_len = len(data["linkedin_post"])
-    if ln_len > 2500:
+    if over_limit("linkedin", data["linkedin_post"]) > 0:
         logger.warning(
-            "generate_social_standalone: LinkedIn post exceeded 2500 chars (%d), truncating",
-            ln_len,
+            "generate_social_standalone: LinkedIn post exceeded %d chars (%d), attempting repair",
+            HARD_LIMITS["linkedin"], ln_len,
         )
-        data["linkedin_post"] = data["linkedin_post"][:2499] + "…"
+        data["linkedin_post"] = await _repair_post("linkedin", data["linkedin_post"], "generate_social_standalone")
     elif ln_len < 1200:
         logger.warning(
             "generate_social_standalone: LinkedIn post length %d is below expected 1200 chars",
@@ -756,11 +803,12 @@ async def generate_social_standalone(
             "generate_social_standalone: instagram_caption length %d is below expected 150 chars",
             ig_len,
         )
-    elif ig_len > 600:
+    elif over_limit("instagram", data["instagram_caption"]) > 0:
         logger.warning(
-            "generate_social_standalone: instagram_caption exceeded 600 chars (%d), truncating", ig_len,
+            "generate_social_standalone: instagram_caption exceeded %d chars (%d), attempting repair",
+            HARD_LIMITS["instagram"], ig_len,
         )
-        data["instagram_caption"] = data["instagram_caption"][:599] + "…"
+        data["instagram_caption"] = await _repair_post("instagram", data["instagram_caption"], "generate_social_standalone")
 
     fb_len = len(data["facebook_post"])
     if fb_len < 200:
@@ -768,18 +816,19 @@ async def generate_social_standalone(
             "generate_social_standalone: facebook_post length %d is below expected 200 chars",
             fb_len,
         )
-    elif fb_len > 800:
+    elif over_limit("facebook_page", data["facebook_post"]) > 0:
         logger.warning(
-            "generate_social_standalone: facebook_post exceeded 800 chars (%d), truncating", fb_len,
+            "generate_social_standalone: facebook_post exceeded %d chars (%d), attempting repair",
+            HARD_LIMITS["facebook_page"], fb_len,
         )
-        data["facebook_post"] = data["facebook_post"][:799] + "…"
+        data["facebook_post"] = await _repair_post("facebook_page", data["facebook_post"], "generate_social_standalone")
 
-    if len(data["threads_post"]) > 500:
+    if over_limit("threads", data["threads_post"]) > 0:
         logger.warning(
-            "generate_social_standalone: threads_post exceeded 500 chars (%d), truncating",
-            len(data["threads_post"]),
+            "generate_social_standalone: threads_post exceeded %d chars (%d), attempting repair",
+            HARD_LIMITS["threads"], len(data["threads_post"]),
         )
-        data["threads_post"] = data["threads_post"][:499] + "…"
+        data["threads_post"] = await _repair_post("threads", data["threads_post"], "generate_social_standalone")
 
     return data
 

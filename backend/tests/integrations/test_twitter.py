@@ -120,7 +120,7 @@ async def test_create_tweet_with_media():
     tweet_id = "tweet_abc"
     captured_json = {}
 
-    async def mock_post(url, *, headers, json, params, **kwargs):
+    async def mock_post(url, *, headers, json, **kwargs):
         captured_json.update(json)
         return _mock_response(201, {"data": {"id": tweet_id}})
 
@@ -138,13 +138,13 @@ async def test_create_tweet_with_media():
 
 
 @pytest.mark.asyncio
-async def test_create_tweet_with_media_truncates_text():
-    """Text longer than 280 chars is truncated before posting."""
+async def test_create_tweet_with_media_passes_text_through_unchanged():
+    """Text is passed through unchanged; over-limit validation happens upstream."""
     from app.integrations.twitter import create_tweet_with_media
 
     captured_json = {}
 
-    async def mock_post(url, *, headers, json, params, **kwargs):
+    async def mock_post(url, *, headers, json, **kwargs):
         captured_json.update(json)
         return _mock_response(201, {"data": {"id": "t1"}})
 
@@ -157,7 +157,7 @@ async def test_create_tweet_with_media_truncates_text():
     with patch("app.integrations.twitter.httpx.AsyncClient", return_value=mock_client):
         await create_tweet_with_media("tok", long_text, "mid")
 
-    assert len(captured_json["text"]) == 280
+    assert captured_json["text"] == long_text
 
 
 @pytest.mark.asyncio

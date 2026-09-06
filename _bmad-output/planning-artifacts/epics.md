@@ -2814,3 +2814,130 @@ So that I can capture a Brain Dump by speaking in situations where typing is imp
 **Then** no new packages have been added — `MediaRecorder` is a browser built-in, polling uses the existing `useJobStatus` hook, icons use the existing Lucide React dependency.
 
 ---
+
+## Epic 26: Voice Fidelity v2 and First-Run Value
+
+Closes the gap between the product promise ("content that sounds like you, not AI") and what the pipeline actually delivers. Evidence from code analysis (2026-09-05): the BVP captures 25 fields but injects only about half into generation; raw writing samples are discarded after extraction so no few-shot exemplars exist; capitalization and punctuation habits (lowercase openers, comma density) are never measured; the voice fidelity score is informational only and never triggers a repair; character limits live in four places with four different values and nothing blocks an over-limit post from reaching a platform API; onboarding has 10 screen transitions and 5 async waits before first generated content, with no step-state persistence.
+
+**Stories:**
+- Story 26.1: Character Limit Single Source of Truth and Enforcement
+- Story 26.2: Micro-Style Stylometry and Full BVP Injection
+- Story 26.3: Few-Shot Voice Exemplars from Stored Samples
+- Story 26.4: Fidelity Repair Loop and Per-Mode Voice Differentiation
+- Story 26.5: Onboarding Friction Reduction and Early Voice Proof
+
+---
+
+### Story 26.1: Character Limit Single Source of Truth and Enforcement
+
+As a user approving social posts,
+I want every platform's character limit defined once and enforced at generation, approval, and publish time,
+so that a post never exceeds a platform limit, never gets blindly truncated mid-sentence, and never fails at the platform API for a reason I could not see.
+
+**Acceptance Criteria:**
+
+1. **Given** a new shared limits module `backend/app/services/platform_limits.py` and a frontend mirror `frontend/lib/platformLimits.ts`, **When** any code needs a platform character limit, **Then** it reads from these modules only. Canonical hard limits: X 280 (weighted), LinkedIn 3000, Instagram 2200, Facebook 63206, Threads 500. Canonical target ranges used by prompts stay stricter than hard limits (X 70-280, LinkedIn 300-1300 linked / 1200-2500 standalone, Instagram 150-600, Facebook 200-800, Threads max 500). The frontend counter maxima in `SocialPostEditors.tsx` (currently 280/1500/2200/1000/500) are replaced by the canonical hard limits.
+
+2. **Given** X counts URLs as 23 characters regardless of actual length, **When** the frontend counts an X post and when the backend validates one, **Then** both use a shared weighted-count implementation (URLs matched with the same regex count as 23; all other characters count via code points), and the X counter in the editor reflects the weighted count.
+
+3. **Given** an LLM social generation response exceeds a hard limit for its platform, **When** the provider (`gemini.py`, `anthropic_client.py`) parses the response, **Then** instead of blind truncation with an ellipsis, it makes ONE repair call asking the model to shorten that specific post below the limit while preserving the hook and voice; only if the repair still exceeds the limit does it truncate at the last sentence boundary below the limit (never mid-word) and log a warning.
+
+4. **Given** a user is on the approval panel with any post over its hard limit for a platform they can publish to, **When** they attempt to Approve, **Then** the action is blocked with an inline message naming the platform(s) and the overage (e.g. "X post is 12 characters over the limit"), and the corresponding counter shows the danger state.
+
+5. **Given** `dispatch_publish` and `dispatch_publish_for_platform` in `backend/app/services/publishing.py`, **When** a post exceeds its platform hard limit at publish time, **Then** the platform is marked failed with a distinct machine-readable reason (e.g. `error_details="over_limit"`) BEFORE any API call, the naive `[:280]` slices in `twitter.py` and `[:2200]` in `meta.py` are removed, and the frontend retry panel surfaces "post is over the X character limit, shorten it and retry" instead of a generic error.
+
+6. **Given** backend tests, **When** run, **Then** they cover: weighted X counting with URLs, repair-call path when generation is over limit, sentence-boundary fallback truncation, publish-time over-limit rejection per platform, and parity between frontend and backend limit constants (a test reads both files or a shared JSON fixture).
+
+---
+
+### Story 26.2: Micro-Style Stylometry and Full BVP Injection
+
+As a writer whose style includes lowercase openers, comma-heavy sentences, and other micro-habits,
+I want the system to measure those habits and actually apply every extracted voice field during generation,
+so that generated content carries my punctuation and casing fingerprint instead of default LLM style.
+
+**Acceptance Criteria:**
+
+1. **Given** `compute_stylometric_fields()` in `backend/app/services/stylometry.py`, **When** extended, **Then** it additionally computes: `casing_style` ("standard" | "lowercase_leaning" | "mixed", from the share of sentence-initial lowercase letters), `comma_density` ("light" | "moderate" | "heavy", commas per 100 words), `exclamation_frequency` ("never" | "rare" | "frequent"), `ellipsis_usage` (bool), `parenthetical_usage` ("rare" | "occasional" | "frequent"), and `sentence_length_stdev` (int), with the same never-raise, 50K-cap behavior as the existing metrics.
+
+2. **Given** the seven extracted-but-never-injected qualitative fields (`formality_scale`, `humor_style`, `vocabulary_complexity`, `example_style`, `target_audience`, plus computed `sentence_rhythm`, `paragraph_density`, `contraction_frequency`), **When** `_build_voice_injection()` and `_build_social_universal_rules()` in `generation_prompts.py` build the voice sections, **Then** each field present in the BVP produces a concrete instruction line (e.g. formality_scale 1-2 -> "casual register, contractions expected"; humor_style "dry" -> "occasional dry humor, never slapstick"; paragraph_density "airy" -> "1-2 sentence paragraphs"), and `contraction_frequency` drives the contraction rule directly instead of being inferred from tone keywords.
+
+3. **Given** the new micro-style fields, **When** the voice section is built, **Then** `casing_style="lowercase_leaning"` injects an explicit rule ("this writer often opens sentences in lowercase in social posts; mirror this in social content, keep standard casing in blog headings"), and `comma_density`, `exclamation_frequency`, `ellipsis_usage`, `parenthetical_usage` each map to one instruction line; fields absent from legacy BVPs inject nothing and never raise.
+
+4. **Given** the social prompts (`_SOCIAL_PROMPT`, `_SOCIAL_STANDALONE_PROMPT`), **When** voice signals are injected, **Then** `signature_phrases`, `voice_anchor_sentences`, and `anti_pattern_example` are injected into social generation the same way blog generation already injects them (today they are blog-only).
+
+5. **Given** a BVP refresh or new extraction, **When** stylometry runs, **Then** the new fields are computed and merged following the Story 16.1 independent-update pattern, and the BVP review UI (`ClientDetailTabs` voice tab) renders the new fields read-only in the existing computed-metrics section.
+
+6. **Given** tests in `backend/tests/test_stylometry.py` and prompt tests, **When** run, **Then** they cover lowercase-leaning detection, comma density boundaries, injection lines for each new field, legacy-BVP absence safety, and social-prompt signature-phrase injection for both providers.
+
+---
+
+### Story 26.3: Few-Shot Voice Exemplars from Stored Samples
+
+As a writer,
+I want the system to keep my actual writing samples and show them to the model as exemplars at generation time,
+so that the model imitates real examples of my writing instead of following abstract instructions about it.
+
+**Acceptance Criteria:**
+
+1. **Given** ingestion currently discards raw text after extraction, **When** ingestion completes (scrape, file upload, or questionnaire samples), **Then** up to 12 representative sample excerpts (200-600 chars each, sentence-boundary trimmed, deduplicated) are stored in a new `voice_samples` JSONB column on `clients` (list of `{text, source, added_at}`), selected to maximize diversity of length and register; a migration is generated via the Alembic CLI.
+
+2. **Given** questionnaire sample texts and voice transcripts already pass through the pipeline, **When** they are processed, **Then** their excerpts are stored with `source="questionnaire"` or `source="transcript"` alongside scraped ones.
+
+3. **Given** blog generation with a BVP present, **When** the prompt is built, **Then** 2-3 stored samples are injected in a clearly delimited WRITING SAMPLES block with the instruction "match the rhythm, punctuation, casing, and register of these samples; do not copy their content", and the fidelity prompt receives the same samples as reference.
+
+4. **Given** social generation (linked and standalone), **When** the prompt is built, **Then** 1-2 short samples are injected per request, preferring shorter excerpts for platform posts.
+
+5. **Given** a client with no stored samples (legacy client, skipped voice setup), **When** generation runs, **Then** the samples block is omitted entirely and behavior is unchanged.
+
+6. **Given** the voice tab in `ClientDetailTabs`, **When** a profile has stored samples, **Then** the user can view them and delete individual samples; a rescan replaces `source="scrape"` samples but preserves questionnaire and transcript samples.
+
+7. **Given** tests, **When** run, **Then** they cover excerpt selection (dedup, length bounds, sentence boundaries), migration up/down, prompt injection for blog and social on both providers, legacy no-samples path, and rescan preservation semantics.
+
+---
+
+### Story 26.4: Fidelity Repair Loop and Per-Mode Voice Differentiation
+
+As a user,
+I want a failing voice score to trigger an automatic repair pass and each generation mode to apply my voice differently,
+so that low-fidelity output fixes itself before I see it and blog, social, and template modes stop sounding identical.
+
+**Acceptance Criteria:**
+
+1. **Given** `check_fidelity()` returns `tone_score < 7` or `cadence_score < 6` or `jargon_violations > 0`, **When** the generation pipeline (`services/generation.py`) receives the score, **Then** it makes exactly ONE repair call per campaign passing the failing dimensions and the voice section, re-scores the repaired output, keeps whichever version scored higher, and stores both scores in `voice_score` (fields `initial` and `final`); the repair adds no user-visible wait state beyond the existing generation job.
+
+2. **Given** the repair loop, **When** it runs, **Then** total added latency is bounded (one repair + one re-score maximum, no recursion), a log line records repaired dimensions, and a `repaired: true` flag in `voice_score` lets the frontend badge show "voice-tuned" instead of a failing badge.
+
+3. **Given** the four article templates and blog vs social generation share one `voice_brief`, **When** prompts are built, **Then** a per-surface voice application layer differentiates them: blog uses the full voice section; LinkedIn keeps structure signals but compresses the brief to register + rhythm; X uses only cadence, casing, and banned words with an explicit "punchier than the blog voice" rule; Instagram and Facebook use the warm-register subset; Threads keeps the existing raw-register rule plus casing. Each surface's voice section is verifiably different in the built prompt (asserted in tests).
+
+4. **Given** the `thought-leadership` and `how-to` templates, **When** blog generation runs, **Then** the voice application includes one template-specific line (thought-leadership amplifies opinion markers and first-person stance; how-to amplifies imperative mood and concrete steps) so template choice changes voice application, not just structure.
+
+5. **Given** assist mode, **When** any of this story's changes run, **Then** assist behavior is untouched: no BVP injection, no repair loop, `voice_score` stays null.
+
+6. **Given** tests, **When** run, **Then** they cover: repair triggered on each failing dimension, better-score-wins selection, single-repair bound, `repaired` flag persistence, per-surface prompt differentiation assertions, template voice lines, and assist-mode invariance.
+
+---
+
+### Story 26.5: Onboarding Friction Reduction and Early Voice Proof
+
+As a new user,
+I want onboarding to save my progress, let me speak instead of type, explain failures, and prove the product understands my voice before asking for more,
+so that I reach my first in-my-voice content quickly and never restart from scratch.
+
+**Acceptance Criteria:**
+
+1. **Given** the User model's single `onboarding_completed` boolean, **When** a `onboarding_step` integer column (nullable, default null) is added via Alembic CLI migration, **Then** each completed step persists it, and a returning user with `onboarding_completed=false` resumes at their saved step with their created client loaded (no more restart at Step 1).
+
+2. **Given** the voice profile finishes extraction in Step 2, **When** the InlineProfileReview renders, **Then** it is extended with a "voice proof" element: one short sample paragraph generated live in the user's extracted voice (a 2-3 sentence rewrite of fixed neutral copy using the voice section), with a caption "This is how PersonnaPress will sound as you"; generation failure hides the element without blocking the step.
+
+3. **Given** website scraping fails or finds no content, **When** the questionnaire path is shown, **Then** a one-line explanation states what happened (e.g. "We could not read enough text from your site, so we will ask a few quick questions instead") instead of the questionnaire appearing unexplained; the specific `error_details` reason maps to distinct copy for `no_content` vs other failures.
+
+4. **Given** the existing `VoiceBrainDump` component from Epic 9 is used in campaigns but not onboarding, **When** Step 4 renders, **Then** the brain dump textarea offers the voice recording option with identical behavior to the campaign page, and the transcript lands in the textarea for editing before submit.
+
+5. **Given** the brain dump draft in Step 4, **When** the user types, **Then** the draft persists to localStorage (same pattern as story 3-18) and is restored if the user returns mid-onboarding; it is cleared on successful campaign creation.
+
+6. **Given** platform connection is the current Step 3 and content generation is Step 4, **When** the flow is reordered, **Then** brain dump becomes Step 3 and platform connection becomes Step 4 (after first content exists, framed as "publish what you just made"), the OAuth return handler is updated for the new step numbering, and skipping platform connection still completes onboarding.
+
+7. **Given** tests, **When** run, **Then** they cover: step persistence and resume, voice-proof render and failure fallback, scrape-failure explanation copy per error reason, voice recording presence in Step 4 (new Step 3), draft persistence and clearing, and OAuth return with reordered steps.
+
+---

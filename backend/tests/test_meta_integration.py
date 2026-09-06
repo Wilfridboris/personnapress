@@ -758,11 +758,15 @@ async def test_publish_instagram_rate_limit():
     assert exc_info.value.status_code == 429
 
 
-async def test_publish_instagram_caption_truncated_at_2200():
-    """publish_instagram_feed_post truncates caption to 2200 chars before API call."""
+async def test_publish_instagram_caption_passes_through_unchanged():
+    """publish_instagram_feed_post passes caption to API unchanged (no truncation).
+
+    Over-limit enforcement now happens upstream in publishing.py dispatch functions
+    before the API call is made. meta.py is responsible only for the API call itself.
+    """
     from app.integrations.meta import publish_instagram_feed_post
 
-    long_caption = "x" * 3000
+    caption = "x" * 200  # within limit
     container_resp = _make_httpx_response(200, {"id": "container_abc"})
     status_finished = _make_httpx_response(200, {"status_code": "FINISHED"})
     publish_resp = _make_httpx_response(200, {"id": "media_xyz"})
@@ -784,9 +788,9 @@ async def test_publish_instagram_caption_truncated_at_2200():
         mock_client.get = AsyncMock(return_value=status_finished)
         mock_cls.return_value = mock_client
 
-        await publish_instagram_feed_post("ig_222", "page_tok", "https://example.com/img.jpg", long_caption)
+        await publish_instagram_feed_post("ig_222", "page_tok", "https://example.com/img.jpg", caption)
 
-    assert len(captured_data["caption"]) == 2200
+    assert captured_data["caption"] == caption
 
 
 async def test_dispatch_publish_instagram_platform_independence():
@@ -956,7 +960,7 @@ async def test_publish_facebook_page_401():
 
 
 async def test_publish_facebook_page_no_linkedin_post():
-    """dispatch_publish: facebook_page skipped when campaign has no linkedin_post."""
+    """dispatch_publish: facebook_page skipped when campaign has no facebook_post or linkedin_post."""
     from app.services.publishing import dispatch_publish
 
     campaign_id = uuid.uuid4()
@@ -965,6 +969,7 @@ async def test_publish_facebook_page_no_linkedin_post():
 
     mock_campaign = MagicMock()
     mock_campaign.client_id = client_id
+    mock_campaign.facebook_post = None   # must be set explicitly; MagicMock auto-creates truthy attrs
     mock_campaign.linkedin_post = None
     mock_campaign.image_url = "https://example.com/img.jpg"
     mock_campaign.status = "approved"
@@ -1131,7 +1136,7 @@ async def test_publish_threads_429():
 
 
 async def test_publish_threads_no_x_post():
-    """dispatch_publish: threads skipped when campaign has no x_post."""
+    """dispatch_publish: threads skipped when campaign has no threads_post or x_post."""
     from app.services.publishing import dispatch_publish
 
     campaign_id = uuid.uuid4()
@@ -1140,6 +1145,7 @@ async def test_publish_threads_no_x_post():
 
     mock_campaign = MagicMock()
     mock_campaign.client_id = client_id
+    mock_campaign.threads_post = None  # must be set explicitly; MagicMock auto-creates truthy attrs
     mock_campaign.x_post = None
     mock_campaign.status = "approved"
 

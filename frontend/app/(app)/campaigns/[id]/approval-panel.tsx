@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import type { Campaign, CampaignStatus } from "@/lib/types";
 import type { BlogEditorHandle } from "@/components/campaigns/BlogEditor";
 import type { SocialPostEditorsHandle } from "@/components/campaigns/SocialPostEditors";
+import { overLimit, HARD_LIMITS } from "@/lib/platformLimits";
 
 const GITHUB_SUPPORTED_FRAMEWORKS = ["jekyll", "plain_static", "astro", "nextjs", "hugo", "eleventy"];
 const BLOG_ONLY_PLATFORMS = new Set(["wordpress", "wordpress-com", "webflow", "headless"]);
@@ -529,13 +530,41 @@ export function ApprovalPanel({ campaign, blogEditorRef, socialEditorsRef, onOpt
   }, [showRepublishControls, availablePlatforms]);
 
   const handleApprove = useCallback(async () => {
+    // Block approval if any non-empty post exceeds its platform hard limit.
+    const socialValues = socialEditorsRef?.current?.getCurrentValues();
+
+    // Map field names to platform_limits keys
+    const socialPlatformMap: Array<[string, keyof typeof HARD_LIMITS, string]> = [
+      ["x_post", "x", "X"],
+      ["linkedin_post", "linkedin", "LinkedIn"],
+      ["instagram_caption", "instagram", "Instagram"],
+      ["facebook_post", "facebook_page", "Facebook"],
+      ["threads_post", "threads", "Threads"],
+    ];
+
+    const overages: string[] = [];
+    if (socialValues) {
+      for (const [field, platform, label] of socialPlatformMap) {
+        const text = socialValues[field as keyof typeof socialValues] ?? "";
+        if (text) {
+          const overage = overLimit(platform, text);
+          if (overage > 0) {
+            overages.push(`${label} post is ${overage} character${overage === 1 ? "" : "s"} over the limit`);
+          }
+        }
+      }
+    }
+    if (overages.length > 0) {
+      addToast(overages.join(". ") + ".", "error");
+      return;
+    }
+
     const previousStatus = campaign.status;
     setIsApproving(true);
     onOptimisticStatus?.("approved");
 
     const isDirtyBlog = blogEditorRef?.current?.isDirty ?? false;
     const blogHtml = isDirtyBlog ? blogEditorRef?.current?.getCurrentHtml() : undefined;
-    const socialValues = socialEditorsRef?.current?.getCurrentValues();
 
     let editsPatched = false;
     try {

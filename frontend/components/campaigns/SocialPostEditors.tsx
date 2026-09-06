@@ -5,16 +5,20 @@ import { Info } from "lucide-react";
 import { campaignsApi, APIError } from "@/lib/api";
 import { useUIStore } from "@/lib/stores/useUIStore";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
+import { HARD_LIMITS, countChars, dangerThreshold, overLimit } from "@/lib/platformLimits";
 
-const X_LIMIT = 280;
-const LINKEDIN_LIMIT = 1500;
-const INSTAGRAM_LIMIT = 2200;
-const FACEBOOK_LIMIT = 1000;
-const THREADS_LIMIT = 500;
-// danger at 95%
-const X_DANGER_THRESHOLD = 267;
-const LINKEDIN_DANGER_THRESHOLD = 1425;
-const THREADS_DANGER_THRESHOLD = 475;
+// Canonical hard limits imported from the single source of truth.
+const X_LIMIT = HARD_LIMITS.x;           // 280
+const LINKEDIN_LIMIT = HARD_LIMITS.linkedin;  // 3000
+const INSTAGRAM_LIMIT = HARD_LIMITS.instagram; // 2200
+const FACEBOOK_LIMIT = HARD_LIMITS.facebook_page; // 63206
+const THREADS_LIMIT = HARD_LIMITS.threads;   // 500
+// Danger thresholds at 95% of hard limits
+const X_DANGER_THRESHOLD = dangerThreshold("x");
+const LINKEDIN_DANGER_THRESHOLD = dangerThreshold("linkedin");
+const INSTAGRAM_DANGER_THRESHOLD = dangerThreshold("instagram");
+const FACEBOOK_DANGER_THRESHOLD = dangerThreshold("facebook_page");
+const THREADS_DANGER_THRESHOLD = dangerThreshold("threads");
 
 interface MetaContext {
   threads?: boolean;
@@ -105,14 +109,26 @@ export const SocialPostEditors = forwardRef<
     [isDirty, xPost, linkedinPost, instagramCaption, facebookPost, threadsPost],
   );
 
-  const xCount = xPost.length;
+  // X uses weighted count: URLs count as 23 chars (matching X's platform behavior)
+  const xCount = countChars("x", xPost);
   const xAtDanger = xCount >= X_DANGER_THRESHOLD;
+  const xOverLimit = overLimit("x", xPost) > 0;
 
-  const liCount = linkedinPost.length;
+  const liCount = countChars("linkedin", linkedinPost);
   const liAtDanger = liCount >= LINKEDIN_DANGER_THRESHOLD;
+  const liOverLimit = overLimit("linkedin", linkedinPost) > 0;
 
-  const threadsCount = threadsPost.length;
+  const igCount = instagramCaption.length;
+  const igAtDanger = igCount >= INSTAGRAM_DANGER_THRESHOLD;
+  const igOverLimit = overLimit("instagram", instagramCaption) > 0;
+
+  const fbCount = facebookPost.length;
+  const fbAtDanger = fbCount >= FACEBOOK_DANGER_THRESHOLD;
+  const fbOverLimit = overLimit("facebook_page", facebookPost) > 0;
+
+  const threadsCount = countChars("threads", threadsPost);
   const threadsAtDanger = threadsCount >= THREADS_DANGER_THRESHOLD;
+  const threadsOverLimit = overLimit("threads", threadsPost) > 0;
 
   // Show new sections based on platform connection state
   const showInstagram = metaContext?.instagram === true;
@@ -218,7 +234,7 @@ export const SocialPostEditors = forwardRef<
           {!readOnly && (
             <span
               id="x-post-counter"
-              className={`text-xs font-mono mt-1 block ${xAtDanger ? "text-danger" : "text-graphite"}`}
+              className={`text-xs font-mono mt-1 block ${xOverLimit ? "text-[#8B0000]" : xAtDanger ? "text-danger" : "text-graphite"}`}
               aria-live="polite"
               aria-atomic="true"
             >
@@ -255,7 +271,7 @@ export const SocialPostEditors = forwardRef<
           {!readOnly && (
             <span
               id="linkedin-post-counter"
-              className={`text-xs font-mono mt-1 block ${liAtDanger ? "text-danger" : "text-graphite"}`}
+              className={`text-xs font-mono mt-1 block ${liOverLimit ? "text-[#8B0000]" : liAtDanger ? "text-danger" : "text-graphite"}`}
               aria-live="polite"
               aria-atomic="true"
             >
@@ -299,11 +315,11 @@ export const SocialPostEditors = forwardRef<
           {!readOnly && (
             <span
               id="instagram-caption-counter"
-              className="text-xs font-mono mt-1 block text-graphite"
+              className={`text-xs font-mono mt-1 block ${igOverLimit ? "text-[#8B0000]" : igAtDanger ? "text-danger" : "text-graphite"}`}
               aria-live="polite"
               aria-atomic="true"
             >
-              {instagramCaption.length} / {INSTAGRAM_LIMIT}
+              {igCount} / {INSTAGRAM_LIMIT}
             </span>
           )}
         </div>
@@ -337,11 +353,11 @@ export const SocialPostEditors = forwardRef<
           {!readOnly && (
             <span
               id="facebook-post-counter"
-              className="text-xs font-mono mt-1 block text-graphite"
+              className={`text-xs font-mono mt-1 block ${fbOverLimit ? "text-[#8B0000]" : fbAtDanger ? "text-danger" : "text-graphite"}`}
               aria-live="polite"
               aria-atomic="true"
             >
-              {facebookPost.length} / {FACEBOOK_LIMIT}
+              {fbCount} / {FACEBOOK_LIMIT}
             </span>
           )}
         </div>
@@ -375,7 +391,7 @@ export const SocialPostEditors = forwardRef<
           {!readOnly && (
             <span
               id="threads-post-counter"
-              className={`text-xs font-mono mt-1 block ${threadsAtDanger ? "text-danger" : "text-graphite"}`}
+              className={`text-xs font-mono mt-1 block ${threadsOverLimit ? "text-[#8B0000]" : threadsAtDanger ? "text-danger" : "text-graphite"}`}
               aria-live="polite"
               aria-atomic="true"
             >

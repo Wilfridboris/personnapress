@@ -71,12 +71,12 @@ describe("SocialPostEditors", () => {
     expect(counter.className).toContain("text-graphite");
   });
 
-  it("LinkedIn counter turns danger at >= 1425 (95% of 1500)", () => {
+  it("LinkedIn counter turns danger at >= 2850 (95% of 3000)", () => {
     renderEditors({ initialLinkedInPost: "" });
     const textarea = screen.getByLabelText("LinkedIn post content");
-    const longText = "a".repeat(1425);
+    const longText = "a".repeat(2850);
     fireEvent.change(textarea, { target: { value: longText } });
-    const counter = screen.getByText("1425 / 1500");
+    const counter = screen.getByText("2850 / 3000");
     expect(counter.className).toContain("text-danger");
   });
 

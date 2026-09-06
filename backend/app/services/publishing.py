@@ -30,6 +30,7 @@ from app.integrations import twitter as twitter_integration
 from app.integrations import webflow as webflow_integration
 from app.integrations import wordpress as wordpress_integration
 from app.integrations import wordpress_com as wordpress_com_integration
+from app.services.platform_limits import over_limit
 
 logger = logging.getLogger(__name__)
 
@@ -627,6 +628,10 @@ async def dispatch_publish_for_platform(
             if not campaign.x_post:
                 logger.debug("dispatch_publish_for_platform: skipping x (null x_post) campaign=%s", campaign_id)
                 return {platform: "skipped"}
+            x_overage = over_limit("x", campaign.x_post)
+            if x_overage > 0:
+                logger.warning("dispatch_publish_for_platform: x_post is %d chars over limit campaign=%s", x_overage, campaign_id)
+                return {platform: "over_limit"}
             creds = await _refresh_x_token_if_needed(creds, db, campaign.client_id)
             if campaign.image_url:
                 try:
@@ -649,6 +654,10 @@ async def dispatch_publish_for_platform(
             if not campaign.linkedin_post:
                 logger.debug("dispatch_publish_for_platform: skipping linkedin (null linkedin_post) campaign=%s", campaign_id)
                 return {platform: "skipped"}
+            li_overage = over_limit("linkedin", campaign.linkedin_post)
+            if li_overage > 0:
+                logger.warning("dispatch_publish_for_platform: linkedin_post is %d chars over limit campaign=%s", li_overage, campaign_id)
+                return {platform: "over_limit"}
             li_target = creds.get("target", "personal")
             li_org_id = creds.get("org_id") if li_target == "organization" else None
             li_post_urn: str = ""
@@ -692,6 +701,10 @@ async def dispatch_publish_for_platform(
             if not (resolved_caption or "").strip():
                 logger.debug("dispatch_publish_for_platform: skipping instagram (no caption) campaign=%s", campaign_id)
                 return {platform: "skipped"}
+            ig_overage = over_limit("instagram", resolved_caption)
+            if ig_overage > 0:
+                logger.warning("dispatch_publish_for_platform: instagram caption is %d chars over limit campaign=%s", ig_overage, campaign_id)
+                return {platform: "over_limit"}
             media_id = await meta_integration.publish_instagram_feed_post(
                 creds["instagram_user_id"],
                 creds["page_access_token"],
@@ -704,6 +717,10 @@ async def dispatch_publish_for_platform(
             if not (resolved_message or "").strip():
                 logger.debug("dispatch_publish_for_platform: skipping facebook_page (no message) campaign=%s", campaign_id)
                 return {platform: "skipped"}
+            fb_overage = over_limit("facebook_page", resolved_message)
+            if fb_overage > 0:
+                logger.warning("dispatch_publish_for_platform: facebook_post is %d chars over limit campaign=%s", fb_overage, campaign_id)
+                return {platform: "over_limit"}
             fb_post_id = await meta_integration.publish_facebook_page_post(
                 creds["page_id"],
                 creds["page_access_token"],
@@ -717,6 +734,10 @@ async def dispatch_publish_for_platform(
             if not (resolved_text or "").strip():
                 logger.debug("dispatch_publish_for_platform: skipping threads (no text) campaign=%s", campaign_id)
                 return {platform: "skipped"}
+            th_overage = over_limit("threads", resolved_text)
+            if th_overage > 0:
+                logger.warning("dispatch_publish_for_platform: threads_post is %d chars over limit campaign=%s", th_overage, campaign_id)
+                return {platform: "over_limit"}
             threads_post_id = await meta_integration.publish_threads_post(
                 creds["threads_user_id"],
                 creds["user_access_token"],
@@ -803,6 +824,11 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                     logger.debug("dispatch_publish: skipping x (null x_post) campaign=%s", campaign_id)
                     results[platform] = "skipped"
                     continue
+                x_overage = over_limit("x", campaign.x_post)
+                if x_overage > 0:
+                    logger.warning("dispatch_publish: x_post is %d chars over limit campaign=%s", x_overage, campaign_id)
+                    results[platform] = "over_limit"
+                    continue
                 creds = await _refresh_x_token_if_needed(creds, db, campaign.client_id)
                 now = asyncio.get_running_loop().time()
                 if last_x_publish_time and now - last_x_publish_time < 2.0:
@@ -832,6 +858,11 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                 if not campaign.linkedin_post:
                     logger.debug("dispatch_publish: skipping linkedin (null linkedin_post) campaign=%s", campaign_id)
                     results[platform] = "skipped"
+                    continue
+                li_overage = over_limit("linkedin", campaign.linkedin_post)
+                if li_overage > 0:
+                    logger.warning("dispatch_publish: linkedin_post is %d chars over limit campaign=%s", li_overage, campaign_id)
+                    results[platform] = "over_limit"
                     continue
                 now = asyncio.get_running_loop().time()
                 if last_linkedin_publish_time and now - last_linkedin_publish_time < 5.0:
@@ -883,6 +914,11 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                     logger.debug("dispatch_publish: skipping instagram (no caption) campaign=%s", campaign_id)
                     results[platform] = "skipped"
                     continue
+                ig_overage = over_limit("instagram", resolved_caption)
+                if ig_overage > 0:
+                    logger.warning("dispatch_publish: instagram caption is %d chars over limit campaign=%s", ig_overage, campaign_id)
+                    results[platform] = "over_limit"
+                    continue
                 media_id = await meta_integration.publish_instagram_feed_post(
                     creds["instagram_user_id"],
                     creds["page_access_token"],
@@ -896,6 +932,11 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                 if not (resolved_message or "").strip():
                     logger.debug("dispatch_publish: skipping facebook_page (no message) campaign=%s", campaign_id)
                     results[platform] = "skipped"
+                    continue
+                fb_overage = over_limit("facebook_page", resolved_message)
+                if fb_overage > 0:
+                    logger.warning("dispatch_publish: facebook_post is %d chars over limit campaign=%s", fb_overage, campaign_id)
+                    results[platform] = "over_limit"
                     continue
                 fb_post_id = await meta_integration.publish_facebook_page_post(
                     creds["page_id"],
@@ -911,6 +952,11 @@ async def dispatch_publish(db: AsyncSession, campaign_id: UUID, job_id: UUID, pl
                 if not (resolved_text or "").strip():
                     logger.debug("dispatch_publish: skipping threads (no text) campaign=%s", campaign_id)
                     results[platform] = "skipped"
+                    continue
+                th_overage = over_limit("threads", resolved_text)
+                if th_overage > 0:
+                    logger.warning("dispatch_publish: threads_post is %d chars over limit campaign=%s", th_overage, campaign_id)
+                    results[platform] = "over_limit"
                     continue
                 threads_post_id = await meta_integration.publish_threads_post(
                     creds["threads_user_id"],

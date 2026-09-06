@@ -130,14 +130,12 @@ async def publish_instagram_feed_post(
     caption: str,
 ) -> str:
     """Create and publish an Instagram feed image post. Returns the published media_id."""
-    caption_truncated = (caption or "")[:2200]
-
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
             f"{META_GRAPH_BASE}/{instagram_user_id}/media",
             data={
                 "image_url": image_url,
-                "caption": caption_truncated,
+                "caption": caption or "",
                 "access_token": page_access_token,
             },
         )

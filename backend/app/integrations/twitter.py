@@ -63,7 +63,7 @@ async def create_tweet(access_token: str, text: str) -> str:
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json",
             },
-            json={"text": (text or "")[:280]},
+            json={"text": text or ""},
         )
     if resp.status_code == 429:
         raise PlatformError("X", 429, "rate limit exceeded, please retry later")
@@ -132,7 +132,7 @@ async def create_tweet_with_media(access_token: str, text: str, media_id: str) -
                 "Content-Type": "application/json",
             },
             json={
-                "text": (text or "")[:280],
+                "text": text or "",
                 "media": {"media_ids": [media_id]},
             },
         )

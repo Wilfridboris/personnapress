@@ -605,3 +605,17 @@ Cross-cutting gaps found while reviewing the post-analytics feature end-to-end (
 - `_repair_plan_entries`/`_next_fallback`/`_pad_fallback` helpers duplicated across providers [anthropic_client.py, gemini.py] — architectural constraint: integrations layer cannot cross-import; noted in dev agent record
 - No input validation on `linkedin_count`/`twitter_count` [roadmap.py] — caller-controlled counts; 0 handled gracefully; revisit if callers become external/untrusted
 - Angle codes listed as bare comma-separated strings in prompt (not explicit JSON array syntax) [generation_prompts.py] — `_repair_plan_entries` repair layer handles invalid returns; upgrade to JSON array if model non-compliance becomes an issue
+
+## Deferred from: code review of 26-1-character-limit-single-source-of-truth-enforcement (2026-09-05)
+
+- source_spec: `_bmad-output/implementation-artifacts/26-1-character-limit-single-source-of-truth-enforcement.md`
+  summary: Instagram and Facebook `dispatch_publish_for_platform` over-limit rejection is untested (spec AC 6 only required X/LinkedIn/Threads tests)
+  evidence: The implementation added over-limit guards for all 5 platforms in dispatch_publish_for_platform, but the test suite (test_platform_limits_provider.py) only covers X, LinkedIn, and Threads. Instagram and Facebook guards are exercised by the same code path but lack dedicated tests.
+
+- source_spec: `_bmad-output/implementation-artifacts/26-1-character-limit-single-source-of-truth-enforcement.md`
+  summary: Direct callers of `publish_instagram_feed_post` no longer have a 2200-char safety net at the API layer
+  evidence: The spec required removing `caption_truncated = (caption or "")[:2200]` from meta.py (task 5). The over-limit guard now lives entirely in dispatch_publish/dispatch_publish_for_platform. If a future code path or test calls publish_instagram_feed_post directly with an over-limit caption, the Instagram API will return an error rather than a silent truncation. Low risk now; note if new callers are added.
+
+- source_spec: `_bmad-output/implementation-artifacts/26-1-character-limit-single-source-of-truth-enforcement.md`
+  summary: Direct callers of `create_tweet`/`create_tweet_with_media` no longer have a 280-char safety net at the API layer
+  evidence: The spec required removing `(text or "")[:280]` from twitter.py (task 5). Over-limit validation now lives entirely upstream. If a future code path calls create_tweet with an over-limit text, the Twitter API will return a 422 rather than a silent truncation. Low risk now; note if new callers are added.
