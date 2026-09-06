@@ -373,7 +373,7 @@ development_status:
   # Epic 26: Voice Fidelity v2 and First-Run Value. Design-thinking analysis 2026-09-05: BVP injects ~half of 25 captured fields, raw samples discarded (no few-shot), casing/punctuation habits unmeasured, fidelity score has no repair loop, char limits defined in 4 places with 4 values and nothing blocks over-limit posts, onboarding has 10 transitions + 5 async waits with no step persistence.
   epic-26: in-progress
   26-1-character-limit-single-source-of-truth-enforcement: done
-  26-2-micro-style-stylometry-full-bvp-injection: ready-for-dev
+  26-2-micro-style-stylometry-full-bvp-injection: review
   26-3-few-shot-voice-exemplars-stored-samples: ready-for-dev
   26-4-fidelity-repair-loop-per-mode-voice-differentiation: ready-for-dev
   26-5-onboarding-friction-reduction-early-voice-proof: ready-for-dev

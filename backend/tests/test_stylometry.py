@@ -151,4 +151,210 @@ class TestEdgeCases:
 
     def test_computed_field_names_constant(self):
         assert "low_confidence" not in COMPUTED_FIELD_NAMES
-        assert len(COMPUTED_FIELD_NAMES) == 5
+        assert len(COMPUTED_FIELD_NAMES) == 11
+
+
+# ── Story 26.2: New micro-style field tests ────────────────────────────────────
+
+def _make_lowercase_leaning_text() -> str:
+    """More than 30% of sentences start with a lowercase letter."""
+    # Repeat 'lowercase opener. ' 7 times + 'Standard opener. ' 3 times = 70% lowercase
+    lower = "lowercase opener sentence here. " * 70
+    upper = "Standard opener sentence here. " * 30
+    # interleave so spaCy sentence detection works well
+    return (lower + upper) * 5
+
+
+def _make_standard_casing_text() -> str:
+    """All sentences start with an uppercase letter."""
+    return "The cat sat on the mat. The dog ran over the hill. Everyone was happy. " * 50
+
+
+def _make_mixed_casing_text() -> str:
+    """Between 10-30% of sentences start with lowercase."""
+    lower = "lowercase sentence here. " * 15
+    upper = "Standard sentence here. " * 85
+    return lower + upper
+
+
+def _make_heavy_comma_text() -> str:
+    """More than 8 commas per 100 words."""
+    # Each sentence has 4 commas in ~10 words => ~40 commas per 100 words
+    sentence = "One, two, three, four, five words per sentence here done. "
+    return sentence * 60
+
+
+def _make_light_comma_text() -> str:
+    """Fewer than 4 commas per 100 words -- no commas at all."""
+    sentence = "The quick brown fox jumps over the lazy dog today. "
+    return sentence * 60
+
+
+def _make_exclamation_frequent_text() -> str:
+    """Exclamation marks at >= 0.5 per 100 words."""
+    # 1 exclamation per ~5 words => 20 per 100 words
+    return "Wow amazing! Great job! Excellent work! Fantastic result! " * 60
+
+
+def _make_exclamation_rare_text() -> str:
+    """Exactly one exclamation mark in a long piece."""
+    base = "The report was thorough and well-structured throughout the analysis. " * 80
+    return base + "Excellent!"
+
+
+def _make_ellipsis_text() -> str:
+    """Text with more than one occurrence of '...'"""
+    return "I was thinking... maybe not... let me reconsider... definitely not. " * 20
+
+
+def _make_parenthetical_frequent_text() -> str:
+    """More than 3 pairs of parentheses per 1000 words."""
+    # 1 pair per ~5 words => 200 pairs per 1000 words
+    sentence = "This is a sentence (with an aside) that continues. "
+    return sentence * 60
+
+
+def _make_parenthetical_rare_text() -> str:
+    """Fewer than 1 pair of parentheses per 1000 words."""
+    return "The quick brown fox jumps over the lazy dog today. " * 60
+
+
+class TestCasingStyle:
+    def test_standard_casing(self):
+        result = compute_stylometric_fields(_make_standard_casing_text())
+        assert result["casing_style"] == "standard"
+
+    def test_lowercase_leaning(self):
+        result = compute_stylometric_fields(_make_lowercase_leaning_text())
+        assert result["casing_style"] == "lowercase_leaning"
+
+    def test_empty_text_returns_standard(self):
+        result = compute_stylometric_fields("")
+        assert result["casing_style"] == "standard"
+
+    def test_casing_style_valid_values(self):
+        result = compute_stylometric_fields(_make_normal_text())
+        assert result["casing_style"] in {"standard", "mixed", "lowercase_leaning"}
+
+
+class TestCommaDensity:
+    def test_heavy_comma_density(self):
+        result = compute_stylometric_fields(_make_heavy_comma_text())
+        assert result["comma_density"] == "heavy"
+
+    def test_light_comma_density(self):
+        result = compute_stylometric_fields(_make_light_comma_text())
+        assert result["comma_density"] == "light"
+
+    def test_comma_density_valid_values(self):
+        result = compute_stylometric_fields(_make_normal_text())
+        assert result["comma_density"] in {"light", "moderate", "heavy"}
+
+    def test_empty_text_returns_light(self):
+        result = compute_stylometric_fields("")
+        assert result["comma_density"] == "light"
+
+
+class TestExclamationFrequency:
+    def test_frequent_exclamations(self):
+        result = compute_stylometric_fields(_make_exclamation_frequent_text())
+        assert result["exclamation_frequency"] == "frequent"
+
+    def test_rare_exclamations(self):
+        result = compute_stylometric_fields(_make_exclamation_rare_text())
+        assert result["exclamation_frequency"] == "rare"
+
+    def test_never_exclamations(self):
+        result = compute_stylometric_fields(_make_light_comma_text())
+        assert result["exclamation_frequency"] == "never"
+
+    def test_exclamation_frequency_valid_values(self):
+        result = compute_stylometric_fields(_make_normal_text())
+        assert result["exclamation_frequency"] in {"never", "rare", "frequent"}
+
+
+class TestEllipsisUsage:
+    def test_ellipsis_detected(self):
+        result = compute_stylometric_fields(_make_ellipsis_text())
+        assert result["ellipsis_usage"] is True
+
+    def test_no_ellipsis(self):
+        result = compute_stylometric_fields(_make_standard_casing_text())
+        assert result["ellipsis_usage"] is False
+
+    def test_single_ellipsis_not_flagged(self):
+        text = "The cat sat on the mat. Maybe... I don't know. " * 40
+        result = compute_stylometric_fields(text)
+        # Only one "..." -- should not be flagged
+        assert result["ellipsis_usage"] is False
+
+    def test_ellipsis_usage_is_bool(self):
+        result = compute_stylometric_fields(_make_normal_text())
+        assert isinstance(result["ellipsis_usage"], bool)
+
+
+class TestParentheticalUsage:
+    def test_frequent_parentheticals(self):
+        result = compute_stylometric_fields(_make_parenthetical_frequent_text())
+        assert result["parenthetical_usage"] == "frequent"
+
+    def test_rare_parentheticals(self):
+        result = compute_stylometric_fields(_make_parenthetical_rare_text())
+        assert result["parenthetical_usage"] == "rare"
+
+    def test_parenthetical_usage_valid_values(self):
+        result = compute_stylometric_fields(_make_normal_text())
+        assert result["parenthetical_usage"] in {"rare", "occasional", "frequent"}
+
+    def test_empty_text_returns_rare(self):
+        result = compute_stylometric_fields("")
+        assert result["parenthetical_usage"] == "rare"
+
+
+class TestSentenceLengthStdev:
+    def test_stdev_is_int(self):
+        result = compute_stylometric_fields(_make_normal_text())
+        assert isinstance(result["sentence_length_stdev"], int)
+
+    def test_single_sentence_stdev_is_zero(self):
+        result = compute_stylometric_fields("Hello world this is one sentence only.")
+        assert result["sentence_length_stdev"] == 0
+
+    def test_empty_text_stdev_is_zero(self):
+        result = compute_stylometric_fields("")
+        assert result["sentence_length_stdev"] == 0
+
+    def test_varied_text_has_nonzero_stdev(self):
+        result = compute_stylometric_fields(_make_varied_text())
+        assert result["sentence_length_stdev"] > 0
+
+
+class TestAllNewFieldsPresent:
+    """AC 1: All 6 new fields are always present in the output dict."""
+
+    def test_all_new_fields_present_on_normal_text(self):
+        new_fields = {
+            "casing_style", "comma_density", "exclamation_frequency",
+            "ellipsis_usage", "parenthetical_usage", "sentence_length_stdev",
+        }
+        result = compute_stylometric_fields(_make_normal_text())
+        for field in new_fields:
+            assert field in result, f"Missing field: {field}"
+
+    def test_all_new_fields_present_on_short_text(self):
+        new_fields = {
+            "casing_style", "comma_density", "exclamation_frequency",
+            "ellipsis_usage", "parenthetical_usage", "sentence_length_stdev",
+        }
+        result = compute_stylometric_fields(_make_short_text())
+        for field in new_fields:
+            assert field in result, f"Missing field on short text: {field}"
+
+    def test_all_new_fields_present_on_empty_text(self):
+        new_fields = {
+            "casing_style", "comma_density", "exclamation_frequency",
+            "ellipsis_usage", "parenthetical_usage", "sentence_length_stdev",
+        }
+        result = compute_stylometric_fields("")
+        for field in new_fields:
+            assert field in result, f"Missing field on empty text: {field}"

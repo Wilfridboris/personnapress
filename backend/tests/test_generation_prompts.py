@@ -9,6 +9,7 @@ from app.integrations.generation_prompts import (
     _SOCIAL_STANDALONE_ASSIST_PROMPT,
     _SOCIAL_STANDALONE_PROMPT,
     _build_social_universal_rules,
+    _build_social_voice_signals,
     _build_standalone_voice_injection,
     _build_template_structure,
     _build_voice_injection,
@@ -710,3 +711,511 @@ class TestSocialStandaloneAssistPrompt:
     def test_does_not_apply_bvp_as_rewrite(self):
         assert "Brand Voice Profile" in _SOCIAL_STANDALONE_ASSIST_PROMPT
         assert "do not apply the brand voice profile" in _SOCIAL_STANDALONE_ASSIST_PROMPT.lower()
+
+
+# ── Story 26.2: Dormant qualitative field injection ───────────────────────────
+
+_BRIEF_BVP = {
+    "voice_brief": "Direct, data-driven voice.",
+    "tone": ["direct"],
+    "cadence": {"avg_sentence_length": 12},
+    "banned_jargon": [],
+}
+
+
+class TestQualitativeFieldInjection:
+    """AC 2: Each dormant qualitative field produces a concrete instruction line."""
+
+    def test_formality_1_produces_casual_register(self):
+        bvp = {**_BRIEF_BVP, "formality_scale": 1}
+        result = _build_voice_injection(bvp)
+        assert "casual register" in result
+
+    def test_formality_2_produces_casual_register(self):
+        bvp = {**_BRIEF_BVP, "formality_scale": 2}
+        result = _build_voice_injection(bvp)
+        assert "casual register" in result
+
+    def test_formality_4_produces_formal_register(self):
+        bvp = {**_BRIEF_BVP, "formality_scale": 4}
+        result = _build_voice_injection(bvp)
+        assert "formal register" in result
+
+    def test_formality_5_produces_formal_register(self):
+        bvp = {**_BRIEF_BVP, "formality_scale": 5}
+        result = _build_voice_injection(bvp)
+        assert "formal register" in result
+
+    def test_formality_3_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "formality_scale": 3}
+        result = _build_voice_injection(bvp)
+        assert "register" not in result
+
+    def test_humor_dry(self):
+        bvp = {**_BRIEF_BVP, "humor_style": "dry"}
+        result = _build_voice_injection(bvp)
+        assert "dry humor" in result
+
+    def test_humor_playful(self):
+        bvp = {**_BRIEF_BVP, "humor_style": "playful"}
+        result = _build_voice_injection(bvp)
+        assert "playful humor" in result
+
+    def test_humor_self_deprecating(self):
+        bvp = {**_BRIEF_BVP, "humor_style": "self_deprecating"}
+        result = _build_voice_injection(bvp)
+        assert "self-deprecating humor" in result
+
+    def test_humor_none_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "humor_style": "none"}
+        result = _build_voice_injection(bvp)
+        assert "Humor:" not in result
+
+    def test_vocabulary_technical(self):
+        bvp = {**_BRIEF_BVP, "vocabulary_complexity": "technical"}
+        result = _build_voice_injection(bvp)
+        assert "technical vocabulary" in result
+
+    def test_vocabulary_plain(self):
+        bvp = {**_BRIEF_BVP, "vocabulary_complexity": "plain"}
+        result = _build_voice_injection(bvp)
+        assert "plain, everyday language" in result
+
+    def test_vocabulary_mixed_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "vocabulary_complexity": "mixed"}
+        result = _build_voice_injection(bvp)
+        assert "Vocabulary:" not in result
+
+    def test_example_analogy(self):
+        bvp = {**_BRIEF_BVP, "example_style": "analogy"}
+        result = _build_voice_injection(bvp)
+        assert "analogies" in result
+
+    def test_example_data(self):
+        bvp = {**_BRIEF_BVP, "example_style": "data"}
+        result = _build_voice_injection(bvp)
+        assert "data and statistics" in result
+
+    def test_example_story(self):
+        bvp = {**_BRIEF_BVP, "example_style": "story"}
+        result = _build_voice_injection(bvp)
+        assert "brief stories" in result
+
+    def test_example_direct_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "example_style": "direct"}
+        result = _build_voice_injection(bvp)
+        assert "Examples:" not in result
+
+    def test_sentence_rhythm_uniform_produces_variation_rule(self):
+        bvp = {**_BRIEF_BVP, "sentence_rhythm": "uniform"}
+        result = _build_voice_injection(bvp)
+        # "uniform" means mirror the writer's consistent rhythm, not contradict it
+        assert "consistent" in result
+        assert "Sentence rhythm:" in result
+
+    def test_sentence_rhythm_varied_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "sentence_rhythm": "varied"}
+        result = _build_voice_injection(bvp)
+        assert "Sentence rhythm:" not in result
+
+    def test_paragraph_density_airy(self):
+        bvp = {**_BRIEF_BVP, "paragraph_density": "airy"}
+        result = _build_voice_injection(bvp)
+        assert "1-2 sentence paragraphs" in result
+
+    def test_paragraph_density_dense(self):
+        bvp = {**_BRIEF_BVP, "paragraph_density": "dense"}
+        result = _build_voice_injection(bvp)
+        assert "denser paragraphs" in result
+
+    def test_paragraph_density_moderate_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "paragraph_density": "moderate"}
+        result = _build_voice_injection(bvp)
+        assert "Paragraphs:" not in result
+
+    def test_contraction_frequent_drives_rule(self):
+        bvp = {**_BRIEF_BVP, "contraction_frequency": "frequent"}
+        result = _build_voice_injection(bvp)
+        assert "use contractions naturally throughout" in result
+
+    def test_contraction_never_drives_rule(self):
+        bvp = {**_BRIEF_BVP, "contraction_frequency": "never"}
+        result = _build_voice_injection(bvp)
+        assert "avoid contractions entirely" in result
+
+    def test_contraction_occasional_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "contraction_frequency": "occasional"}
+        result = _build_voice_injection(bvp)
+        assert "Contractions:" not in result
+
+    def test_target_audience_injected(self):
+        bvp = {**_BRIEF_BVP, "target_audience": "senior software engineers"}
+        result = _build_voice_injection(bvp)
+        assert "Write for: senior software engineers" in result
+
+    def test_target_audience_empty_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "target_audience": ""}
+        result = _build_voice_injection(bvp)
+        assert "Write for:" not in result
+
+    def test_target_audience_none_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "target_audience": None}
+        result = _build_voice_injection(bvp)
+        assert "Write for:" not in result
+
+    def test_unknown_humor_enum_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "humor_style": "sarcastic"}
+        result = _build_voice_injection(bvp)
+        assert "Humor:" not in result
+
+    def test_unknown_example_enum_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "example_style": "unknown_value"}
+        result = _build_voice_injection(bvp)
+        assert "Examples:" not in result
+
+    def test_legacy_bvp_no_qualitative_fields_no_error(self):
+        """Legacy 3-field BVP must not raise and must return empty (no voice_brief)."""
+        bvp = {"tone": ["professional"], "cadence": {}, "banned_jargon": []}
+        result = _build_voice_injection(bvp)
+        assert result == ""
+
+    def test_absent_fields_inject_nothing(self):
+        """Missing qualitative fields must silently produce no instruction lines."""
+        result = _build_voice_injection(_BRIEF_BVP)
+        assert "Register:" not in result
+        assert "Humor:" not in result
+        assert "Vocabulary:" not in result
+        assert "Examples:" not in result
+        assert "Paragraphs:" not in result
+        assert "Contractions:" not in result
+        assert "Write for:" not in result
+
+
+class TestMicroStyleBlogInjection:
+    """AC 3: Micro-style fields produce concrete instruction lines in blog context."""
+
+    def test_casing_lowercase_leaning_blog_rule(self):
+        bvp = {**_BRIEF_BVP, "casing_style": "lowercase_leaning"}
+        result = _build_voice_injection(bvp)
+        assert "lowercase" in result
+        assert "headings" in result or "H1" in result
+
+    def test_casing_standard_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "casing_style": "standard"}
+        result = _build_voice_injection(bvp)
+        assert "Casing:" not in result
+
+    def test_casing_mixed_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "casing_style": "mixed"}
+        result = _build_voice_injection(bvp)
+        assert "Casing:" not in result
+
+    def test_comma_density_heavy(self):
+        bvp = {**_BRIEF_BVP, "comma_density": "heavy"}
+        result = _build_voice_injection(bvp)
+        assert "comma-heavy" in result
+
+    def test_comma_density_light(self):
+        bvp = {**_BRIEF_BVP, "comma_density": "light"}
+        result = _build_voice_injection(bvp)
+        assert "minimal commas" in result
+
+    def test_comma_density_moderate_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "comma_density": "moderate"}
+        result = _build_voice_injection(bvp)
+        assert "Punctuation:" not in result
+
+    def test_exclamation_never(self):
+        bvp = {**_BRIEF_BVP, "exclamation_frequency": "never"}
+        result = _build_voice_injection(bvp)
+        assert "never use exclamation marks" in result
+
+    def test_exclamation_rare(self):
+        bvp = {**_BRIEF_BVP, "exclamation_frequency": "rare"}
+        result = _build_voice_injection(bvp)
+        assert "rarely uses them" in result
+
+    def test_exclamation_frequent(self):
+        bvp = {**_BRIEF_BVP, "exclamation_frequency": "frequent"}
+        result = _build_voice_injection(bvp)
+        assert "uses them naturally" in result
+
+    def test_ellipsis_true_injects_rule(self):
+        bvp = {**_BRIEF_BVP, "ellipsis_usage": True}
+        result = _build_voice_injection(bvp)
+        assert "ellipses" in result
+        # The ellipsis rule permits "..." but explicitly forbids em-dashes
+        assert "never use em-dashes" in result
+
+    def test_ellipsis_false_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "ellipsis_usage": False}
+        result = _build_voice_injection(bvp)
+        assert "Ellipsis:" not in result
+
+    def test_parenthetical_frequent(self):
+        bvp = {**_BRIEF_BVP, "parenthetical_usage": "frequent"}
+        result = _build_voice_injection(bvp)
+        assert "parenthetical asides frequently" in result
+
+    def test_parenthetical_rare(self):
+        bvp = {**_BRIEF_BVP, "parenthetical_usage": "rare"}
+        result = _build_voice_injection(bvp)
+        assert "avoid parenthetical asides" in result
+
+    def test_parenthetical_occasional_produces_no_line(self):
+        bvp = {**_BRIEF_BVP, "parenthetical_usage": "occasional"}
+        result = _build_voice_injection(bvp)
+        assert "Parentheticals:" not in result
+
+    def test_absent_micro_fields_inject_nothing(self):
+        """Legacy BVP without micro-style fields must not inject any micro lines."""
+        result = _build_voice_injection(_BRIEF_BVP)
+        assert "Casing:" not in result
+        assert "Punctuation:" not in result
+        assert "Exclamation marks:" not in result
+        assert "Ellipsis:" not in result
+        assert "Parentheticals:" not in result
+
+
+class TestSocialUniversalRulesContractionOverride:
+    """AC 2: contraction_frequency drives contraction rule; tone is fallback."""
+
+    def test_contraction_frequent_overrides_formal_tone(self):
+        """Even with formal tone, frequent contraction_frequency wins."""
+        bvp = {"contraction_frequency": "frequent"}
+        result = _build_social_universal_rules(bvp, "professional, formal, authoritative", "avg sentence length 15 words")
+        assert "use naturally throughout" in result
+
+    def test_contraction_never_overrides_casual_tone(self):
+        """Even with casual tone, never contraction_frequency wins."""
+        bvp = {"contraction_frequency": "never"}
+        result = _build_social_universal_rules(bvp, "casual, friendly, conversational", "avg sentence length 15 words")
+        assert "avoid entirely" in result
+
+    def test_contraction_occasional_falls_back_to_tone(self):
+        """occasional contraction_frequency defers to tone inference."""
+        bvp = {"contraction_frequency": "occasional"}
+        result = _build_social_universal_rules(bvp, "casual, friendly", "avg sentence length 15 words")
+        assert "use naturally throughout" in result
+
+    def test_absent_contraction_freq_falls_back_to_tone(self):
+        """Missing contraction_frequency defers to tone inference."""
+        bvp = {}
+        result = _build_social_universal_rules(bvp, "professional, formal", "avg sentence length 15 words")
+        assert "avoid entirely" in result
+
+    def test_social_target_audience_injected(self):
+        bvp = {"target_audience": "freelance designers"}
+        result = _build_social_universal_rules(bvp, "casual", "avg sentence length 12 words")
+        assert "Write for: freelance designers" in result
+
+    def test_social_target_audience_empty_produces_no_line(self):
+        bvp = {"target_audience": ""}
+        result = _build_social_universal_rules(bvp, "casual", "avg sentence length 12 words")
+        assert "Write for:" not in result
+
+    def test_social_casing_lowercase_leaning(self):
+        bvp = {"casing_style": "lowercase_leaning"}
+        result = _build_social_universal_rules(bvp, "casual", "avg sentence length 12 words")
+        assert "lowercase" in result
+
+    def test_social_casing_standard_produces_no_line(self):
+        bvp = {"casing_style": "standard"}
+        result = _build_social_universal_rules(bvp, "casual", "avg sentence length 12 words")
+        assert "Casing:" not in result
+
+    def test_social_ellipsis_true(self):
+        bvp = {"ellipsis_usage": True}
+        result = _build_social_universal_rules(bvp, "casual", "avg sentence length 12 words")
+        assert "ellipses" in result
+
+    def test_social_ellipsis_false_produces_no_line(self):
+        bvp = {"ellipsis_usage": False}
+        result = _build_social_universal_rules(bvp, "casual", "avg sentence length 12 words")
+        assert "Ellipsis:" not in result
+
+    def test_social_absent_micro_fields_produce_no_lines(self):
+        bvp = {}
+        result = _build_social_universal_rules(bvp, "casual", "avg sentence length 12 words")
+        assert "Casing:" not in result
+        assert "Punctuation:" not in result
+        assert "Exclamation marks:" not in result
+        assert "Ellipsis:" not in result
+        assert "Parentheticals:" not in result
+
+
+class TestBuildSocialVoiceSignals:
+    """AC 4: _build_social_voice_signals injects sig phrases, anchors, anti-pattern."""
+
+    def test_signature_phrases_appear(self):
+        bvp = {"signature_phrases": ["Let me be blunt", "the data says otherwise"]}
+        result = _build_social_voice_signals(bvp)
+        assert "SIGNATURE PHRASES" in result
+        assert "Let me be blunt" in result
+        assert "the data says otherwise" in result
+
+    def test_voice_anchors_appear(self):
+        bvp = {"voice_anchor_sentences": ["Here is what the numbers show.", "Most advice ignores the base rate."]}
+        result = _build_social_voice_signals(bvp)
+        assert "VOICE ANCHORS" in result
+        assert "Here is what the numbers show." in result
+
+    def test_anti_pattern_appears(self):
+        bvp = {"anti_pattern_example": "In today's rapidly evolving landscape..."}
+        result = _build_social_voice_signals(bvp)
+        assert "ANTI-PATTERN" in result
+        assert "In today's rapidly evolving landscape" in result
+
+    def test_all_three_blocks_appear(self):
+        bvp = {
+            "signature_phrases": ["Let me be blunt"],
+            "voice_anchor_sentences": ["Here is what I know."],
+            "anti_pattern_example": "As we all know, synergies...",
+        }
+        result = _build_social_voice_signals(bvp)
+        assert "SIGNATURE PHRASES" in result
+        assert "VOICE ANCHORS" in result
+        assert "ANTI-PATTERN" in result
+
+    def test_empty_bvp_returns_empty_string(self):
+        assert _build_social_voice_signals({}) == ""
+
+    def test_absent_fields_return_empty_string(self):
+        bvp = {"tone": ["casual"], "banned_jargon": ["leverage"]}
+        assert _build_social_voice_signals(bvp) == ""
+
+    def test_empty_lists_return_empty_string(self):
+        bvp = {"signature_phrases": [], "voice_anchor_sentences": [], "anti_pattern_example": ""}
+        assert _build_social_voice_signals(bvp) == ""
+
+    def test_em_dash_in_phrase_replaced(self):
+        bvp = {"signature_phrases": ["test—phrase"]}
+        result = _build_social_voice_signals(bvp)
+        assert "test, phrase" in result
+        assert "test—phrase" not in result
+
+    def test_em_dash_in_anchor_replaced(self):
+        bvp = {"voice_anchor_sentences": ["sentence—with dash"]}
+        result = _build_social_voice_signals(bvp)
+        assert "sentence, with dash" in result
+
+    def test_em_dash_in_anti_pattern_replaced(self):
+        bvp = {"anti_pattern_example": "bad—example"}
+        result = _build_social_voice_signals(bvp)
+        assert "bad, example" in result
+
+    def test_double_quote_in_anti_pattern_replaced_with_single(self):
+        bvp = {"anti_pattern_example": 'she said "hello"'}
+        result = _build_social_voice_signals(bvp)
+        assert "she said 'hello'" in result
+
+    def test_sig_phrases_capped_at_10(self):
+        phrases = [f"phrase {i}" for i in range(15)]
+        bvp = {"signature_phrases": phrases}
+        result = _build_social_voice_signals(bvp)
+        for i in range(10):
+            assert f"phrase {i}" in result
+        for i in range(10, 15):
+            assert f"phrase {i}" not in result
+
+    def test_anchors_capped_at_5(self):
+        sentences = [f"Sentence {i}." for i in range(8)]
+        bvp = {"voice_anchor_sentences": sentences}
+        result = _build_social_voice_signals(bvp)
+        for i in range(5):
+            assert f"Sentence {i}." in result
+        for i in range(5, 8):
+            assert f"Sentence {i}." not in result
+
+    def test_non_list_signature_phrases_does_not_iterate_chars(self):
+        bvp = {"signature_phrases": "not a list"}  # type: ignore[arg-type]
+        result = _build_social_voice_signals(bvp)
+        assert "SIGNATURE PHRASES" not in result
+
+    def test_non_list_anchors_does_not_iterate_chars(self):
+        bvp = {"voice_anchor_sentences": "not a list"}  # type: ignore[arg-type]
+        result = _build_social_voice_signals(bvp)
+        assert "VOICE ANCHORS" not in result
+
+    def test_non_string_anti_pattern_does_not_crash(self):
+        bvp = {"anti_pattern_example": 42}  # type: ignore[arg-type]
+        result = _build_social_voice_signals(bvp)
+        assert "ANTI-PATTERN" not in result
+
+    def test_newline_in_phrase_flattened(self):
+        bvp = {"signature_phrases": ["line one\nline two"]}
+        result = _build_social_voice_signals(bvp)
+        assert "line one line two" in result
+        assert "line one\nline two" not in result
+
+    def test_newline_in_anti_pattern_flattened(self):
+        bvp = {"anti_pattern_example": "bad sentence\nwith newline"}
+        result = _build_social_voice_signals(bvp)
+        assert "bad sentence with newline" in result
+        assert "bad sentence\nwith newline" not in result
+
+
+class TestSocialPromptContainsSocialVoiceSignalsPlaceholder:
+    """AC 4: Both social prompts include the {social_voice_signals} placeholder."""
+
+    def test_social_prompt_has_placeholder(self):
+        assert "{social_voice_signals}" in _SOCIAL_PROMPT
+
+    def test_social_standalone_prompt_has_placeholder(self):
+        assert "{social_voice_signals}" in _SOCIAL_STANDALONE_PROMPT
+
+    def test_social_prompt_renders_with_signals(self):
+        """Verify the prompt can be rendered with voice signals included."""
+        bvp = {
+            "signature_phrases": ["Let me be blunt"],
+            "voice_anchor_sentences": ["Here is what I know."],
+            "anti_pattern_example": "As we all know...",
+        }
+        signals = _build_social_voice_signals(bvp)
+        rendered = _SOCIAL_PROMPT.format(
+            bvp_json="{}",
+            linkedin_voice_section="",
+            instagram_voice_section="",
+            facebook_voice_section="",
+            threads_voice_section="",
+            bvp_structure_hints="",
+            social_universal_rules="WRITING RULES:",
+            social_voice_signals=signals,
+            brain_dump="test brain dump",
+            blog_title="Test Title",
+        )
+        assert "SIGNATURE PHRASES" in rendered
+        assert "VOICE ANCHORS" in rendered
+        assert "ANTI-PATTERN" in rendered
+
+    def test_social_standalone_prompt_renders_with_signals(self):
+        bvp = {"signature_phrases": ["Let me be blunt"]}
+        signals = _build_social_voice_signals(bvp)
+        rendered = _SOCIAL_STANDALONE_PROMPT.format(
+            bvp_json="{}",
+            linkedin_voice_section="",
+            instagram_voice_section="",
+            facebook_voice_section="",
+            threads_voice_section="",
+            bvp_structure_hints="",
+            social_universal_rules="WRITING RULES:",
+            social_voice_signals=signals,
+            brain_dump="test brain dump",
+        )
+        assert "SIGNATURE PHRASES" in rendered
+
+    def test_social_prompt_renders_empty_signals(self):
+        """Empty social_voice_signals (legacy BVP) must not break rendering."""
+        rendered = _SOCIAL_PROMPT.format(
+            bvp_json="{}",
+            linkedin_voice_section="",
+            instagram_voice_section="",
+            facebook_voice_section="",
+            threads_voice_section="",
+            bvp_structure_hints="",
+            social_universal_rules="WRITING RULES:",
+            social_voice_signals="",
+            brain_dump="test brain dump",
+            blog_title="Test Title",
+        )
+        assert "BRAIN DUMP" in rendered

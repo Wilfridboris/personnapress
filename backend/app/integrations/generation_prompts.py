@@ -87,6 +87,112 @@ def _build_voice_injection(bvp: dict) -> str:
             f'vocabulary, and structure throughout):\n"{anti_pattern}"'
         )
 
+    # ── Dormant qualitative fields (AC 2) ─────────────────────────────────────
+    # DEFAULT values (formality_scale=3, humor_style="none", vocabulary_complexity="mixed")
+    # produce no instruction line -- they carry no information above the baseline.
+    qualitative_lines: list[str] = []
+
+    formality = bvp.get("formality_scale")
+    if formality in (1, 2):
+        qualitative_lines.append("- Register: casual register, contractions expected")
+    elif formality in (4, 5):
+        qualitative_lines.append("- Register: formal register, avoid contractions")
+
+    humor = bvp.get("humor_style") or ""
+    humor_map = {
+        "dry": "- Humor: occasional dry humor, never slapstick",
+        "playful": "- Humor: light, playful humor where it fits naturally",
+        "self_deprecating": "- Humor: self-deprecating humor where fitting",
+    }
+    if humor in humor_map:
+        qualitative_lines.append(humor_map[humor])
+
+    vocab = bvp.get("vocabulary_complexity") or ""
+    if vocab == "technical":
+        qualitative_lines.append("- Vocabulary: use domain-specific technical vocabulary for an expert audience")
+    elif vocab == "plain":
+        qualitative_lines.append("- Vocabulary: use plain, everyday language; avoid technical jargon")
+    # "mixed" is the default; no instruction line
+
+    example = bvp.get("example_style") or ""
+    example_map = {
+        "analogy": "- Examples: illustrate points with analogies",
+        "data": "- Examples: illustrate points with data and statistics",
+        "story": "- Examples: illustrate points with brief stories or personal examples",
+    }
+    if example in example_map:
+        qualitative_lines.append(example_map[example])
+    # "direct" is neutral default -- no instruction line
+
+    rhythm = bvp.get("sentence_rhythm") or ""
+    if rhythm == "uniform":
+        qualitative_lines.append(
+            "- Sentence rhythm: write with consistent, measured sentence lengths; "
+            "avoid mixing very short and very long sentences"
+        )
+    # "varied" is already the default LLM behavior; no instruction line needed
+
+    para_density = bvp.get("paragraph_density") or ""
+    if para_density == "airy":
+        qualitative_lines.append("- Paragraphs: use 1-2 sentence paragraphs")
+    elif para_density == "dense":
+        qualitative_lines.append("- Paragraphs: use longer, denser paragraphs with 4 or more sentences")
+    # "moderate" is default -- no instruction line
+
+    contraction_freq = bvp.get("contraction_frequency") or ""
+    if contraction_freq == "frequent":
+        qualitative_lines.append("- Contractions: use contractions naturally throughout (don't, can't, I've, you'll, it's)")
+    elif contraction_freq == "never":
+        qualitative_lines.append("- Contractions: avoid contractions entirely")
+    # "occasional" -- let tone inference handle it; no explicit line
+
+    ta = (bvp.get("target_audience") or "").strip()
+    if ta:
+        qualitative_lines.append(f"- Write for: {ta}")
+
+    # ── Micro-style fields (AC 3 -- blog: casing applies to body prose only) ──
+    micro_lines: list[str] = []
+
+    casing = bvp.get("casing_style") or ""
+    if casing == "lowercase_leaning":
+        micro_lines.append(
+            "- Casing: this writer often opens sentences in lowercase; "
+            "mirror this in body prose only, and never apply lowercase casing to "
+            "H1, H2, H3 headings, or the meta description"
+        )
+    # "standard" and "mixed" inject nothing
+
+    comma_dens = bvp.get("comma_density") or ""
+    if comma_dens == "heavy":
+        micro_lines.append("- Punctuation: this writer uses comma-heavy sentences; preserve this comma density in body prose")
+    elif comma_dens == "light":
+        micro_lines.append("- Punctuation: this writer uses minimal commas; keep punctuation sparse in body prose")
+    # "moderate" is default -- no instruction line
+
+    excl = bvp.get("exclamation_frequency") or ""
+    if excl == "frequent":
+        micro_lines.append("- Exclamation marks: this writer uses them naturally; use them where they fit")
+    elif excl == "rare":
+        micro_lines.append("- Exclamation marks: this writer rarely uses them; use at most one per piece")
+    elif excl == "never":
+        micro_lines.append("- Exclamation marks: never use exclamation marks")
+
+    if bvp.get("ellipsis_usage") is True:
+        micro_lines.append(
+            "- Ellipsis: this writer uses ellipses (...) for effect; "
+            "use them where they fit naturally, and never use em-dashes"
+        )
+
+    paren = bvp.get("parenthetical_usage") or ""
+    if paren == "frequent":
+        micro_lines.append("- Parentheticals: this writer uses parenthetical asides frequently; include them naturally")
+    elif paren == "rare":
+        micro_lines.append("- Parentheticals: avoid parenthetical asides")
+    # "occasional" -- no instruction line
+
+    qualitative_block = ("\n" + "\n".join(qualitative_lines)) if qualitative_lines else ""
+    micro_block = ("\n" + "\n".join(micro_lines)) if micro_lines else ""
+
     return (
         f"{voice_brief}\n\n"
         "VOICE APPLICATION RULES (apply within the SEO structure -- do not override structure):\n"
@@ -98,6 +204,8 @@ def _build_voice_injection(bvp: dict) -> str:
         f"- {spec_rule}"
         f"{header_rule}"
         f"{closing_rule}"
+        + qualitative_block
+        + micro_block
         + sig_block
         + anchor_block
         + anti_block
@@ -128,10 +236,17 @@ def _build_social_universal_rules(bvp: dict, tone_list: str, cadence_instruction
         f"- Cadence: {cadence_instruction}",
     ]
 
+    # contraction_frequency (computed) takes precedence; tone inference is fallback for
+    # legacy BVPs that predate stylometry (Story 26.2).
+    contraction_freq = bvp.get("contraction_frequency") or ""
     tone_lower = tone_list.lower()
     casual_tones = {"casual", "friendly", "conversational", "approachable"}
     formal_tones = {"professional", "formal", "authoritative", "corporate"}
-    if any(t in tone_lower for t in casual_tones):
+    if contraction_freq == "frequent":
+        lines.append("- Contractions: use naturally throughout (don't, can't, I've, you'll, it's)")
+    elif contraction_freq == "never":
+        lines.append("- Contractions: avoid entirely")
+    elif any(t in tone_lower for t in casual_tones):
         lines.append("- Contractions: use naturally throughout (don't, can't, I've, you'll, it's)")
     elif any(t in tone_lower for t in formal_tones):
         lines.append("- Contractions: avoid entirely")
@@ -157,6 +272,44 @@ def _build_social_universal_rules(bvp: dict, tone_list: str, cadence_instruction
         '"In today\'s fast-paced world", "In today\'s digital landscape", '
         '"As we all know", "It\'s no secret that"'
     )
+
+    # ── Target audience (AC 2) ──────────────────────────────────────────────
+    ta = (bvp.get("target_audience") or "").strip()
+    if ta:
+        lines.append(f"- Write for: {ta}")
+
+    # ── Micro-style social rules (AC 3 -- casing applies fully in social) ───
+    casing = bvp.get("casing_style") or ""
+    if casing == "lowercase_leaning":
+        lines.append(
+            "- Casing: this writer often opens sentences in lowercase in social posts; mirror this fully"
+        )
+
+    comma_dens = bvp.get("comma_density") or ""
+    if comma_dens == "heavy":
+        lines.append("- Punctuation: this writer uses comma-heavy sentences; preserve this comma density")
+    elif comma_dens == "light":
+        lines.append("- Punctuation: this writer uses minimal commas; keep punctuation sparse")
+
+    excl = bvp.get("exclamation_frequency") or ""
+    if excl == "frequent":
+        lines.append("- Exclamation marks: this writer uses them naturally; use them where they fit")
+    elif excl == "rare":
+        lines.append("- Exclamation marks: use at most one per post")
+    elif excl == "never":
+        lines.append("- Exclamation marks: never use exclamation marks")
+
+    if bvp.get("ellipsis_usage") is True:
+        lines.append(
+            "- Ellipsis: this writer uses ellipses (...) for effect; "
+            "use them where they fit, and never use em-dashes"
+        )
+
+    paren = bvp.get("parenthetical_usage") or ""
+    if paren == "frequent":
+        lines.append("- Parentheticals: this writer uses parenthetical asides frequently; include them naturally")
+    elif paren == "rare":
+        lines.append("- Parentheticals: avoid parenthetical asides")
 
     return "\n".join(lines)
 
@@ -344,7 +497,7 @@ BRAND VOICE PROFILE:
 {bvp_json}
 {linkedin_voice_section}{instagram_voice_section}{facebook_voice_section}{threads_voice_section}{bvp_structure_hints}
 {social_universal_rules}
-
+{social_voice_signals}
 BRAIN DUMP:
 {brain_dump}
 
@@ -376,7 +529,7 @@ BRAND VOICE PROFILE:
 {linkedin_voice_section}{instagram_voice_section}{facebook_voice_section}{threads_voice_section}
 {bvp_structure_hints}
 {social_universal_rules}
-
+{social_voice_signals}
 BRAIN DUMP:
 {brain_dump}
 
@@ -516,6 +669,55 @@ def _build_standalone_voice_injection(bvp: dict) -> str:
         + "\n".join(hints)
         + "\n"
     )
+
+
+def _build_social_voice_signals(bvp: dict) -> str:
+    """Build signature_phrases, voice_anchor_sentences, anti_pattern_example blocks
+    for social prompts (AC 4). Reuses the same 16-6 sanitization guards as
+    _build_voice_injection: non-list guards, newline stripping, double-quote escaping.
+    Returns empty string when none of these fields are present.
+    """
+    _raw_sig = bvp.get("signature_phrases")
+    sig_phrases = [
+        p for p in (_raw_sig if isinstance(_raw_sig, list) else [])
+        if isinstance(p, str) and p.strip()
+    ][:10]
+    _raw_anchors = bvp.get("voice_anchor_sentences")
+    voice_anchors = [
+        s for s in (_raw_anchors if isinstance(_raw_anchors, list) else [])
+        if isinstance(s, str) and s.strip()
+    ][:5]
+    _raw_anti = bvp.get("anti_pattern_example")
+    anti_pattern = ((_raw_anti if isinstance(_raw_anti, str) else "") or "").strip().replace("—", ", ").replace('"', "'").replace("\n", " ").replace("\r", "")
+
+    sig_block = ""
+    if sig_phrases:
+        phrases_clean = [p.replace("—", ", ").replace("\n", " ").replace("\r", "") for p in sig_phrases]
+        sig_bullet_list = "\n".join(f"- {p}" for p in phrases_clean)
+        sig_block = (
+            "\nSIGNATURE PHRASES (short phrases this writer uses naturally; weave 1-2 into the posts "
+            "where they fit organically; never force them and never repeat the same phrase twice):\n"
+            + sig_bullet_list
+        )
+
+    anchor_block = ""
+    if voice_anchors:
+        anchors_clean = [s.replace("—", ", ").replace("\n", " ").replace("\r", "") for s in voice_anchors]
+        anchor_bullet_list = "\n".join(f"- {s}" for s in anchors_clean)
+        anchor_block = (
+            "\nVOICE ANCHORS (verbatim sentences from this writer; these represent the target register, "
+            "rhythm, and directness; match this level across all posts):\n"
+            + anchor_bullet_list
+        )
+
+    anti_block = ""
+    if anti_pattern:
+        anti_block = (
+            f'\nANTI-PATTERN (this writer would NEVER produce a sentence like this; avoid this register, '
+            f'vocabulary, and structure in all posts):\n"{anti_pattern}"'
+        )
+
+    return sig_block + anchor_block + anti_block
 
 
 def _build_seo_section(

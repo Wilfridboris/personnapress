@@ -28,6 +28,13 @@ COMPUTED_FIELD_NAMES = frozenset(
         "paragraph_density",
         "contraction_frequency",
         "list_preference",
+        # Story 26.2: micro-style fields
+        "casing_style",
+        "comma_density",
+        "exclamation_frequency",
+        "ellipsis_usage",
+        "parenthetical_usage",
+        "sentence_length_stdev",
     }
 )
 
@@ -100,7 +107,73 @@ def compute_stylometric_fields(text: str) -> dict[str, Any]:
     else:
         result["list_preference"] = "rarely"
 
-    # ── 5. low_confidence flag ────────────────────────────────────────────────
+    # ── 5. casing_style ──────────────────────────────────────────────────────
+    sentences_list = list(doc.sents)
+    if sentences_list:
+        lowercase_starters = sum(
+            1 for sent in sentences_list
+            if sent.text.strip() and sent.text.strip()[0].islower()
+        )
+        pct_lower = lowercase_starters / len(sentences_list)
+        if pct_lower > 0.30:
+            result["casing_style"] = "lowercase_leaning"
+        elif pct_lower >= 0.10:
+            result["casing_style"] = "mixed"
+        else:
+            result["casing_style"] = "standard"
+    else:
+        result["casing_style"] = "standard"
+
+    # ── 6. comma_density ─────────────────────────────────────────────────────
+    # Reuse non_space_tokens (already computed above for contraction_frequency)
+    word_count_for_density = total_tokens if total_tokens > 0 else 1
+    comma_count = sum(1 for t in doc if t.text == ",")
+    commas_per_100 = (comma_count / word_count_for_density) * 100
+    if commas_per_100 < 4:
+        result["comma_density"] = "light"
+    elif commas_per_100 <= 8:
+        result["comma_density"] = "moderate"
+    else:
+        result["comma_density"] = "heavy"
+
+    # ── 7. exclamation_frequency ─────────────────────────────────────────────
+    excl_count = sum(1 for t in doc if t.text == "!")
+    excl_per_100 = (excl_count / word_count_for_density) * 100
+    if excl_count == 0:
+        result["exclamation_frequency"] = "never"
+    elif excl_per_100 < 0.5:
+        result["exclamation_frequency"] = "rare"
+    else:
+        result["exclamation_frequency"] = "frequent"
+
+    # ── 8. ellipsis_usage ────────────────────────────────────────────────────
+    capped_text = text[:50_000]
+    result["ellipsis_usage"] = (capped_text.count("...") + capped_text.count("…")) > 1
+
+    # ── 9. parenthetical_usage ───────────────────────────────────────────────
+    paren_count = sum(1 for t in doc if t.text == "(")
+    if word_count_for_density < 10:
+        # Too few words to produce a meaningful signal; avoid spurious "frequent" from
+        # the zero-guard (word_count_for_density=1 makes words_per_1000=0.001, so a
+        # single "(" would yield parens_per_1000=1000).
+        result["parenthetical_usage"] = "rare"
+    else:
+        words_per_1000 = word_count_for_density / 1000
+        parens_per_1000 = paren_count / words_per_1000
+        if parens_per_1000 < 1:
+            result["parenthetical_usage"] = "rare"
+        elif parens_per_1000 <= 3:
+            result["parenthetical_usage"] = "occasional"
+        else:
+            result["parenthetical_usage"] = "frequent"
+
+    # ── 10. sentence_length_stdev ─────────────────────────────────────────────
+    if len(lengths) >= 2:
+        result["sentence_length_stdev"] = round(statistics.stdev(lengths))
+    else:
+        result["sentence_length_stdev"] = 0
+
+    # ── 11. low_confidence flag ───────────────────────────────────────────────
     if textstat.lexicon_count(text[:50_000], removepunct=True) < 300:
         result["low_confidence"] = True
 

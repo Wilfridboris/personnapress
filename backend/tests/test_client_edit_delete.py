@@ -229,6 +229,68 @@ async def test_patch_client_url_change_with_confirm_dispatches_ingest(
     db.commit.assert_called_once()
 
 
+# ── Story 26.2: Computed-field filtering on PATCH ────────────────────────────
+
+@patch("app.routers.clients.get_campaign_count")
+@patch("app.routers.clients.get_active_ingestion_job_for_client")
+@patch("app.routers.clients.update_client")
+@patch("app.routers.clients.get_client")
+async def test_patch_bvp_strips_all_new_computed_fields(
+    mock_get_client, mock_update, mock_active_job, mock_campaign_count
+):
+    """PATCH with brand_voice_profile containing Story 26.2 computed fields must
+    strip all six new fields before passing the BVP to update_client.
+    The router uses COMPUTED_FIELD_NAMES (which now includes the 6 new fields)
+    to filter the payload at app/routers/clients.py lines 215-218.
+    """
+    from app.routers.clients import update_client_detail
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id, name="Acme")
+    updated = _make_client(user_id=user_id, name="Acme")
+    updated.id = client.id
+    mock_get_client.return_value = client
+    mock_update.return_value = updated
+    mock_active_job.return_value = None
+    mock_campaign_count.return_value = 0
+    current_user = {"user_id": str(user_id)}
+    db = AsyncMock()
+    bg = MagicMock()
+
+    # BVP payload containing ONLY computed fields + one legitimate field.
+    bvp_payload = {
+        "tone": ["direct"],                 # legitimate, must be kept
+        "casing_style": "lowercase_leaning",  # computed, must be stripped
+        "comma_density": "heavy",             # computed, must be stripped
+        "exclamation_frequency": "rare",      # computed, must be stripped
+        "ellipsis_usage": True,               # computed, must be stripped
+        "parenthetical_usage": "occasional",  # computed, must be stripped
+        "sentence_length_stdev": 7,           # computed, must be stripped
+    }
+
+    await update_client_detail(
+        client.id,
+        ClientUpdate(brand_voice_profile=bvp_payload),
+        bg,
+        current_user,
+        db,
+    )
+
+    mock_update.assert_called_once()
+    _call_kwargs = mock_update.call_args
+    # update_client is called as update_client(db, client_id, **update_fields)
+    # so the BVP arrives in the keyword args
+    passed_bvp = _call_kwargs.kwargs.get("brand_voice_profile") or {}
+
+    # All six new computed fields must have been removed
+    for field in ("casing_style", "comma_density", "exclamation_frequency",
+                  "ellipsis_usage", "parenthetical_usage", "sentence_length_stdev"):
+        assert field not in passed_bvp, f"Computed field '{field}' was not stripped from BVP"
+
+    # The legitimate field must remain
+    assert "tone" in passed_bvp
+
+
 # ── Router: DELETE /clients/{client_id} ──────────────────────────────────────
 
 @patch("app.routers.clients.get_client")

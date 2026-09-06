@@ -24,6 +24,7 @@ from app.integrations.generation_prompts import (
     _WEEK_PLAN_PROMPT,
     _build_seo_section,
     _build_social_universal_rules,
+    _build_social_voice_signals,
     _build_standalone_voice_injection,
     _build_template_structure,
     _build_voice_injection,
@@ -557,6 +558,7 @@ async def generate_social(
     social_universal_rules = _build_social_universal_rules(
         brand_voice_profile or {}, tone_list, cadence_instruction
     )
+    social_voice_signals = _build_social_voice_signals(brand_voice_profile or {})
 
     prompt = _SOCIAL_PROMPT.format(
         bvp_json=bvp_json,
@@ -566,6 +568,7 @@ async def generate_social(
         threads_voice_section=threads_voice_section,
         bvp_structure_hints=bvp_structure_hints,
         social_universal_rules=social_universal_rules,
+        social_voice_signals=social_voice_signals,
         brain_dump=brain_dump,
         blog_title=blog_title,
     )
@@ -731,6 +734,7 @@ async def generate_social_standalone(
         social_universal_rules = _build_social_universal_rules(
             brand_voice_profile or {}, tone_list, cadence_instruction
         )
+        social_voice_signals = _build_social_voice_signals(brand_voice_profile or {})
 
         prompt = _SOCIAL_STANDALONE_PROMPT.format(
             bvp_json=bvp_json,
@@ -740,6 +744,7 @@ async def generate_social_standalone(
             threads_voice_section=threads_voice_section,
             bvp_structure_hints=bvp_structure_hints,
             social_universal_rules=social_universal_rules,
+            social_voice_signals=social_voice_signals,
             brain_dump=brain_dump,
         )
 

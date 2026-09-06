@@ -142,6 +142,13 @@ export interface ExpandedBrandVoiceProfile {
   contraction_frequency?: "never" | "occasional" | "frequent";
   list_preference?: "rarely" | "sometimes" | "often";
   low_confidence?: boolean;
+  // Story 26.2: micro-style computed fields
+  casing_style?: "standard" | "mixed" | "lowercase_leaning";
+  comma_density?: "light" | "moderate" | "heavy";
+  exclamation_frequency?: "never" | "rare" | "frequent";
+  ellipsis_usage?: boolean;
+  parenthetical_usage?: "rare" | "occasional" | "frequent";
+  sentence_length_stdev?: number;
   // Qualitative identity
   pronoun_preference?: "first_person" | "second_person" | "mixed";
   formality_scale?: number;

@@ -143,6 +143,13 @@ const COMPUTED_LABELS: { key: keyof ExpandedBrandVoiceProfile; label: string }[]
   { key: "paragraph_density", label: "Paragraph density" },
   { key: "contraction_frequency", label: "Contractions" },
   { key: "list_preference", label: "List use" },
+  // Story 26.2: micro-style computed fields
+  { key: "casing_style", label: "Casing" },
+  { key: "comma_density", label: "Comma density" },
+  { key: "exclamation_frequency", label: "Exclamation marks" },
+  { key: "ellipsis_usage", label: "Ellipsis" },
+  { key: "parenthetical_usage", label: "Parentheticals" },
+  { key: "sentence_length_stdev", label: "Sentence variation" },
 ];
 
 function ComputedMetricsRow({ bvp }: ComputedMetricsRowProps) {

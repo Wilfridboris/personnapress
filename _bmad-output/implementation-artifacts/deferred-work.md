@@ -1,5 +1,19 @@
 # Deferred Work
 
+## Deferred from: code review of 26-2-micro-style-stylometry-full-bvp-injection (2026-09-05)
+
+- source_spec: `_bmad-output/implementation-artifacts/26-2-micro-style-stylometry-full-bvp-injection.md`
+  summary: `sentence_length_stdev` renders as a raw integer in the voice tab UI with no unit label or plain-language mapping
+  evidence: ExpandedProfileReview.tsx displays computed metric values as-is; `sentence_length_stdev` is typed as `number` and will show e.g. "12" with no context, unlike the categorical fields which render their enum values directly. Pre-existing pattern for `sentence_length_avg`; cosmetic but could confuse non-technical users.
+
+- source_spec: `_bmad-output/implementation-artifacts/26-2-micro-style-stylometry-full-bvp-injection.md`
+  summary: `anti_pattern_example` in `_build_social_voice_signals` has no length cap, unlike `signature_phrases` (10) and `voice_anchor_sentences` (5)
+  evidence: A very long anti_pattern value is injected verbatim into social prompts without truncation. Pre-existing behaviour in the blog path; could bloat prompt context for pathological BVPs.
+
+- source_spec: `_bmad-output/implementation-artifacts/26-2-micro-style-stylometry-full-bvp-injection.md`
+  summary: `stylometry.py` new metric computations assume `text` is always a non-None string (no `None` guard on `text[:50_000]` in `ellipsis_usage` block)
+  evidence: The existing codebase upholds this invariant (all callers pass strings), and the broader `compute_stylometric_fields` function already uses `text[:50_000]` for `paragraph_density` without a None guard. Risk is pre-existing; defensively guard if the call-site contract ever relaxes.
+
 ## Deferred from: code review of 25-2-linkedin-personal-profile-analytics (2026-08-31)
 
 - F5. All-metrics 400/5xx misclassified as `no_data_yet` [backend/app/integrations/linkedin_metrics.py — `_fetch_member_one`]: when every metric call in the fan-out fails (e.g. LinkedIn returns 400 on all `_MEMBER_METRIC_TYPES`), the resulting snapshot has all-None metrics and `unavailable_reason=None`, so the dashboard shows "no data yet" rather than a transient-failure reason. AC #8 specifies per-metric skip semantics only; distinguishing full-fan-out failure from genuine empty data requires a new reason code and spec change. Accepted as out-of-spec; file a new story if misclassification becomes a user complaint.

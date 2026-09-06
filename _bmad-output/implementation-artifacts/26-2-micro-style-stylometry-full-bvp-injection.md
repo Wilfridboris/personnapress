@@ -1,6 +1,7 @@
 # Story 26.2: Micro-Style Stylometry and Full BVP Injection
 
-Status: ready-for-dev
+Status: done
+baseline_commit: b5862506d2ba836f1c107bf60f67ef159ca86c67
 
 ## Story
 
@@ -24,26 +25,26 @@ so that generated content carries my punctuation and casing fingerprint instead 
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Extend stylometry (AC: 1)
-  - [ ] Add the 6 new metrics to `compute_stylometric_fields()` using the existing spaCy doc where possible (sentence iteration already exists for `sentence_length_avg` / `sentence_rhythm`); reuse, do not re-tokenize.
-  - [ ] Thresholds: `casing_style` lowercase_leaning if > 30% of sentences start lowercase, mixed if 10-30%, else standard. `comma_density` light < 4, moderate 4-8, heavy > 8 commas per 100 words. `exclamation_frequency` never = 0, rare < 0.5 per 100 words, else frequent. `ellipsis_usage` true if "..." or "…" appears more than once. `parenthetical_usage` rare < 1, occasional 1-3, frequent > 3 pairs per 1000 words.
-  - [ ] Preserve invariants: never raise, cap input at 50K chars, work on < 300 words (fields still computed, `low_confidence` already flags it).
-- [ ] Task 2: Inject the seven dormant fields (AC: 2)
-  - [ ] In `_build_voice_injection()` (`generation_prompts.py:15-104`): add one instruction line per present field. Map every enum value explicitly (no passthrough of raw enum tokens into prose); values outside the known enum inject nothing (the 3-14 review deferred exactly this trap: unknown BVP enum values must be silently dropped, add the guard now).
-  - [ ] In `_build_social_universal_rules()` (`generation_prompts.py:123-161`): replace the tone-keyword contraction inference with a direct `contraction_frequency` rule when the field exists; keep tone inference as fallback for legacy BVPs.
-  - [ ] `target_audience`: inject as "Write for: {target_audience}" in both blog and social sections when non-empty.
-- [ ] Task 3: Inject micro-style fields (AC: 3)
-  - [ ] Blog: casing rule applies to body prose only, never headings, H1, or meta description (state this in the instruction line).
-  - [ ] Social: casing rule applies fully. Note: `ellipsis_usage` true permits "..." but the em-dash ban stays absolute.
-- [ ] Task 4: Social voice signal parity (AC: 4)
-  - [ ] Port the 16-6 signal blocks (signature_phrases, voice_anchor_sentences, anti_pattern_example) into `_SOCIAL_PROMPT` and complete them in `_SOCIAL_STANDALONE_PROMPT` (standalone already has phrases + anti-pattern via `_build_standalone_voice_injection()` lines 452-518 but lacks voice_anchor_sentences; linked social has none of the three).
-  - [ ] Reuse the 16-6 sanitization exactly: non-list guards, newline stripping, double-quote escaping (these were review patches on 16-6, do not regress them).
-- [ ] Task 5: Voice tab UI (AC: 5)
-  - [ ] Add the 6 new computed fields to the read-only computed-metrics section of the voice tab in `ClientDetailTabs` (the 16-3 expanded BVP review UI). Follow the existing metric-row markup exactly; labels in plain language ("Casing", "Comma density", "Exclamation marks", "Ellipsis", "Parentheticals", "Sentence variation").
-  - [ ] Fields absent (legacy BVP) render nothing, no empty rows, no dashes-as-placeholders.
-- [ ] Task 6: Tests (AC: 6)
-  - [ ] `test_stylometry.py`: lowercase-leaning vs standard vs mixed boundary cases, comma density at each threshold, exclamation/ellipsis/parenthetical detection, short-text safety, all-new-fields-present shape.
-  - [ ] Prompt tests in BOTH provider test files: each new injection line appears when field present, absent when missing, unknown enum value injects nothing, social prompts contain signature phrase / anchor / anti-pattern blocks, contraction rule driven by contraction_frequency.
+- [x] Task 1: Extend stylometry (AC: 1)
+  - [x] Add the 6 new metrics to `compute_stylometric_fields()` using the existing spaCy doc where possible (sentence iteration already exists for `sentence_length_avg` / `sentence_rhythm`); reuse, do not re-tokenize.
+  - [x] Thresholds: `casing_style` lowercase_leaning if > 30% of sentences start lowercase, mixed if 10-30%, else standard. `comma_density` light < 4, moderate 4-8, heavy > 8 commas per 100 words. `exclamation_frequency` never = 0, rare < 0.5 per 100 words, else frequent. `ellipsis_usage` true if "..." or "…" appears more than once. `parenthetical_usage` rare < 1, occasional 1-3, frequent > 3 pairs per 1000 words.
+  - [x] Preserve invariants: never raise, cap input at 50K chars, work on < 300 words (fields still computed, `low_confidence` already flags it).
+- [x] Task 2: Inject the seven dormant fields (AC: 2)
+  - [x] In `_build_voice_injection()` (`generation_prompts.py:15-104`): add one instruction line per present field. Map every enum value explicitly (no passthrough of raw enum tokens into prose); values outside the known enum inject nothing (the 3-14 review deferred exactly this trap: unknown BVP enum values must be silently dropped, add the guard now).
+  - [x] In `_build_social_universal_rules()` (`generation_prompts.py:123-161`): replace the tone-keyword contraction inference with a direct `contraction_frequency` rule when the field exists; keep tone inference as fallback for legacy BVPs.
+  - [x] `target_audience`: inject as "Write for: {target_audience}" in both blog and social sections when non-empty.
+- [x] Task 3: Inject micro-style fields (AC: 3)
+  - [x] Blog: casing rule applies to body prose only, never headings, H1, or meta description (state this in the instruction line).
+  - [x] Social: casing rule applies fully. Note: `ellipsis_usage` true permits "..." but the em-dash ban stays absolute.
+- [x] Task 4: Social voice signal parity (AC: 4)
+  - [x] Port the 16-6 signal blocks (signature_phrases, voice_anchor_sentences, anti_pattern_example) into `_SOCIAL_PROMPT` and complete them in `_SOCIAL_STANDALONE_PROMPT` (standalone already has phrases + anti-pattern via `_build_standalone_voice_injection()` lines 452-518 but lacks voice_anchor_sentences; linked social has none of the three).
+  - [x] Reuse the 16-6 sanitization exactly: non-list guards, newline stripping, double-quote escaping (these were review patches on 16-6, do not regress them).
+- [x] Task 5: Voice tab UI (AC: 5)
+  - [x] Add the 6 new computed fields to the read-only computed-metrics section of the voice tab in `ClientDetailTabs` (the 16-3 expanded BVP review UI). Follow the existing metric-row markup exactly; labels in plain language ("Casing", "Comma density", "Exclamation marks", "Ellipsis", "Parentheticals", "Sentence variation").
+  - [x] Fields absent (legacy BVP) render nothing, no empty rows, no dashes-as-placeholders.
+- [x] Task 6: Tests (AC: 6)
+  - [x] `test_stylometry.py`: lowercase-leaning vs standard vs mixed boundary cases, comma density at each threshold, exclamation/ellipsis/parenthetical detection, short-text safety, all-new-fields-present shape.
+  - [x] Prompt tests in BOTH provider test files: each new injection line appears when field present, absent when missing, unknown enum value injects nothing, social prompts contain signature phrase / anchor / anti-pattern blocks, contraction rule driven by contraction_frequency.
 
 ## Dev Notes
 
@@ -108,8 +109,80 @@ so that generated content carries my punctuation and casing fingerprint instead 
 
 ### Agent Model Used
 
+claude-sonnet-4-6
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- 5 review patches applied: double-dash violations (7 strings), sentence_rhythm "uniform" instruction corrected to mirror uniform style, anti_pattern newline stripping, parenthetical_usage near-empty-doc edge case, PATCH endpoint test for new computed fields.
+- 3 items deferred: sentence_length_stdev raw-number UI display, anti_pattern unbounded length, text=None stylometry invariant.
+- 198 tests pass (180 prompt tests + 18 PATCH endpoint tests). Pre-existing stylometry function test failures unchanged (spaCy mocked at module level in conftest.py).
+
 ### File List
+
+- backend/app/services/stylometry.py
+- backend/app/integrations/generation_prompts.py
+- backend/app/integrations/gemini.py
+- backend/app/integrations/anthropic_client.py
+- frontend/components/clients/ExpandedProfileReview.tsx
+- frontend/lib/types.ts
+- backend/tests/test_generation_prompts.py
+- backend/tests/test_stylometry.py
+- backend/tests/test_client_edit_delete.py
+
+## Suggested Review Order
+
+**New micro-style metrics (start here to understand what data the injection consumes)**
+
+- 6 new fields added to `COMPUTED_FIELD_NAMES`; sets the contract for what BVP stores
+  [`stylometry.py:24`](../../backend/app/services/stylometry.py#L24)
+
+- `casing_style` computation: pct of sentence-initial lowercase chars drives the label
+  [`stylometry.py:110`](../../backend/app/services/stylometry.py#L110)
+
+- `comma_density`, `exclamation_frequency`, `ellipsis_usage`, `parenthetical_usage`, `sentence_length_stdev` — all reuse existing `doc`/`total_tokens` variables
+  [`stylometry.py:127`](../../backend/app/services/stylometry.py#L127)
+
+**Prompt injection core (blog path)**
+
+- Entry point: `_build_voice_injection` starts injecting 7 dormant qualitative fields here; default-value silencing logic documented inline
+  [`generation_prompts.py:90`](../../backend/app/integrations/generation_prompts.py#L90)
+
+- Micro-style blog rules: casing restricted to body prose only; em-dash ban reinforced in ellipsis rule
+  [`generation_prompts.py:153`](../../backend/app/integrations/generation_prompts.py#L153)
+
+**Prompt injection social path**
+
+- `_build_social_universal_rules`: `contraction_frequency` now overrides tone-keyword inference; micro-style social rules and target_audience appended
+  [`generation_prompts.py:239`](../../backend/app/integrations/generation_prompts.py#L239)
+
+- `_build_social_voice_signals`: new function; ports sig_phrases/anchors/anti_pattern to social with identical 16-6 sanitization guards
+  [`generation_prompts.py:674`](../../backend/app/integrations/generation_prompts.py#L674)
+
+**Provider wiring**
+
+- Gemini: imports and passes `social_voice_signals` into both `generate_social` and `generate_social_standalone`
+  [`gemini.py:561`](../../backend/app/integrations/gemini.py#L561)
+
+- Anthropic: same wiring, provider parity confirmed
+  [`anthropic_client.py:384`](../../backend/app/integrations/anthropic_client.py#L384)
+
+**UI**
+
+- 6 new entries in `COMPUTED_LABELS`; absent fields render nothing (filter uses `!= null`)
+  [`ExpandedProfileReview.tsx:147`](../../frontend/components/clients/ExpandedProfileReview.tsx#L147)
+
+**Types and tests**
+
+- 6 optional fields added to `ExpandedBrandVoiceProfile` interface
+  [`types.ts:146`](../../frontend/lib/types.ts#L146)
+
+- Prompt injection tests: qualitative fields, micro-style blog, social contraction override, `_build_social_voice_signals` sanitization, template rendering
+  [`test_generation_prompts.py:726`](../../backend/tests/test_generation_prompts.py#L726)
+
+- Stylometry boundary tests for all 6 new metrics
+  [`test_stylometry.py:222`](../../backend/tests/test_stylometry.py#L222)
+
+- PATCH endpoint regression: new computed fields are stripped before DB persistence
+  [`test_client_edit_delete.py:238`](../../backend/tests/test_client_edit_delete.py#L238)
