@@ -221,16 +221,19 @@ async def test_generate_social_truncates_x_post_at_280(mock_client):
     from app.integrations.anthropic_client import generate_social
 
     long_x = "x" * 300
-    data = json.dumps({
+    short_x = "x" * 270  # valid repaired x_post under 280
+    data_long = json.dumps({
         "x_post": long_x, "linkedin_post": "LinkedIn post " * 40,
         "instagram_caption": "A" * 200, "facebook_post": "B" * 250, "threads_post": "C" * 100,
     })
-    mock_client.messages.create = AsyncMock(
-        return_value=_make_anthropic_response(data)
-    )
+    # First call: initial generation. Second call: repair call returning short post.
+    mock_client.messages.create = AsyncMock(side_effect=[
+        _make_anthropic_response(data_long),
+        _make_anthropic_response(short_x),
+    ])
     result = await generate_social("brain dump", "Title", _VALID_BVP)
-    assert len(result["x_post"]) == 280
-    assert result["x_post"].endswith("…")
+    assert len(result["x_post"]) == 270
+    assert not result["x_post"].endswith("…")
 
 
 @pytest.mark.asyncio
@@ -286,20 +289,23 @@ async def test_generate_social_standalone_happy_path(mock_client):
 
 @pytest.mark.asyncio
 @patch("app.integrations.anthropic_client._client")
-async def test_generate_social_standalone_linkedin_over_2500_truncated(mock_client):
+async def test_generate_social_standalone_linkedin_over_3000_truncated(mock_client):
     from app.integrations.anthropic_client import generate_social_standalone
 
-    long_ln = "L" * 2600
-    data = json.dumps({
+    long_ln = "L" * 3100  # exceeds current 3000 char hard limit
+    short_ln = "L" * 2950  # valid repaired linkedin post under 3000
+    data_long = json.dumps({
         "x_post": "Short X post.", "linkedin_post": long_ln,
         "instagram_caption": "A" * 200, "facebook_post": "B" * 250, "threads_post": "C" * 100,
     })
-    mock_client.messages.create = AsyncMock(
-        return_value=_make_anthropic_response(data)
-    )
+    # First call: initial generation. Second call: repair returning short post.
+    mock_client.messages.create = AsyncMock(side_effect=[
+        _make_anthropic_response(data_long),
+        _make_anthropic_response(short_ln),
+    ])
     result = await generate_social_standalone("brain dump", _VALID_BVP)
-    assert len(result["linkedin_post"]) == 2500
-    assert result["linkedin_post"].endswith("…")
+    assert len(result["linkedin_post"]) == 2950
+    assert not result["linkedin_post"].endswith("…")
 
 
 @pytest.mark.asyncio
@@ -501,82 +507,82 @@ async def test_generate_social_injects_threads_voice_section_when_voice_brief_pr
     await generate_social("brain dump", "Title", _BVP_WITH_VOICE_BRIEF_SOCIAL)
 
     prompt_text = captured_prompts[0]
-    assert "THREADS BRAND VOICE" in prompt_text
+    assert "THREADS VOICE" in prompt_text
     assert "Boris writes raw and direct" in prompt_text
 
 
 @pytest.mark.asyncio
 @patch("app.integrations.anthropic_client._client")
-async def test_generate_social_hard_truncates_instagram_at_600(mock_client):
+async def test_generate_social_instagram_601_chars_passes_through(mock_client):
+    """Instagram hard limit is 2200; 601-char caption is well under limit and passes unchanged."""
     from app.integrations.anthropic_client import generate_social
 
-    long_ig = "I" * 601
+    ig_601 = "I" * 601
     data = json.dumps({
         "x_post": "Short post.", "linkedin_post": "L" * 400,
-        "instagram_caption": long_ig, "facebook_post": "F" * 300, "threads_post": "T" * 100,
+        "instagram_caption": ig_601, "facebook_post": "F" * 300, "threads_post": "T" * 100,
     })
     mock_client.messages.create = AsyncMock(
         return_value=_make_anthropic_response(data)
     )
     result = await generate_social("brain dump", "Title", _VALID_BVP)
-    assert len(result["instagram_caption"]) == 600
-    assert result["instagram_caption"].endswith("…")
+    assert len(result["instagram_caption"]) == 601
 
 
 @pytest.mark.asyncio
 @patch("app.integrations.anthropic_client._client")
-async def test_generate_social_hard_truncates_facebook_at_800(mock_client):
+async def test_generate_social_facebook_801_chars_passes_through(mock_client):
+    """Facebook hard limit is 63206; 801-char post is well under limit and passes unchanged."""
     from app.integrations.anthropic_client import generate_social
 
-    long_fb = "F" * 801
+    fb_801 = "F" * 801
     data = json.dumps({
         "x_post": "Short post.", "linkedin_post": "L" * 400,
-        "instagram_caption": "I" * 200, "facebook_post": long_fb, "threads_post": "T" * 100,
+        "instagram_caption": "I" * 200, "facebook_post": fb_801, "threads_post": "T" * 100,
     })
     mock_client.messages.create = AsyncMock(
         return_value=_make_anthropic_response(data)
     )
     result = await generate_social("brain dump", "Title", _VALID_BVP)
-    assert len(result["facebook_post"]) == 800
-    assert result["facebook_post"].endswith("…")
+    assert len(result["facebook_post"]) == 801
 
 
 @pytest.mark.asyncio
 @patch("app.integrations.anthropic_client._client")
-async def test_generate_social_standalone_hard_truncates_instagram_at_600(mock_client):
+async def test_generate_social_standalone_instagram_601_chars_passes_through(mock_client):
+    """Instagram hard limit is 2200; 601-char caption is well under limit and passes unchanged."""
     from app.integrations.anthropic_client import generate_social_standalone
 
-    long_ig = "I" * 601
+    ig_601 = "I" * 601
     data = json.dumps({
         "x_post": "Short post but at least 70 characters to be valid for standalone.",
         "linkedin_post": "L" * 1300,
-        "instagram_caption": long_ig, "facebook_post": "F" * 300, "threads_post": "T" * 100,
+        "instagram_caption": ig_601, "facebook_post": "F" * 300, "threads_post": "T" * 100,
     })
     mock_client.messages.create = AsyncMock(
         return_value=_make_anthropic_response(data)
     )
     result = await generate_social_standalone("brain dump", _VALID_BVP)
-    assert len(result["instagram_caption"]) == 600
-    assert result["instagram_caption"].endswith("…")
+    assert len(result["instagram_caption"]) == 601
 
 
 @pytest.mark.asyncio
 @patch("app.integrations.anthropic_client._client")
-async def test_generate_social_standalone_hard_truncates_facebook_at_800(mock_client):
+async def test_generate_social_standalone_facebook_801_chars_passes_through(mock_client):
+    """Facebook hard limit is 63206; 801-char post is well under limit and passes unchanged."""
     from app.integrations.anthropic_client import generate_social_standalone
 
-    long_fb = "F" * 801
+    fb_801 = "F" * 801
     data = json.dumps({
         "x_post": "Short post but at least 70 characters to be valid for standalone.",
         "linkedin_post": "L" * 1300,
-        "instagram_caption": "I" * 200, "facebook_post": long_fb, "threads_post": "T" * 100,
+        "instagram_caption": "I" * 200, "facebook_post": fb_801, "threads_post": "T" * 100,
     })
     mock_client.messages.create = AsyncMock(
         return_value=_make_anthropic_response(data)
     )
     result = await generate_social_standalone("brain dump", _VALID_BVP)
-    assert len(result["facebook_post"]) == 800
-    assert result["facebook_post"].endswith("…")
+    assert len(result["facebook_post"]) == 801
 
 
 # ── generate_blog: assist mode (Story 3.28) ───────────────────────────────────

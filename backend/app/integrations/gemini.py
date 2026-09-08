@@ -18,6 +18,7 @@ from app.integrations.generation_prompts import (
     _BLOG_ASSIST_PROMPT,
     _BLOG_PROMPT,
     _FIDELITY_PROMPT,
+    _REPAIR_BLOG_VOICE_PROMPT,
     _SOCIAL_PROMPT,
     _SOCIAL_STANDALONE_ASSIST_PROMPT,
     _SOCIAL_STANDALONE_PROMPT,
@@ -28,8 +29,10 @@ from app.integrations.generation_prompts import (
     _build_social_voice_signals,
     _build_standalone_voice_injection,
     _build_template_structure,
+    _build_template_voice_line,
     _build_voice_injection,
     build_quick_read_override,
+    build_voice_for_surface,
     _meta_voice_note,
     _strip_fences,
     _md_to_html,
@@ -305,9 +308,9 @@ async def generate_blog(
             banned_jargon_list = ", ".join(str(j) for j in brand_voice_profile.get("banned_jargon", []))
             # Use voice injection when voice_brief is present; fall back to JSON for legacy BVPs
             if brand_voice_profile.get("voice_brief"):
-                voice_section = _build_voice_injection(brand_voice_profile)
+                voice_section = _build_voice_injection(brand_voice_profile) + _build_template_voice_line(article_template)
             else:
-                voice_section = json.dumps(brand_voice_profile)
+                voice_section = json.dumps(brand_voice_profile) + _build_template_voice_line(article_template)
         else:
             voice_section = _DEFAULT_VOICE
             tone_list = "professional, clear, authoritative"
@@ -507,6 +510,40 @@ async def check_fidelity(
     return data
 
 
+async def repair_blog_voice(
+    html: str,
+    failing_dimensions: list[str],
+    voice_section: str,
+    voice_samples: list[dict] | None = None,
+    thinking_tokens: int = 256,
+) -> str:
+    """Repair a blog post to fix failing voice fidelity dimensions.
+
+    Makes exactly ONE LLM call. Returns the full repaired HTML.
+    Failing dimensions are stated explicitly so the model knows what to fix.
+    Em-dashes are sanitized from output (project rule).
+    """
+    failing_text = "\n".join(f"- {d}" for d in failing_dimensions) if failing_dimensions else "- general voice mismatch"
+    samples_block = _build_samples_block(voice_samples, max_count=3) if voice_samples else ""
+    safe_html = html.replace("{", "{{").replace("}", "}}")
+
+    prompt = _REPAIR_BLOG_VOICE_PROMPT.format(
+        failing_dimensions=failing_text,
+        voice_section=voice_section,
+        samples_block=samples_block,
+        blog_html=safe_html,
+    )
+
+    response = await _client.aio.models.generate_content(
+        model=_MODEL,
+        contents=prompt,
+        config=_thinking_config(thinking_tokens),
+    )
+    result = _strip_blog_trailer(_md_to_html(_strip_fences(response.text.strip())))
+    result = result.replace("—", ", ")
+    return result
+
+
 async def generate_social(
     brain_dump: str,
     blog_title: str,
@@ -537,28 +574,15 @@ async def generate_social(
         cadence_instruction = "avg sentence length 15 words"
 
     voice_brief = (brand_voice_profile or {}).get("voice_brief") or ""
-    if voice_brief:
-        linkedin_voice_section = (
-            "\nLINKEDIN BRAND VOICE (apply to linkedin_post only -- do not apply to x_post):\n"
-            f"{voice_brief}\n"
-        )
-        instagram_voice_section = (
-            "\nINSTAGRAM BRAND VOICE (apply to instagram_caption only):\n"
-            f"{voice_brief}\n"
-        )
-        facebook_voice_section = (
-            "\nFACEBOOK BRAND VOICE (apply to facebook_post only):\n"
-            f"{voice_brief}\n"
-        )
-        sentences = [s.strip() for s in voice_brief.split(". ") if s.strip()]
-        brief_excerpt = ". ".join(sentences[:2])
-        if brief_excerpt and not brief_excerpt.endswith("."):
-            brief_excerpt += "."
-        threads_voice_section = (
-            "\nTHREADS BRAND VOICE (apply to threads_post only -- keep it raw and unpolished; "
-            "voice is for register, not formality):\n"
-            f"{brief_excerpt}\n"
-        )
+    if voice_brief and brand_voice_profile:
+        linkedin_built = build_voice_for_surface(brand_voice_profile, "linkedin")
+        instagram_built = build_voice_for_surface(brand_voice_profile, "instagram")
+        facebook_built = build_voice_for_surface(brand_voice_profile, "facebook")
+        threads_built = build_voice_for_surface(brand_voice_profile, "threads")
+        linkedin_voice_section = f"\n{linkedin_built}\n" if linkedin_built else ""
+        instagram_voice_section = f"\n{instagram_built}\n" if instagram_built else ""
+        facebook_voice_section = f"\n{facebook_built}\n" if facebook_built else ""
+        threads_voice_section = f"\n{threads_built}\n" if threads_built else ""
     else:
         linkedin_voice_section = ""
         instagram_voice_section = ""
@@ -716,28 +740,15 @@ async def generate_social_standalone(
             cadence_instruction = "avg sentence length 15 words"
 
         voice_brief = (brand_voice_profile or {}).get("voice_brief") or ""
-        if voice_brief:
-            linkedin_voice_section = (
-                "\nLINKEDIN BRAND VOICE (apply to linkedin_post only -- do not apply to x_post):\n"
-                f"{voice_brief}\n"
-            )
-            instagram_voice_section = (
-                "\nINSTAGRAM BRAND VOICE (apply to instagram_caption only):\n"
-                f"{voice_brief}\n"
-            )
-            facebook_voice_section = (
-                "\nFACEBOOK BRAND VOICE (apply to facebook_post only):\n"
-                f"{voice_brief}\n"
-            )
-            sentences = [s.strip() for s in voice_brief.split(". ") if s.strip()]
-            brief_excerpt = ". ".join(sentences[:2])
-            if brief_excerpt and not brief_excerpt.endswith("."):
-                brief_excerpt += "."
-            threads_voice_section = (
-                "\nTHREADS BRAND VOICE (apply to threads_post only -- keep it raw and unpolished; "
-                "voice is for register, not formality):\n"
-                f"{brief_excerpt}\n"
-            )
+        if voice_brief and brand_voice_profile:
+            linkedin_built = build_voice_for_surface(brand_voice_profile, "linkedin")
+            instagram_built = build_voice_for_surface(brand_voice_profile, "instagram")
+            facebook_built = build_voice_for_surface(brand_voice_profile, "facebook")
+            threads_built = build_voice_for_surface(brand_voice_profile, "threads")
+            linkedin_voice_section = f"\n{linkedin_built}\n" if linkedin_built else ""
+            instagram_voice_section = f"\n{instagram_built}\n" if instagram_built else ""
+            facebook_voice_section = f"\n{facebook_built}\n" if facebook_built else ""
+            threads_voice_section = f"\n{threads_built}\n" if threads_built else ""
         else:
             linkedin_voice_section = ""
             instagram_voice_section = ""

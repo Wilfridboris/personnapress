@@ -212,6 +212,150 @@ def _build_voice_injection(bvp: dict) -> str:
     )
 
 
+def build_voice_for_surface(bvp: dict, surface: str) -> str:
+    """Build a per-surface voice section for social prompt injection.
+
+    Surfaces: blog, linkedin, x, instagram, facebook, threads.
+
+    - blog: returns full _build_voice_injection output (current behavior).
+    - linkedin: compressed brief (first 2 sentences) + structure signals
+      (opening/closing pattern, post_structure_template) + cadence hint + banned words.
+    - x: cadence + casing + banned words + fixed "punchier than blog" line.
+    - instagram/facebook: warm-register subset -- compressed brief + contraction toward casual
+      + cadence + banned words.
+    - threads: existing raw-register rule + casing + banned words (no brief).
+
+    Returns empty string when voice_brief absent (legacy BVP fallback).
+    """
+    if not bvp:
+        return ""
+
+    voice_brief = bvp.get("voice_brief") or ""
+    surface = surface.lower()
+
+    if surface == "blog":
+        return _build_voice_injection(bvp)
+
+    # Shared helpers used by multiple surfaces
+    def _two_sentence_brief() -> str:
+        sentences = [s.strip() for s in voice_brief.split(". ") if s.strip()]
+        excerpt = ". ".join(sentences[:2])
+        if excerpt and not excerpt.endswith("."):
+            excerpt += "."
+        return excerpt
+
+    def _cadence_hint() -> str:
+        cadence = bvp.get("cadence") or {}
+        avg = cadence.get("avg_sentence_length") or 15
+        return f"Cadence: avg sentence length {avg} words."
+
+    def _banned_words_line() -> str:
+        banned = ", ".join(str(j) for j in bvp.get("banned_jargon", []))
+        if banned:
+            return f"Banned words: {banned}."
+        return ""
+
+    def _casing_line() -> str:
+        casing = bvp.get("casing_style") or ""
+        if casing == "lowercase_leaning":
+            return "Casing: this writer often opens sentences in lowercase; mirror this."
+        return ""
+
+    if surface == "linkedin":
+        if not voice_brief:
+            return ""
+        lines = ["LINKEDIN VOICE (apply to linkedin_post only):"]
+        brief_excerpt = _two_sentence_brief()
+        if brief_excerpt:
+            lines.append(brief_excerpt)
+        opening = bvp.get("opening_pattern") or ""
+        opening_map = {
+            "question": "Open with a question hook.",
+            "bold_claim": "Open with a bold claim or data hook.",
+            "anecdote": "Open with a personal reveal or before/after hook.",
+            "stat": "Open with a data or numbers hook.",
+            "problem": "Open by naming a common mistake or its cost.",
+        }
+        if opening in opening_map:
+            lines.append(opening_map[opening])
+        closing = bvp.get("closing_pattern") or ""
+        closing_map = {
+            "cta": "End with a direct action CTA.",
+            "question": "End with a specific question the reader can answer.",
+            "summary": "End with one crisp sentence that crystallises the main lesson.",
+            "one_liner": "End with a punchy one-liner takeaway.",
+        }
+        if closing in closing_map:
+            lines.append(closing_map[closing])
+        struct = (bvp.get("post_structure_template") or "").strip()
+        if struct:
+            lines.append(f"Preferred structure: {struct}")
+        cadence = _cadence_hint()
+        if cadence:
+            lines.append(cadence)
+        banned = _banned_words_line()
+        if banned:
+            lines.append(banned)
+        return "\n".join(lines)
+
+    if surface == "x":
+        lines = ["X VOICE (apply to x_post only):"]
+        cadence = _cadence_hint()
+        if cadence:
+            lines.append(cadence)
+        casing = _casing_line()
+        if casing:
+            lines.append(casing)
+        banned = _banned_words_line()
+        if banned:
+            lines.append(banned)
+        lines.append(
+            "Punchier and more compressed than the blog voice; shorter sentences than the profile average."
+        )
+        return "\n".join(lines)
+
+    if surface in ("instagram", "facebook"):
+        if not voice_brief:
+            return ""
+        label = "INSTAGRAM" if surface == "instagram" else "FACEBOOK"
+        field = "instagram_caption" if surface == "instagram" else "facebook_post"
+        lines = [f"{label} VOICE (apply to {field} only):"]
+        brief_excerpt = _two_sentence_brief()
+        if brief_excerpt:
+            lines.append(brief_excerpt)
+        lines.append("Use contractions naturally (it's, you'll, don't, I've) for a warm, conversational tone.")
+        cadence = _cadence_hint()
+        if cadence:
+            lines.append(cadence)
+        banned = _banned_words_line()
+        if banned:
+            lines.append(banned)
+        return "\n".join(lines)
+
+    if surface == "threads":
+        lines = [
+            "THREADS VOICE (apply to threads_post only -- keep it raw and unpolished; "
+            "voice is for register, not formality):"
+        ]
+        casing = _casing_line()
+        if casing:
+            lines.append(casing)
+        banned = _banned_words_line()
+        if banned:
+            lines.append(banned)
+        if voice_brief:
+            sentences = [s.strip() for s in voice_brief.split(". ") if s.strip()]
+            brief_excerpt = ". ".join(sentences[:2])
+            if brief_excerpt and not brief_excerpt.endswith("."):
+                brief_excerpt += "."
+            if brief_excerpt:
+                lines.append(brief_excerpt)
+        return "\n".join(lines)
+
+    # Unknown surface: return full voice injection as safe fallback
+    return _build_voice_injection(bvp) if voice_brief else ""
+
+
 def _meta_voice_note(bvp: dict) -> str:
     """Return the condensed voice note for the meta description instruction.
 
@@ -491,6 +635,40 @@ Return ONLY a valid JSON object (no markdown):
   "tags": [<list of 3-5 concise lowercase SEO tags relevant to this specific post, e.g. ["brand voice", "content marketing", "ai tools"]>]
 }}
 {expanded_scoring_section}"""
+
+_REPAIR_BLOG_VOICE_PROMPT = """You are a copy editor. A blog post scored poorly on voice fidelity. Fix ONLY the failing dimensions listed below while preserving all structure and authored content.
+
+FAILING DIMENSIONS:
+{failing_dimensions}
+
+BRAND VOICE PROFILE VOICE SECTION:
+{voice_section}
+{samples_block}
+WHAT YOU MUST PRESERVE (do not change these under any circumstances):
+- The H1 title (exact wording)
+- All H2 and H3 headings (exact wording)
+- The meta description comment and excerpt comment
+- The TL;DR block
+- The FAQ section (all questions and answers verbatim)
+- All anchor links (href values, rel attributes, target attributes, anchor text)
+- All authored passages from the brain dump (2+ coherent first-person sentences in finished prose)
+- The overall structure and section order
+
+WHAT YOU MAY CHANGE:
+- Prose in generated paragraphs (not authored passages) to fix the failing dimensions
+- Word choice in generated sections to remove banned jargon
+- Sentence rhythm in generated sections to match the cadence profile
+
+REPAIR RULES:
+- Fix only what is listed in FAILING DIMENSIONS. Do not rewrite sections that scored well.
+- Never use an em-dash (—) anywhere in the output. Rewrite the sentence naturally without one.
+- Never use a double-dash (--) as a substitute.
+- Do not add new sections, headings, or content not already present.
+- Output ONLY the full repaired HTML. No commentary, no word count, no compliance note.
+
+BLOG HTML TO REPAIR:
+{blog_html}
+"""
 
 _SOCIAL_PROMPT = """You are an expert social media copywriter writing platform-native posts that complement a blog article.
 
@@ -875,6 +1053,21 @@ def _build_template_structure(
             "Do NOT add a FAQ section.]</p>"
         )
 
+    return ""
+
+
+def _build_template_voice_line(article_template: str | None) -> str:
+    """Return a template-specific voice application line for blog prompts.
+
+    Appended to the voice_section in generate_blog for thought-leadership and how-to templates.
+    Returns empty string for standard and listicle (no specific voice direction needed).
+    No em-dashes or double-dashes.
+    """
+    tmpl = (article_template or "standard").lower()
+    if tmpl == "thought-leadership":
+        return "\nTEMPLATE VOICE: Lead with opinion and first-person stance; take positions plainly."
+    if tmpl == "how-to":
+        return "\nTEMPLATE VOICE: Prefer imperative mood and concrete numbered steps."
     return ""
 
 

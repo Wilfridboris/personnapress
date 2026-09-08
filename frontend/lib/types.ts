@@ -224,6 +224,12 @@ export interface Campaign {
   article_slug?: string | null;
 }
 
+export interface VoiceScoreDimensions {
+  tone_score: number | null;
+  cadence_score: number | null;
+  jargon_violations: number | null;
+}
+
 export interface VoiceScore {
   tone_score: number;
   cadence_score: number;
@@ -234,6 +240,10 @@ export interface VoiceScore {
   seo_fluff_detected?: boolean;
   authored_passages_preserved?: boolean;
   tags?: string[];
+  /** Repair loop fields added by the fidelity repair feature (additive; absent on legacy scores) */
+  repaired?: boolean;
+  initial?: VoiceScoreDimensions;
+  final?: VoiceScoreDimensions;
 }
 
 export type CampaignGenerationMode = "generate" | "assist";

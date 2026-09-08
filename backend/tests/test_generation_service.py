@@ -114,7 +114,7 @@ async def test_happy_path_all_fields_updated(mock_gemini, mock_logs_repo):
     await run_generation_pipeline(job_id, db)
 
     assert campaign.blog_html == _BLOG_HTML
-    assert campaign.voice_score == _VOICE_SCORE
+    assert campaign.voice_score == {**_VOICE_SCORE, "repaired": False}
     assert campaign.x_post == "Tweet!"
     assert campaign.linkedin_post == _SOCIAL["linkedin_post"]
     assert campaign.instagram_caption == _SOCIAL["instagram_caption"]
@@ -814,7 +814,7 @@ async def test_fidelity_and_social_called_via_gather(mock_gemini, mock_logs_repo
     assert "fidelity" in call_order
     assert "social" in call_order
     # Both fields populated correctly
-    assert campaign.voice_score == _VOICE_SCORE
+    assert campaign.voice_score == {**_VOICE_SCORE, "repaired": False}
     assert campaign.x_post == "Tweet!"
 
 

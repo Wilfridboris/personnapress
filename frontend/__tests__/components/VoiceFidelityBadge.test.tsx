@@ -3,6 +3,32 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { VoiceFidelityBadge } from "@/components/campaigns/VoiceFidelityBadge";
 import type { VoiceScore } from "@/lib/types";
 
+// ── Story 26.4 fixtures ───────────────────────────────────────────────────────
+const repairedPassingScore: VoiceScore = {
+  tone_score: 9,
+  cadence_score: 8,
+  jargon_violations: 0,
+  repaired: true,
+  initial: { tone_score: 5, cadence_score: 8, jargon_violations: 0 },
+  final: { tone_score: 9, cadence_score: 8, jargon_violations: 0 },
+};
+
+const repairedStillFailingScore: VoiceScore = {
+  tone_score: 5,
+  cadence_score: 4,
+  jargon_violations: 0,
+  repaired: true,
+  initial: { tone_score: 5, cadence_score: 4, jargon_violations: 0 },
+  final: { tone_score: 5, cadence_score: 4, jargon_violations: 0 },
+};
+
+const legacyFlatOnlyScore: VoiceScore = {
+  tone_score: 8,
+  cadence_score: 7,
+  jargon_violations: 0,
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 const passingScore: VoiceScore = { tone_score: 8, cadence_score: 7, jargon_violations: 0 };
 const exactBoundaryScore: VoiceScore = { tone_score: 7, cadence_score: 6, jargon_violations: 0 };
 const failingTone: VoiceScore = { tone_score: 6, cadence_score: 7, jargon_violations: 0 };
@@ -87,5 +113,52 @@ describe("VoiceFidelityBadge", () => {
     expect(screen.getByText("Tone: 5/10")).toBeInTheDocument();
     expect(screen.getByText("Cadence: 4/10")).toBeInTheDocument();
     expect(screen.getByText("Jargon violations: 3")).toBeInTheDocument();
+  });
+});
+
+// ── Story 26.4: voice-tuned badge variant ─────────────────────────────────────
+describe("VoiceFidelityBadge - Story 26.4 repair variants", () => {
+  it("shows Voice-tuned badge when repaired is true and final score passes", () => {
+    render(<VoiceFidelityBadge voiceScore={repairedPassingScore} />);
+    expect(screen.getByText(/voice-tuned/i)).toBeInTheDocument();
+  });
+
+  it("Voice-tuned badge is not a button (informational only)", () => {
+    render(<VoiceFidelityBadge voiceScore={repairedPassingScore} />);
+    // Should be a div, not a button
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("Voice-tuned badge has tooltip text about automatic adjustment", () => {
+    render(<VoiceFidelityBadge voiceScore={repairedPassingScore} />);
+    const badge = screen.getByText(/voice-tuned/i).closest("[title]");
+    expect(badge).toBeTruthy();
+    expect(badge?.getAttribute("title")).toMatch(/automatically adjusted/i);
+  });
+
+  it("Voice-tuned badge renders Wand2 icon with aria-hidden", () => {
+    const { container } = render(<VoiceFidelityBadge voiceScore={repairedPassingScore} />);
+    // Lucide Wand2 renders as an svg; it should be aria-hidden
+    const svg = container.querySelector("svg");
+    expect(svg).toBeTruthy();
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("shows failing badge when repaired is true but final score still fails", () => {
+    render(<VoiceFidelityBadge voiceScore={repairedStillFailingScore} />);
+    // Should show the failure button, not the voice-tuned badge
+    expect(screen.getByRole("button", { name: /voice match/i })).toBeInTheDocument();
+    expect(screen.queryByText(/voice-tuned/i)).toBeNull();
+  });
+
+  it("renders null for legacy flat-only passing score (no repaired field)", () => {
+    const { container } = render(<VoiceFidelityBadge voiceScore={legacyFlatOnlyScore} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("renders failure badge for legacy flat-only failing score", () => {
+    const failingLegacy: VoiceScore = { tone_score: 5, cadence_score: 7, jargon_violations: 0 };
+    render(<VoiceFidelityBadge voiceScore={failingLegacy} />);
+    expect(screen.getByRole("button", { name: /voice match/i })).toBeInTheDocument();
   });
 });

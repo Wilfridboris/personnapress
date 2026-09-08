@@ -1027,8 +1027,9 @@ async def test_generate_social_linkedin_prompt_receives_voice_brief(mock_client)
     await gemini.generate_social("brain dump", "Title", _BVP_WITH_VOICE_BRIEF)
 
     prompt_text = captured_prompt[0]
-    assert _VOICE_BRIEF in prompt_text
-    assert "LINKEDIN BRAND VOICE" in prompt_text
+    # build_voice_for_surface injects the first 2 sentences of voice_brief for LinkedIn
+    assert "Boris writes in first person with punchy short sentences." in prompt_text
+    assert "LINKEDIN VOICE" in prompt_text
 
 
 @pytest.mark.asyncio
@@ -1403,7 +1404,7 @@ async def test_generate_social_injects_threads_voice_section_when_voice_brief_pr
     await generate_social("brain dump", "Title", _BVP_WITH_VOICE_BRIEF_SOCIAL)
 
     prompt_text = captured_prompt[0]
-    assert "THREADS BRAND VOICE" in prompt_text
+    assert "THREADS VOICE" in prompt_text
     assert "Boris writes raw and direct" in prompt_text
 
 

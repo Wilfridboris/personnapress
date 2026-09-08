@@ -212,6 +212,15 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
                 ),
             )
 
+        # ── Repair pass (AC 1, 2) ─────────────────────────────────────────────
+        # Only for generate mode (assist has voice_score=None).
+        # Repair happens strictly after gather resolves; social posts are not
+        # regenerated after repair (3-25 parallel sequencing preserved).
+        if voice_score is not None:
+            voice_score = await _maybe_repair_blog_voice(
+                blog_html, voice_score, brand_voice_profile, voice_samples, campaign
+            )
+
         campaign.voice_score = voice_score
         campaign.x_post = social["x_post"]
         campaign.linkedin_post = social["linkedin_post"]
@@ -442,6 +451,135 @@ async def run_social_only_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
         logger.exception("run_social_only_pipeline: error for job %s: %s", job_id, exc)
         sentry_sdk.capture_exception(exc)
         await _fail_job(db, job, "Social post generation failed. Please retry.")
+
+
+async def _maybe_repair_blog_voice(
+    blog_html: str,
+    voice_score: dict,
+    brand_voice_profile: dict | None,
+    voice_samples: list[dict] | None,
+    campaign,
+) -> dict:
+    """Attempt one repair pass if fidelity is failing. Hard bound of one repair per campaign.
+
+    Returns an updated voice_score dict with additive initial/final/repaired keys.
+    Flat keys (tone_score, cadence_score, jargon_violations, etc.) always hold FINAL values.
+
+    On any exception, falls back to original score with repaired=False.
+    The pipeline never fails because of repair (best-effort only).
+    """
+    tone_score = voice_score.get("tone_score", 10)
+    cadence_score = voice_score.get("cadence_score", 10)
+    jargon_violations = voice_score.get("jargon_violations", 0)
+
+    needs_repair = (
+        tone_score < 7
+        or cadence_score < 6
+        or jargon_violations > 0
+    )
+
+    if not needs_repair:
+        return {**voice_score, "repaired": False}
+
+    # Build the failing dimensions description
+    failing_dimensions: list[str] = []
+    if tone_score < 7:
+        failing_dimensions.append(f"tone scored {tone_score}/10 against the voice profile (threshold: 7)")
+    if cadence_score < 6:
+        failing_dimensions.append(f"cadence scored {cadence_score}/10 against the voice profile (threshold: 6)")
+    if jargon_violations > 0:
+        banned = brand_voice_profile.get("banned_jargon", []) if brand_voice_profile else []
+        banned_str = f": check for {', '.join(str(j) for j in banned[:5])}" if banned else ""
+        failing_dimensions.append(f"{jargon_violations} banned jargon violation(s) found{banned_str}")
+
+    # Build voice section for the repair prompt
+    if brand_voice_profile and brand_voice_profile.get("voice_brief"):
+        from app.integrations.generation_prompts import _build_voice_injection
+        voice_section = _build_voice_injection(brand_voice_profile)
+    elif brand_voice_profile:
+        import json as _json
+        voice_section = _json.dumps(brand_voice_profile)
+    else:
+        voice_section = ""
+
+    initial_score = {k: v for k, v in voice_score.items()}
+
+    try:
+        logger.info(
+            "_maybe_repair_blog_voice: initiating repair for campaign %s, failing: %s",
+            campaign.id,
+            failing_dimensions,
+        )
+        repaired_html = await _llm.repair_blog_voice(
+            blog_html,
+            failing_dimensions,
+            voice_section,
+            voice_samples=voice_samples,
+        )
+
+        if not repaired_html or not repaired_html.strip():
+            logger.warning(
+                "_maybe_repair_blog_voice: repair returned empty HTML for campaign %s, keeping original",
+                campaign.id,
+            )
+            return {**voice_score, "repaired": False}
+
+        # Re-score the repaired HTML (one rescore, no recursion)
+        repaired_score = await _llm.check_fidelity(
+            repaired_html,
+            brand_voice_profile,
+            _FIDELITY_THINKING_TOKENS,
+            campaign.brain_dump,
+            voice_samples=voice_samples,
+        )
+
+        # Pick the higher-scoring version: compare tone + cadence, tiebreak fewer jargon
+        def _composite(s: dict) -> tuple:
+            return (
+                s.get("tone_score", 0) + s.get("cadence_score", 0),
+                -(s.get("jargon_violations", 0)),  # negate: fewer violations is higher score
+            )
+
+        if _composite(repaired_score) >= _composite(initial_score):
+            campaign.blog_html = repaired_html
+            final_score = repaired_score
+            logger.info(
+                "_maybe_repair_blog_voice: repair improved score for campaign %s "
+                "(tone %s->%s, cadence %s->%s, jargon %s->%s)",
+                campaign.id,
+                initial_score.get("tone_score"), final_score.get("tone_score"),
+                initial_score.get("cadence_score"), final_score.get("cadence_score"),
+                initial_score.get("jargon_violations"), final_score.get("jargon_violations"),
+            )
+        else:
+            final_score = initial_score
+            logger.info(
+                "_maybe_repair_blog_voice: repair did not improve score for campaign %s, keeping original",
+                campaign.id,
+            )
+
+        return {
+            **final_score,
+            "repaired": True,
+            "initial": {
+                "tone_score": initial_score.get("tone_score"),
+                "cadence_score": initial_score.get("cadence_score"),
+                "jargon_violations": initial_score.get("jargon_violations"),
+            },
+            "final": {
+                "tone_score": final_score.get("tone_score"),
+                "cadence_score": final_score.get("cadence_score"),
+                "jargon_violations": final_score.get("jargon_violations"),
+            },
+        }
+
+    except Exception as exc:
+        logger.warning(
+            "_maybe_repair_blog_voice: repair failed for campaign %s, keeping original score. Error: %s",
+            campaign.id,
+            exc,
+        )
+        return {**voice_score, "repaired": False}
 
 
 async def _fail_job(db: AsyncSession, job: Job, error_details: str) -> None:

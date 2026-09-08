@@ -1,5 +1,22 @@
 # Deferred Work
 
+## Deferred from: code review of 26-4-fidelity-repair-loop-per-mode-voice-differentiation (2026-09-08)
+
+- source_spec: `_bmad-output/implementation-artifacts/26-4-fidelity-repair-loop-per-mode-voice-differentiation.md`
+  summary: Assist-mode social generation uses `build_voice_for_surface` for the main generate path, but assist mode sets `brand_voice_profile=None` via the `if voice_brief and brand_voice_profile:` guard, so assist posts receive no surface-differentiated injection. The assist path has always suppressed BVP injection by design (AC 5 verified). Surface differentiation for non-BVP social posts is a future concern only if assist mode ever gains a voice layer.
+
+- source_spec: `_bmad-output/implementation-artifacts/26-4-fidelity-repair-loop-per-mode-voice-differentiation.md`
+  summary: `_build_template_voice_line` is called before `json.dumps(bvp)` in the blog prompt, so the template line appended to `voice_section` appears in the structured text injection but not in the JSON blob. For prompts that reconstruct voice guidance from the JSON branch, the template modifier is absent. Not triggered in the current `generate_blog` code paths because both branches use `voice_section`; revisit if a JSON-only BVP branch is added.
+
+- source_spec: `_bmad-output/implementation-artifacts/26-4-fidelity-repair-loop-per-mode-voice-differentiation.md`
+  summary: In `build_voice_for_surface`, the Threads surface appends the voice brief at the end of the section (after banned words), while all other surfaces place the brief at or near the top. This ordering difference is intentional per spec ("raw-register rule + casing + banned words (no brief)" with brief trailing), but could be normalized in a future prompt-structure cleanup pass if prompt ordering conventions are standardized.
+
+- source_spec: `_bmad-output/implementation-artifacts/26-4-fidelity-repair-loop-per-mode-voice-differentiation.md`
+  summary: `VoiceScoreDimensions` in `frontend/lib/types.ts` has all fields typed as `number | null | undefined` (nullable) to handle partial data. The JSONB shape written by the backend always includes all three keys (`tone_score`, `cadence_score`, `jargon_violations`), so `null` should not appear in practice. A stricter type (`number`) would add false safety for future schema variations; leaving nullable is more resilient to backend changes.
+
+- source_spec: `_bmad-output/implementation-artifacts/26-4-fidelity-repair-loop-per-mode-voice-differentiation.md`
+  summary: Spec AC 3 requires pairwise inequality for per-surface voice sections ("each surface's built section must differ from every other surface's"). Tests assert selected pairs but do not enumerate all C(6,2)=15 pairs. A minimal BVP where banned_jargon and cadence_profile are both empty could collapse some surface sections to near-identical strings. Full pairwise coverage with a fixture BVP that has all optional fields set is a test hardening task, not a runtime bug.
+
 ## Deferred from: code review of 26-2-micro-style-stylometry-full-bvp-injection (2026-09-05)
 
 - source_spec: `_bmad-output/implementation-artifacts/26-2-micro-style-stylometry-full-bvp-injection.md`

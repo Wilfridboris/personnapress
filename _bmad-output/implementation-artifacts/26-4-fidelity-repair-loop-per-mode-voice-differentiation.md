@@ -1,6 +1,7 @@
 # Story 26.4: Fidelity Repair Loop and Per-Mode Voice Differentiation
 
-Status: ready-for-dev
+Status: done
+baseline_commit: e615622951ac307547f7f41ca8d1e95fb3d81103
 
 ## Story
 
@@ -115,3 +116,69 @@ so that low-fidelity output fixes itself before I see it and blog, social, and t
 ### Completion Notes List
 
 ### File List
+
+## Suggested Review Order
+
+**Repair orchestration**
+
+- Entry point: `_maybe_repair_blog_voice` — repair trigger, score comparison, fallback contract
+  [`generation.py:456`](../../backend/app/services/generation.py#L456)
+
+- Repair call site after `asyncio.gather` resolves; sequencing constraint preserved from 3-25
+  [`generation.py:219`](../../backend/app/services/generation.py#L219)
+
+- Repair prompt: what the model is instructed to fix vs. preserve; `{samples_block}` injection
+  [`generation_prompts.py:639`](../../backend/app/integrations/generation_prompts.py#L639)
+
+- Anthropic provider: `repair_blog_voice` with HTML curly-brace escaping and samples injection
+  [`anthropic_client.py:342`](../../backend/app/integrations/anthropic_client.py#L342)
+
+- Gemini provider: mirrors Anthropic implementation for provider parity
+  [`gemini.py:513`](../../backend/app/integrations/gemini.py#L513)
+
+**Per-surface voice differentiation**
+
+- `build_voice_for_surface`: 6 surfaces (blog/linkedin/x/instagram/facebook/threads) each with a documented subset
+  [`generation_prompts.py:212`](../../backend/app/integrations/generation_prompts.py#L212)
+
+- Anthropic `generate_social` rewired to call `build_voice_for_surface` per platform
+  [`anthropic_client.py:400`](../../backend/app/integrations/anthropic_client.py#L400)
+
+- Gemini `generate_social` mirrors the same rewiring
+  [`gemini.py:574`](../../backend/app/integrations/gemini.py#L574)
+
+**Template voice lines**
+
+- `_build_template_voice_line`: thought-leadership and how-to modifiers; standard/listicle return empty
+  [`generation_prompts.py:1056`](../../backend/app/integrations/generation_prompts.py#L1056)
+
+- Blog prompt appends the template line to voice section (Anthropic path)
+  [`anthropic_client.py:150`](../../backend/app/integrations/anthropic_client.py#L150)
+
+- Blog prompt appends the template line to voice section (Gemini path)
+  [`gemini.py:308`](../../backend/app/integrations/gemini.py#L308)
+
+**Frontend badge and types**
+
+- Voice-tuned variant: `Wand2` icon, tooltip text, renders only when repaired and passing
+  [`VoiceFidelityBadge.tsx:13`](../../frontend/components/campaigns/VoiceFidelityBadge.tsx#L13)
+
+- `VoiceScoreDimensions` type and additive `VoiceScore` repair fields
+  [`types.ts:224`](../../frontend/lib/types.ts#L224)
+
+**Tests and peripherals**
+
+- New repair loop unit tests: per-dimension triggers, better-score-wins, single-call bound, fallback
+  [`test_26_4_voice_repair.py:1`](../../backend/tests/test_26_4_voice_repair.py#L1)
+
+- Pipeline test assertions updated for `repaired: False` on passing scores
+  [`test_generation_service.py:1`](../../backend/tests/test_generation_service.py#L1)
+
+- Anthropic provider tests: surface labels, platform limit corrections left by 26.1
+  [`test_anthropic_generation.py:1`](../../backend/tests/test_anthropic_generation.py#L1)
+
+- Gemini provider tests: surface label corrections
+  [`test_gemini_generation.py:1`](../../backend/tests/test_gemini_generation.py#L1)
+
+- Badge tests: voice-tuned variant, repaired-failing, legacy flat-score rendering
+  [`VoiceFidelityBadge.test.tsx:1`](../../frontend/__tests__/components/VoiceFidelityBadge.test.tsx#L1)
