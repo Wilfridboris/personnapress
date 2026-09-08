@@ -52,6 +52,9 @@ async def generate_roadmap(roadmap_id: uuid.UUID, db: AsyncSession) -> None:
     client_result = await db.execute(select(Client).where(Client.id == roadmap.client_id))
     client = client_result.scalar_one_or_none()
     bvp: dict | None = client.brand_voice_profile if client else None
+    voice_samples: list[dict] | None = (
+        client.voice_samples if client and isinstance(client.voice_samples, list) else None
+    )
     user_id = roadmap.user_id
 
     try:
@@ -127,7 +130,7 @@ async def generate_roadmap(roadmap_id: uuid.UUID, db: AsyncSession) -> None:
 
             await generation_service.generate_social_only(
                 roadmap.brain_dump, bvp, "x", x_campaign.id, db,
-                angle=slot_angle, hook=slot_hook,
+                angle=slot_angle, hook=slot_hook, voice_samples=voice_samples,
             )
 
             campaign_ids.append(x_campaign.id)
@@ -153,7 +156,7 @@ async def generate_roadmap(roadmap_id: uuid.UUID, db: AsyncSession) -> None:
 
             await generation_service.generate_social_only(
                 roadmap.brain_dump, bvp, "linkedin", li_campaign.id, db,
-                angle=slot_angle, hook=slot_hook,
+                angle=slot_angle, hook=slot_hook, voice_samples=voice_samples,
             )
 
             campaign_ids.append(li_campaign.id)

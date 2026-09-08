@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { jobsApi, clientsApi } from "@/lib/api";
 import { useJobStatus, isJobTerminal } from "@/hooks/useJobStatus";
 import { useClientStore } from "@/lib/stores/useClientStore";
-import type { BrandVoiceProfileStatus } from "@/lib/types";
+import type { BrandVoiceProfileStatus, VoiceSample } from "@/lib/types";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -18,6 +18,58 @@ import { LowConfidenceBanner } from "@/components/clients/LowConfidenceBanner";
 import { ClientDetailTabs } from "@/components/clients/ClientDetailTabs";
 import { PlatformConnectionsClient } from "@/components/publishing/PlatformConnectionsClient";
 import type { ClientResponse } from "@/lib/types";
+
+const SOURCE_LABELS: Record<VoiceSample["source"], string> = {
+  scrape: "Website",
+  questionnaire: "Questionnaire",
+  transcript: "Voice note",
+};
+
+function SampleRow({ sample, onDelete }: { sample: VoiceSample; onDelete: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const handleDelete = async () => {
+    setDeleting(true);
+    try { await onDelete(); } finally { setDeleting(false); setConfirming(false); }
+  };
+  return (
+    <div className="p-4 flex gap-3 items-start">
+      <div className="flex-1 min-w-0">
+        <span className="inline-block text-xs font-mono uppercase tracking-widest text-graphite border border-border px-2 py-0.5 mb-2">
+          {SOURCE_LABELS[sample.source] ?? sample.source}
+        </span>
+        <p className={`text-sm text-ink leading-relaxed whitespace-pre-line ${expanded ? "" : "line-clamp-3"}`}>
+          {sample.text}
+        </p>
+        <button type="button" onClick={() => setExpanded(v => !v)} aria-expanded={expanded}
+          className="mt-1 text-xs text-graphite hover:text-ink underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ink transition-colors duration-300">
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      </div>
+      <div className="shrink-0 flex items-center gap-2">
+        {confirming ? (
+          <>
+            <span className="text-xs text-ink">Delete?</span>
+            <button type="button" onClick={handleDelete} disabled={deleting} aria-busy={deleting}
+              className="text-xs text-danger underline underline-offset-2 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-danger">
+              {deleting ? "Deleting..." : "Yes"}
+            </button>
+            <button type="button" onClick={() => setConfirming(false)}
+              className="text-xs text-graphite underline underline-offset-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ink">
+              No
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={() => setConfirming(true)} aria-label="Delete this writing sample"
+            className="p-2.5 text-graphite hover:text-danger transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ink">
+            <Trash2 className="size-4" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 interface Props {
   client: ClientResponse;
@@ -151,6 +203,18 @@ export function ClientDetail({ client }: Props) {
 
   // ── File upload panel ref (used by low-confidence banner) ─────────────────
   const fileUploadRef = useRef<FileUploadPanelHandle>(null);
+
+  const [voiceSamples, setVoiceSamples] = useState<VoiceSample[]>(client.voice_samples ?? []);
+  const handleDeleteSample = async (index: number) => {
+    const prev = voiceSamples;
+    setVoiceSamples(s => s.filter((_, i) => i !== index));
+    try {
+      await clientsApi.deleteSample(client.id, index);
+      queryClient.invalidateQueries({ queryKey: ["client", client.id] });
+    } catch {
+      setVoiceSamples(prev);
+    }
+  };
 
   const handleSave = async () => {
     setEditError(null);
@@ -384,6 +448,26 @@ export function ClientDetail({ client }: Props) {
       {/* ── Content files ───────────────────────────────────────────────── */}
       <section className="mb-10">
         <FileUploadPanel ref={fileUploadRef} clientId={client.id} />
+      </section>
+
+      <hr className="border-border mb-10" />
+
+      {/* ── Writing samples ─────────────────────────────────────────────── */}
+      <section aria-labelledby="samples-heading" className="mb-10">
+        <p id="samples-heading" className="text-xs font-sans uppercase tracking-widest text-ink mb-4">
+          Writing samples
+        </p>
+        {voiceSamples.length === 0 ? (
+          <p className="text-sm text-graphite">
+            No writing samples stored yet. Rescan your website or add questionnaire samples to collect some.
+          </p>
+        ) : (
+          <div className="border border-border divide-y divide-border">
+            {voiceSamples.map((sample, i) => (
+              <SampleRow key={`${sample.source}-${i}-${sample.added_at}`} sample={sample} onDelete={() => handleDeleteSample(i)} />
+            ))}
+          </div>
+        )}
       </section>
     </>
   );

@@ -145,6 +145,9 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
     )
     client = client_result.scalar_one_or_none()
     brand_voice_profile: dict | None = client.brand_voice_profile if client else None
+    voice_samples: list[dict] | None = (
+        client.voice_samples if client and isinstance(client.voice_samples, list) else None
+    )
 
     try:
         # ── Step 2: Blog generation ───────────────────────────────────────────
@@ -162,6 +165,7 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
             target_word_count=campaign.target_word_count,
             article_template=campaign.article_template,
             generation_mode=campaign.generation_mode,
+            voice_samples=voice_samples,
         )
         if not blog_html:
             raise ValueError("generate_blog returned empty content")
@@ -179,7 +183,7 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
         if is_assist:
             # Assist mode preserves the author's raw voice intentionally.
             # BVP fidelity scoring is not applicable and is suppressed (AC 6).
-            # Social posts use the existing prompt which borrows authored passages as hooks.
+            # No samples injection in assist mode (Story 26.3 AC 5).
             voice_score = None
             social = await _llm_with_retry(
                 _llm.generate_social,
@@ -196,6 +200,7 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
                     brand_voice_profile,
                     _FIDELITY_THINKING_TOKENS,
                     campaign.brain_dump,
+                    voice_samples=voice_samples,
                 ),
                 _llm_with_retry(
                     _llm.generate_social,
@@ -203,6 +208,7 @@ async def run_generation_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
                     blog_title,
                     brand_voice_profile,
                     _SOCIAL_THINKING_TOKENS,
+                    voice_samples=voice_samples,
                 ),
             )
 
@@ -253,6 +259,7 @@ async def generate_social_only(
     db: AsyncSession,
     angle: str | None = None,
     hook: str | None = None,
+    voice_samples: list[dict] | None = None,
 ) -> None:
     """Generate a single social post for a roadmap-only-social campaign.
 
@@ -276,6 +283,7 @@ async def generate_social_only(
         _SOCIAL_THINKING_TOKENS,
         angle=angle,
         hook=hook,
+        voice_samples=voice_samples,
     )
 
     if platform == "x":
@@ -395,6 +403,9 @@ async def run_social_only_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
     if not client:
         logger.warning("run_social_only_pipeline: client %s not found for campaign %s, proceeding without BVP", campaign.client_id, campaign.id)
     brand_voice_profile: dict | None = client.brand_voice_profile if client else None
+    voice_samples: list[dict] | None = (
+        client.voice_samples if client and isinstance(client.voice_samples, list) else None
+    )
 
     try:
         social: dict = await _llm_with_retry(
@@ -403,6 +414,7 @@ async def run_social_only_pipeline(job_id: uuid.UUID, db: AsyncSession) -> None:
             brand_voice_profile,
             _SOCIAL_THINKING_TOKENS,
             generation_mode=campaign.generation_mode,
+            voice_samples=voice_samples,
         )
 
         x_post = social.get("x_post")

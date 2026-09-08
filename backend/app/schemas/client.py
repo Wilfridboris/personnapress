@@ -93,6 +93,7 @@ class ClientResponse(BaseModel):
     name: str
     website_url: Optional[str] = None
     brand_voice_profile: Optional[dict] = None
+    voice_samples: Optional[list] = None
     job_id: Optional[uuid.UUID] = None
     campaign_count: int = 0
     created_at: datetime

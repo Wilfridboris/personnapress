@@ -92,6 +92,9 @@ class Client(SQLModel, table=True):
     brand_voice_profile: Optional[dict] = Field(
         default=None, sa_column=Column(JSONB, nullable=True)
     )
+    voice_samples: Optional[list] = Field(
+        default=None, sa_column=Column(JSONB, nullable=True)
+    )
     roadmap_config: Optional[dict] = Field(
         default=None, sa_column=Column(JSONB, nullable=True)
     )

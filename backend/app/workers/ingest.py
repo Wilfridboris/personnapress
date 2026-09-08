@@ -22,6 +22,7 @@ from app.services.ingestion import (
     extract_file_text,
     extract_voice_profile,
     scrape_website,
+    select_voice_samples,
 )
 
 logger = logging.getLogger(__name__)
@@ -148,7 +149,27 @@ async def _run_ingestion(db: AsyncSession, job_id: uuid.UUID, client_id: uuid.UU
         await db.commit()
         return
 
-    # 7. Persist voice profile and complete the job
+    # 7. Select voice samples — wrapped in try/except; never fails the job (16-1 pattern)
+    new_scrape_samples: list[dict] = []
+    try:
+        raw_pairs: list[tuple[str, str]] = []
+        if scraped_text:
+            raw_pairs.append((scraped_text, "scrape"))
+        for ft in file_texts:
+            raw_pairs.append((ft, "scrape"))
+        new_scrape_samples = select_voice_samples(raw_pairs)
+    except Exception:
+        logger.exception(
+            "ingest_worker: sample selection failed for job %s; proceeding without samples",
+            job_id,
+        )
+
+    # Rescan semantics (AC 6): replace source="scrape" entries, preserve others
+    existing_samples: list[dict] = client.voice_samples or []
+    preserved = [s for s in existing_samples if isinstance(s, dict) and s.get("source") != "scrape"]
+    client.voice_samples = preserved + new_scrape_samples if new_scrape_samples else (preserved or None)
+
+    # 8. Persist voice profile and complete the job
     client.brand_voice_profile = voice_profile if voice_profile else None
     job.status = "complete"
     job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -300,7 +321,33 @@ async def _run_questionnaire(
         await db.commit()
         return
 
-    # 5. Mark job complete
+    # 5. Select voice samples from questionnaire sample_texts (wrapped; never fails job)
+    if data.sample_texts:
+        non_empty = [t.strip() for t in data.sample_texts if t and t.strip()]
+        if non_empty:
+            try:
+                raw_pairs = [(t, "questionnaire") for t in non_empty]
+                new_samples = select_voice_samples(raw_pairs)
+                if new_samples:
+                    q_client_result = await db.execute(
+                        select(Client).where(Client.id == client_id)
+                    )
+                    q_client = q_client_result.scalar_one_or_none()
+                    if q_client is not None:
+                        existing = q_client.voice_samples or []
+                        preserved = [
+                            s for s in existing
+                            if isinstance(s, dict) and s.get("source") != "questionnaire"
+                        ]
+                        q_client.voice_samples = preserved + new_samples
+                        await db.commit()
+            except Exception:
+                logger.exception(
+                    "questionnaire_worker: sample selection failed for job %s; proceeding without",
+                    job_id,
+                )
+
+    # 6. Mark job complete
     job.status = "complete"
     job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()

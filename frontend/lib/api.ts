@@ -88,6 +88,8 @@ export const clientsApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  deleteSample: (id: string, index: number) =>
+    apiFetch<void>(`/clients/${id}/voice-samples/${index}`, { method: "DELETE" }),
 };
 
 export const jobsApi = {

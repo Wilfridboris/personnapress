@@ -5,6 +5,7 @@ Provides:
 - extract_clean_text(html) — strips nav/footer/ads from HTML, returns text
 - extract_file_text(file_bytes, filename) — extracts text from .txt/.md/.docx
 - extract_voice_profile(combined_text, client_id, session) — calls Gemini with retry
+- select_voice_samples(texts) — select up to 12 representative excerpt dicts
 """
 
 import asyncio
@@ -12,6 +13,7 @@ import io
 import logging
 import re
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urljoin, urlparse
 
@@ -235,6 +237,106 @@ def extract_file_text(file_bytes: bytes, filename: str) -> str:
     # Unknown extension — safety fallback (upload validation should prevent this)
     logger.warning("extract_file_text: unsupported extension for %s", filename)
     return ""
+
+
+def _trim_to_sentence_boundary(text: str, min_len: int, max_len: int) -> str:
+    """Trim text to fit within [min_len, max_len] at a sentence boundary.
+
+    Returns empty string if no suitable trim can be found.
+    """
+    text = text.strip()
+    if len(text) < min_len:
+        return ""
+    if len(text) <= max_len:
+        return text
+
+    truncated = text[:max_len]
+    match = re.search(r"[.!?][^.!?]*$", truncated)
+    if match:
+        end = match.start() + 1
+        candidate = truncated[:end].strip()
+        if len(candidate) >= min_len:
+            return candidate
+
+    last_space = truncated.rfind(" ")
+    if last_space >= min_len:
+        return truncated[:last_space].strip()
+
+    return ""
+
+
+def select_voice_samples(
+    texts: list[tuple[str, str]],
+) -> list[dict]:
+    """Select up to 12 representative voice sample excerpts from (text, source) pairs.
+
+    Args:
+        texts: List of (text, source) tuples where source is "scrape", "questionnaire",
+               or "transcript".
+
+    Returns:
+        List of up to 12 dicts: {text: str, source: str, added_at: str (ISO 8601)}.
+        Selection is deterministic given the same input.
+    """
+    _MIN_CHARS = 200
+    _MAX_CHARS = 600
+    _MAX_SAMPLES = 12
+    _SHORT_MAX = 300
+
+    candidates: list[tuple[str, str]] = []
+
+    for raw_text, source in texts:
+        if not raw_text or not raw_text.strip():
+            continue
+        paragraphs = re.split(r"\n{2,}", raw_text.strip())
+        for para in paragraphs:
+            para = para.strip()
+            if not para:
+                continue
+            para = re.sub(r"\n+", " ", para)
+            trimmed = _trim_to_sentence_boundary(para, _MIN_CHARS, _MAX_CHARS)
+            if trimmed:
+                candidates.append((trimmed, source))
+
+    if not candidates:
+        return []
+
+    seen_prefixes: set[str] = set()
+    unique: list[tuple[str, str]] = []
+    for text, source in candidates:
+        prefix = re.sub(r"\W+", "", text[:80].lower())
+        if prefix in seen_prefixes:
+            continue
+        seen_prefixes.add(prefix)
+        unique.append((text, source))
+
+    short_pool = [(t, s) for t, s in unique if len(t) <= _SHORT_MAX]
+    long_pool = [(t, s) for t, s in unique if len(t) > _SHORT_MAX]
+
+    selected: list[tuple[str, str]] = []
+    short_target = min(len(short_pool), _MAX_SAMPLES // 3)
+    long_target = min(len(long_pool), _MAX_SAMPLES - short_target)
+    short_target = _MAX_SAMPLES - long_target
+
+    selected.extend(short_pool[:short_target])
+    selected.extend(long_pool[:long_target])
+
+    if len(selected) < _MAX_SAMPLES:
+        already_texts: set[str] = {text for text, _ in selected}
+        for pair in unique:
+            if len(selected) >= _MAX_SAMPLES:
+                break
+            if pair[0] not in already_texts:
+                selected.append(pair)
+                already_texts.add(pair[0])
+
+    selected = selected[:_MAX_SAMPLES]
+
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return [
+        {"text": text, "source": source, "added_at": now_iso}
+        for text, source in selected
+    ]
 
 
 async def extract_voice_profile(

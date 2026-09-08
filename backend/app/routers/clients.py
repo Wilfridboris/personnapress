@@ -49,6 +49,7 @@ router = APIRouter(prefix="/clients", tags=["clients"])
 _INVALID_SESSION = {"error": {"code": "INVALID_SESSION", "message": "Invalid session.", "detail": {}}}
 _NOT_FOUND = {"error": {"code": "CLIENT_NOT_FOUND", "message": "Client not found.", "detail": {}}}
 _FORBIDDEN = {"error": {"code": "FORBIDDEN", "message": "Access denied.", "detail": {}}}
+_SAMPLE_NOT_FOUND = {"error": {"code": "SAMPLE_NOT_FOUND", "message": "Writing sample not found.", "detail": {}}}
 
 
 def _extract_domain(url: str) -> str:
@@ -503,4 +504,32 @@ async def patch_roadmap_config(
     await db.commit()
 
     return RoadmapConfigResponse(roadmap_config=client.roadmap_config)
+
+
+@router.delete("/{client_id}/voice-samples/{index}", status_code=204)
+async def delete_voice_sample(
+    client_id: uuid.UUID,
+    index: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    """Delete a single voice sample by its 0-based index in client.voice_samples."""
+    try:
+        user_id = uuid.UUID(current_user["user_id"])
+    except (ValueError, KeyError):
+        raise HTTPException(status_code=401, detail=_INVALID_SESSION)
+
+    client = await get_client(db, client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+
+    samples: list = list(client.voice_samples or [])
+    if index < 0 or index >= len(samples):
+        raise HTTPException(status_code=404, detail=_SAMPLE_NOT_FOUND)
+
+    samples.pop(index)
+    await update_client(db, client_id, voice_samples=samples if samples else None)
+    await db.commit()
+
+    return Response(status_code=204)
 

@@ -343,6 +343,7 @@ class TestWordCountPrompt:
 
         return _BLOG_PROMPT.format(
             voice_section=_DEFAULT_VOICE,
+            samples_block="",
             meta_voice_note="",
             brain_dump="test brain dump",
             tone_list="professional",
@@ -1179,6 +1180,7 @@ class TestSocialPromptContainsSocialVoiceSignalsPlaceholder:
             facebook_voice_section="",
             threads_voice_section="",
             bvp_structure_hints="",
+            samples_block="",
             social_universal_rules="WRITING RULES:",
             social_voice_signals=signals,
             brain_dump="test brain dump",
@@ -1198,6 +1200,7 @@ class TestSocialPromptContainsSocialVoiceSignalsPlaceholder:
             facebook_voice_section="",
             threads_voice_section="",
             bvp_structure_hints="",
+            samples_block="",
             social_universal_rules="WRITING RULES:",
             social_voice_signals=signals,
             brain_dump="test brain dump",
@@ -1213,6 +1216,7 @@ class TestSocialPromptContainsSocialVoiceSignalsPlaceholder:
             facebook_voice_section="",
             threads_voice_section="",
             bvp_structure_hints="",
+            samples_block="",
             social_universal_rules="WRITING RULES:",
             social_voice_signals="",
             brain_dump="test brain dump",

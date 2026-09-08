@@ -22,6 +22,7 @@ from app.integrations.generation_prompts import (
     _SOCIAL_STANDALONE_ASSIST_PROMPT,
     _SOCIAL_STANDALONE_PROMPT,
     _WEEK_PLAN_PROMPT,
+    _build_samples_block,
     _build_seo_section,
     _build_social_universal_rules,
     _build_social_voice_signals,
@@ -123,6 +124,7 @@ async def generate_blog(
     target_word_count: str | None = None,
     article_template: str | None = None,
     generation_mode: str | None = None,
+    voice_samples: list[dict] | None = None,
 ) -> str:
     is_assist = (generation_mode or "generate") == "assist"
 
@@ -171,8 +173,12 @@ async def generate_blog(
         else:
             length_override_section = ""
 
+        # Assist mode: no samples injection by design (AC 5 of Story 26.3)
+        samples_block = _build_samples_block(voice_samples, max_count=3, prefer_short=False)
+
         prompt = _BLOG_PROMPT.format(
             voice_section=voice_section,
+            samples_block=samples_block,
             meta_voice_note=meta_voice_note,
             brain_dump=brain_dump,
             tone_list=tone_list,
@@ -228,6 +234,7 @@ async def check_fidelity(
     brand_voice_profile: dict | None,
     thinking_tokens: int = 256,    # unused -- no thinking on fidelity check
     brain_dump: str = "",
+    voice_samples: list[dict] | None = None,
 ) -> dict:
     if brand_voice_profile is None:
         return {
@@ -268,8 +275,11 @@ async def check_fidelity(
     else:
         expanded_scoring_section = ""
 
+    samples_block = _build_samples_block(voice_samples, max_count=3, prefer_short=False)
+
     prompt = _FIDELITY_PROMPT.format(
         bvp_json=json.dumps(brand_voice_profile),
+        samples_block=samples_block,
         blog_html=blog_html,
         brain_dump_sample=brain_dump[:1500],
         expanded_scoring_section=expanded_scoring_section,
@@ -331,6 +341,7 @@ async def generate_social(
     blog_title: str,
     brand_voice_profile: dict | None,
     thinking_tokens: int = 0,    # unused -- no thinking on social posts
+    voice_samples: list[dict] | None = None,
 ) -> dict:
     if brand_voice_profile:
         bvp_without_voice = {k: v for k, v in brand_voice_profile.items() if k != "voice_brief"}
@@ -385,6 +396,7 @@ async def generate_social(
         brand_voice_profile or {}, tone_list, cadence_instruction
     )
     social_voice_signals = _build_social_voice_signals(brand_voice_profile or {})
+    samples_block = _build_samples_block(voice_samples, max_count=2, prefer_short=True)
 
     prompt = _SOCIAL_PROMPT.format(
         bvp_json=bvp_json,
@@ -393,6 +405,7 @@ async def generate_social(
         facebook_voice_section=facebook_voice_section,
         threads_voice_section=threads_voice_section,
         bvp_structure_hints=bvp_structure_hints,
+        samples_block=samples_block,
         social_universal_rules=social_universal_rules,
         social_voice_signals=social_voice_signals,
         brain_dump=brain_dump,
@@ -483,6 +496,7 @@ async def generate_social_standalone(
     angle: str | None = None,
     hook: str | None = None,
     generation_mode: str | None = None,
+    voice_samples: list[dict] | None = None,
 ) -> dict:
     """Generate standalone social posts for Plan My Week (no blog exists).
 
@@ -556,6 +570,7 @@ async def generate_social_standalone(
             brand_voice_profile or {}, tone_list, cadence_instruction
         )
         social_voice_signals = _build_social_voice_signals(brand_voice_profile or {})
+        samples_block = _build_samples_block(voice_samples, max_count=2, prefer_short=True)
 
         prompt = _SOCIAL_STANDALONE_PROMPT.format(
             bvp_json=bvp_json,
@@ -564,6 +579,7 @@ async def generate_social_standalone(
             facebook_voice_section=facebook_voice_section,
             threads_voice_section=threads_voice_section,
             bvp_structure_hints=bvp_structure_hints,
+            samples_block=samples_block,
             social_universal_rules=social_universal_rules,
             social_voice_signals=social_voice_signals,
             brain_dump=brain_dump,

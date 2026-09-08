@@ -42,11 +42,18 @@ export interface RoadmapConfig {
   images_enabled: boolean;
 }
 
+export interface VoiceSample {
+  text: string;
+  source: "scrape" | "questionnaire" | "transcript";
+  added_at: string;
+}
+
 export interface ClientResponse {
   id: string;
   name: string;
   website_url: string | null;
   brand_voice_profile: ExpandedBrandVoiceProfile | null;
+  voice_samples: VoiceSample[] | null;
   job_id: string | null;
   campaign_count: number;
   created_at: string;

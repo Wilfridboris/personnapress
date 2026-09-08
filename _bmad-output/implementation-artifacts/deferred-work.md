@@ -633,3 +633,17 @@ Cross-cutting gaps found while reviewing the post-analytics feature end-to-end (
 - source_spec: `_bmad-output/implementation-artifacts/26-1-character-limit-single-source-of-truth-enforcement.md`
   summary: Direct callers of `create_tweet`/`create_tweet_with_media` no longer have a 280-char safety net at the API layer
   evidence: The spec required removing `(text or "")[:280]` from twitter.py (task 5). Over-limit validation now lives entirely upstream. If a future code path calls create_tweet with an over-limit text, the Twitter API will return a 422 rather than a silent truncation. Low risk now; note if new callers are added.
+
+## Deferred from: code review of 26-3-few-shot-voice-exemplars-stored-samples (2026-09-08)
+
+- source_spec: `_bmad-output/implementation-artifacts/26-3-few-shot-voice-exemplars-stored-samples.md`
+  summary: `test_failed_rescan_preserves_all_samples` tests an inline copy of the worker logic, not `_run_ingestion` itself
+  evidence: The test at `backend/tests/test_voice_samples.py:355-371` manually re-implements the preservation expression (`preserved + new_scrape_samples if new_scrape_samples else preserved or None`) and asserts against a local variable. It never imports or calls `_run_ingestion`. A bug introduced in the worker's failure branch would pass all tests undetected. Fix by adding a test that patches `select_voice_samples` to raise, calls `_run_ingestion` (with mocked DB), and asserts `client.voice_samples` still contains the pre-existing non-scrape samples.
+
+- source_spec: `_bmad-output/implementation-artifacts/26-3-few-shot-voice-exemplars-stored-samples.md`
+  summary: Concurrent DELETE requests to `/clients/{id}/voice-samples/{index}` can remove the wrong sample
+  evidence: The delete endpoint reads `client.voice_samples`, pops by positional index, and writes back — three separate operations with no row-level lock. Two simultaneous deletes reading the same list state will each compute an index against a stale snapshot; the slower write silently removes the wrong entry. Low-stakes for user-generated writing samples; no optimistic locking or ETag mechanism in place. Fix with `SELECT FOR UPDATE` around the read-modify-write if concurrent access becomes a concern.
+
+- source_spec: `_bmad-output/implementation-artifacts/26-3-few-shot-voice-exemplars-stored-samples.md`
+  summary: Second delete triggered while first is still in-flight targets a shifted index after optimistic UI update
+  evidence: In `ClientDetail.tsx:handleDeleteSample`, the optimistic `setVoiceSamples` filter runs immediately, shifting subsequent indexes. If the user clicks a second delete before the first API call completes, the index passed to `clientsApi.deleteSample` refers to the pre-filter list position but the backend still holds the original array (no optimistic update on the server). The mismatch deletes a different sample than intended. Fix by disabling all delete buttons while any delete is in-flight.

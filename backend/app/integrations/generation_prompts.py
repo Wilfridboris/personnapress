@@ -355,6 +355,7 @@ _BLOG_PROMPT = """You are a direct, expert blog writer. Write a blog post that s
 
 BRAND VOICE PROFILE:
 {voice_section}
+{samples_block}
 
 BRAIN DUMP:
 {brain_dump}
@@ -470,7 +471,7 @@ _FIDELITY_PROMPT = """Evaluate the following blog post against the Brand Voice P
 
 BRAND VOICE PROFILE:
 {bvp_json}
-
+{samples_block}
 BRAIN DUMP SAMPLE (first 1500 characters of the original brain dump -- used only to verify authored passage preservation):
 {brain_dump_sample}
 
@@ -496,6 +497,7 @@ _SOCIAL_PROMPT = """You are an expert social media copywriter writing platform-n
 BRAND VOICE PROFILE:
 {bvp_json}
 {linkedin_voice_section}{instagram_voice_section}{facebook_voice_section}{threads_voice_section}{bvp_structure_hints}
+{samples_block}
 {social_universal_rules}
 {social_voice_signals}
 BRAIN DUMP:
@@ -528,6 +530,7 @@ BRAND VOICE PROFILE:
 {bvp_json}
 {linkedin_voice_section}{instagram_voice_section}{facebook_voice_section}{threads_voice_section}
 {bvp_structure_hints}
+{samples_block}
 {social_universal_rules}
 {social_voice_signals}
 BRAIN DUMP:
@@ -982,6 +985,60 @@ ANGLE FOR THIS POST (write ONLY from this angle):
 {hook_line}- Do not restate other angles. Commit fully to this one angle.
 - Do not invent facts, numbers, tools, or outcomes beyond what is in the brain dump.
 """
+
+
+def _build_samples_block(
+    samples: list[dict] | None,
+    max_count: int = 3,
+    prefer_short: bool = False,
+) -> str:
+    """Build a delimited WRITING SAMPLES block for prompt injection.
+
+    Args:
+        samples: List of {text, source, added_at} dicts. None or empty returns "".
+        max_count: Maximum number of samples to include (2-3 for blog, 1-2 for social).
+        prefer_short: When True, prefer shorter samples (for social prompts).
+
+    Returns:
+        A formatted block with numbered samples, or "" when no samples.
+    """
+    if not samples:
+        return ""
+
+    valid = [
+        s for s in samples
+        if isinstance(s, dict) and isinstance(s.get("text"), str) and s["text"].strip()
+    ]
+    if not valid:
+        return ""
+
+    if prefer_short:
+        valid = sorted(valid, key=lambda s: len(s["text"]))
+    else:
+        short = [s for s in valid if len(s["text"]) <= 300]
+        long_ = [s for s in valid if len(s["text"]) > 300]
+        interleaved: list[dict] = []
+        s_idx = l_idx = 0
+        while len(interleaved) < len(valid):
+            if s_idx < len(short):
+                interleaved.append(short[s_idx])
+                s_idx += 1
+            if l_idx < len(long_):
+                interleaved.append(long_[l_idx])
+                l_idx += 1
+        valid = interleaved
+
+    selected = valid[:max_count]
+
+    lines = [
+        "WRITING SAMPLES (match the rhythm, punctuation, casing, and register of these "
+        "samples; do not copy their content):"
+    ]
+    for i, s in enumerate(selected, 1):
+        text = re.sub(r"[\r\n]+", " ", s["text"]).replace('"', "'")
+        lines.append(f'{i}. "{text}"')
+
+    return "\n".join(lines)
 
 
 def _strip_blog_trailer(html: str) -> str:
