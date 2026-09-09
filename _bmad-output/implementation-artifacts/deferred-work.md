@@ -661,6 +661,24 @@ Cross-cutting gaps found while reviewing the post-analytics feature end-to-end (
   summary: Direct callers of `create_tweet`/`create_tweet_with_media` no longer have a 280-char safety net at the API layer
   evidence: The spec required removing `(text or "")[:280]` from twitter.py (task 5). Over-limit validation now lives entirely upstream. If a future code path calls create_tweet with an over-limit text, the Twitter API will return a 422 rather than a silent truncation. Low risk now; note if new callers are added.
 
+## Deferred from: code review of 26-5-onboarding-friction-reduction-early-voice-proof (2026-09-08)
+
+- source_spec: `_bmad-output/implementation-artifacts/26-5-onboarding-friction-reduction-early-voice-proof.md`
+  summary: `asyncio.CancelledError` in `_call_llm_preview` is not re-raised; the outer `asyncio.wait_for` timeout will raise `CancelledError` but the generic `except Exception` in `_call_llm_preview` may swallow it in Python 3.8+. In Python 3.11+ `CancelledError` inherits from `BaseException`, not `Exception`, so it propagates correctly. Verify Python version in production; add an explicit `except asyncio.CancelledError: raise` before the generic handler if needed.
+  evidence: `backend/app/routers/clients.py` — `_call_llm_preview` uses `except Exception` as the catch-all.
+
+- source_spec: `_bmad-output/implementation-artifacts/26-5-onboarding-friction-reduction-early-voice-proof.md`
+  summary: `PATCH /auth/onboarding-step` is reachable by users who have already completed onboarding (`onboarding_completed=True`). A re-visiting user (e.g. via direct URL) could overwrite their `onboarding_step` with a non-None value, which would then be included in the next JWT refresh. `onboarding_step` is only read during onboarding (proxy redirect keeps completed users away from `/onboarding`), so there is no functional impact today; but a guard (`if user.onboarding_completed: return early`) would be cleaner.
+  evidence: `backend/app/services/auth_service.py:patch_onboarding_step` — no completed-user guard.
+
+- source_spec: `_bmad-output/implementation-artifacts/26-5-onboarding-friction-reduction-early-voice-proof.md`
+  summary: The draft autosave `setTimeout` in `OnboardingFlow.tsx` is not cleared on component unmount. If the user navigates away mid-debounce window, the 500ms timer fires after unmount and attempts a `localStorage.setItem`, which is harmless but may trigger React "state update on unmounted component" noise. Add a `useEffect` cleanup that calls `clearTimeout(saveTimerRef.current)` on unmount.
+  evidence: `frontend/components/onboarding/OnboardingFlow.tsx` — draft save debounce pattern without unmount cleanup.
+
+- source_spec: `_bmad-output/implementation-artifacts/26-5-onboarding-friction-reduction-early-voice-proof.md`
+  summary: `persistStep` in `OnboardingFlow.tsx` is fire-and-forget with no dev-mode logging. A failed PATCH (network error, 401) is silently swallowed. This is intentional for UX (non-blocking), but adds no observability. Consider `console.warn` in development for the error case to aid debugging during local onboarding testing.
+  evidence: `frontend/components/onboarding/OnboardingFlow.tsx:persistStep` — `.catch(() => {})` with no log.
+
 ## Deferred from: code review of 26-3-few-shot-voice-exemplars-stored-samples (2026-09-08)
 
 - source_spec: `_bmad-output/implementation-artifacts/26-3-few-shot-voice-exemplars-stored-samples.md`

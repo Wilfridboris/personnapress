@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Enum as SAEnum, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Enum as SAEnum, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy import false as sa_false
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.dialects.postgresql import JSONB
@@ -59,6 +59,9 @@ class User(SQLModel, table=True):
     github_installation_id: Optional[str] = Field(default=None, nullable=True)
     verified: bool = Field(default=False)
     onboarding_completed: bool = Field(default=False)
+    onboarding_step: Optional[int] = Field(
+        default=None, sa_column=Column(Integer, nullable=True)
+    )
     created_at: datetime = Field(default_factory=utcnow)
 
 

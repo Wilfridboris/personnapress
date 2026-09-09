@@ -90,6 +90,8 @@ export const clientsApi = {
     }),
   deleteSample: (id: string, index: number) =>
     apiFetch<void>(`/clients/${id}/voice-samples/${index}`, { method: "DELETE" }),
+  voicePreview: (id: string) =>
+    apiFetch<{ preview: string }>(`/clients/${id}/voice-preview`, { method: "POST" }),
 };
 
 export const jobsApi = {
@@ -185,6 +187,11 @@ export const dashboardApi = {
 export const authApi = {
   completeOnboarding: () =>
     apiFetch<{ status: string }>("/auth/complete-onboarding", { method: "POST" }),
+  patchOnboardingStep: (step: number) =>
+    apiFetch<{ status: string; onboarding_step: number }>("/auth/onboarding-step", {
+      method: "PATCH",
+      body: JSON.stringify({ step }),
+    }),
 };
 
 export const subscriptionsApi = {

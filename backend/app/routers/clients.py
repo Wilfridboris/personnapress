@@ -1,3 +1,5 @@
+import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Union
@@ -6,6 +8,8 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.core.dependencies import get_current_user
 from app.db.connection import get_session
@@ -40,6 +44,8 @@ from app.schemas.client import (
     DeliveryTokenResponse,
     QuestionnaireRequest,
 )
+from app.core.config import settings
+from app.integrations.generation_prompts import _build_voice_injection, _DEFAULT_VOICE
 from app.services.stylometry import COMPUTED_FIELD_NAMES
 from app.services.subscription_service import check_client_limit, get_user_plan_info
 from app.workers.ingest import ingest_worker, questionnaire_worker
@@ -533,3 +539,109 @@ async def delete_voice_sample(
 
     return Response(status_code=204)
 
+
+
+# ---------------------------------------------------------------------------
+# Voice preview (Story 26.5, AC 2)
+# ---------------------------------------------------------------------------
+
+# Fixed neutral source paragraph for the voice proof. Two sentences of plain
+# content that any voice can rewrite -- no em-dashes, no markdown.
+_VOICE_PREVIEW_SOURCE = (
+    "Planning content for the week ahead takes time and intention. "
+    "Most people start with a topic and hope the words come together from there."
+)
+
+_VOICE_PREVIEW_TIMEOUT = 10.0  # seconds; preview must never block step progression
+
+
+_gemini_client_instance = None  # module-level singleton
+
+
+def _get_gemini_client():
+    """Return a module-level cached Gemini client (lazy-init to avoid import at startup)."""
+    global _gemini_client_instance
+    if _gemini_client_instance is None:
+        from google import genai as _genai  # type: ignore[import]
+        _gemini_client_instance = _genai.Client(api_key=settings.GEMINI_API_KEY)  # type: ignore[assignment]
+    return _gemini_client_instance
+
+
+async def _call_llm_preview(voice_section: str) -> str:
+    """Call the active LLM provider synchronously (no job row) to generate a voice proof.
+
+    Returns 2-3 sentences of plain text rewritten in the client's voice.
+    Raises on provider error so the endpoint can return 502 quickly.
+    """
+    prompt = (
+        f"Rewrite the following two sentences in the voice described below. "
+        f"Return 2-3 sentences of plain text only. No markdown, no bullet points, no em-dashes.\n\n"
+        f"Voice:\n{voice_section}\n\n"
+        f"Source text:\n{_VOICE_PREVIEW_SOURCE}"
+    )
+
+    if settings.LLM_PROVIDER == "anthropic":
+        from app.integrations.anthropic_client import _call as anthropic_call  # type: ignore[import]
+        return await asyncio.wait_for(anthropic_call(prompt, max_tokens=256), timeout=_VOICE_PREVIEW_TIMEOUT)
+    elif settings.LLM_PROVIDER == "gemini":
+        # Use the same google-genai SDK and async client pattern as integrations/gemini.py
+        gemini_client = _get_gemini_client()
+        response = await asyncio.wait_for(
+            gemini_client.aio.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=prompt,
+            ),
+            timeout=_VOICE_PREVIEW_TIMEOUT,
+        )
+        return (response.text or "").strip()
+    else:
+        raise ValueError(f"Unknown LLM_PROVIDER: {settings.LLM_PROVIDER!r}")
+
+
+class VoicePreviewResponse(BaseModel):
+    preview: str
+
+
+@router.post("/{client_id}/voice-preview", response_model=VoicePreviewResponse)
+async def get_voice_preview(
+    client_id: uuid.UUID,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> VoicePreviewResponse:
+    """Generate a live voice proof paragraph for the onboarding InlineProfileReview.
+
+    Synchronous (no job row). Returns 502 quickly on any provider error.
+    Ownership check + 404 if no BVP yet.
+    """
+    try:
+        user_id = uuid.UUID(current_user["user_id"])
+    except (ValueError, KeyError):
+        raise HTTPException(status_code=401, detail=_INVALID_SESSION)
+
+    client = await get_client(db, client_id)
+    if not client or client.user_id != user_id:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+
+    if not client.brand_voice_profile:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NO_BVP", "message": "No brand voice profile yet.", "detail": {}}},
+        )
+
+    bvp: dict = client.brand_voice_profile
+    voice_section = _build_voice_injection(bvp) or _DEFAULT_VOICE
+
+    try:
+        preview_text = await _call_llm_preview(voice_section)
+    except asyncio.TimeoutError:
+        logger.warning("voice-preview: timeout for client %s after %.0fs", client_id, _VOICE_PREVIEW_TIMEOUT)
+        raise HTTPException(status_code=502, detail={"error": {"code": "PROVIDER_ERROR", "message": "Voice preview unavailable.", "detail": {}}})
+    except Exception as exc:
+        logger.warning("voice-preview: provider error for client %s: %s", client_id, exc)
+        raise HTTPException(status_code=502, detail={"error": {"code": "PROVIDER_ERROR", "message": "Voice preview unavailable.", "detail": {}}})
+
+    preview_text = preview_text.strip()
+    if not preview_text:
+        raise HTTPException(status_code=502, detail={"error": {"code": "PROVIDER_ERROR", "message": "Voice preview unavailable.", "detail": {}}})
+
+    return VoicePreviewResponse(preview=preview_text)
