@@ -1,6 +1,7 @@
 # Story 26.5: Onboarding Friction Reduction and Early Voice Proof
 
-Status: ready-for-dev
+Status: done
+baseline_commit: 7d6a6c53a33aa0c5417a46954828e6b8cb26c327
 
 ## Story
 
@@ -128,3 +129,78 @@ so that I reach my first in-my-voice content quickly and never restart from scra
 ### Completion Notes List
 
 ### File List
+
+## Suggested Review Order
+
+**DB schema and migration**
+
+- New nullable column wired to SQLModel with explicit `sa_column`; nullable so no backfill needed.
+  [`models.py:62`](../../backend/app/db/repositories/models.py#L62)
+
+- Hand-written migration (review `down_revision` chains to `5c08a8909153` before deploy; `alembic check` is mandatory).
+  [`20260908_0001_e5a6b7c8d9e0_add_onboarding_step_to_users.py:1`](../../backend/alembic/versions/20260908_0001_e5a6b7c8d9e0_add_onboarding_step_to_users.py#L1)
+
+**Step persistence: backend**
+
+- `patch_onboarding_step` service: writes step to DB, refreshes JWT cookie in one round-trip.
+  [`auth_service.py:278`](../../backend/app/services/auth_service.py#L278)
+
+- `_issue_session` now forwards `onboarding_step` into JWT; `complete_onboarding` clears it.
+  [`auth_service.py:102`](../../backend/app/services/auth_service.py#L102)
+
+- `PATCH /auth/onboarding-step` router endpoint with `ge=1, le=4` input validation.
+  [`auth.py:73`](../../backend/app/routers/auth.py#L73)
+
+**Step persistence: middleware and server component**
+
+- Proxy forwards step header only when value >= 1, preventing phantom step-0 resume.
+  [`proxy.ts:51`](../../frontend/proxy.ts#L51)
+
+- Server component decodes header with `Number.isFinite` guard; passes `initialStep` to client.
+  [`page.tsx:15`](../../frontend/app/onboarding/page.tsx#L15)
+
+**Voice preview endpoint**
+
+- `get_voice_preview`: ownership check, 404 on missing BVP, 502 on timeout, silent legacy-BVP fallback to `_DEFAULT_VOICE`.
+  [`clients.py:606`](../../backend/app/routers/clients.py#L606)
+
+- `_call_llm_preview`: explicit `elif/else` provider dispatch; `asyncio.wait_for` with 10s cap; module-level singleton for Gemini.
+  [`clients.py:570`](../../backend/app/routers/clients.py#L570)
+
+- Fixed neutral source paragraph constant (2 sentences, never changes between calls).
+  [`clients.py:550`](../../backend/app/routers/clients.py#L550)
+
+**OnboardingFlow: step resume and reorder**
+
+- `clampedInitial` + `persistStep` fire-and-forget pattern; completeOnboarding moved to Step 4 exits only.
+  [`OnboardingFlow.tsx:353`](../../frontend/components/onboarding/OnboardingFlow.tsx#L353)
+
+- `VoiceProof` component: TanStack Query, shimmer skeleton, CSS-only `voiceProofIn` entrance, silent-hide on error.
+  [`OnboardingFlow.tsx:33`](../../frontend/components/onboarding/OnboardingFlow.tsx#L33)
+
+- Scrape failure copy branch: `no_content` vs other, rendered as quiet one-liner above questionnaire.
+  [`OnboardingFlow.tsx:222`](../../frontend/components/onboarding/OnboardingFlow.tsx#L222)
+
+**Draft autosave**
+
+- `DRAFT_STORAGE_KEY` constant, `readDraft` with age + future-timestamp guards, `saveDraft` via `draftSaveTimeoutRef` (not state).
+  [`OnboardingFlow.tsx:25`](../../frontend/components/onboarding/OnboardingFlow.tsx#L25)
+
+- `readDraft` + `saveDraft` helpers: 7-day max-age, future-timestamp eviction, JSON shape.
+  [`OnboardingFlow.tsx:306`](../../frontend/components/onboarding/OnboardingFlow.tsx#L306)
+
+**ProgressIndicator and API layer**
+
+- Refactored from "N of 4" text to labeled `nav > ol` with `aria-current="step"` and Lucide Check on completed.
+  [`ProgressIndicator.tsx:3`](../../frontend/components/onboarding/ProgressIndicator.tsx#L3)
+
+- Two new API calls wired: `voicePreview` (POST) and `patchOnboardingStep` (PATCH).
+  [`api.ts:93`](../../frontend/lib/api.ts#L93)
+
+**Tests**
+
+- 10 backend tests: step persistence, JWT refresh, BVP ownership, provider timeout, legacy-BVP fallback.
+  [`test_onboarding_step.py:1`](../../backend/tests/test_onboarding_step.py#L1)
+
+- Frontend test suite: configurable `_mockJob` mock, scrape-failure copy assertions, draft/OAuth/step-reorder blocks.
+  [`OnboardingFlow.test.tsx:1`](../../frontend/__tests__/components/OnboardingFlow.test.tsx#L1)

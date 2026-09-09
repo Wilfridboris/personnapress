@@ -1,5 +1,15 @@
 # Deferred Work
 
+## Deferred from: code review of 26-5-onboarding-friction-reduction-early-voice-proof (2026-09-08)
+
+- source_spec: `_bmad-output/implementation-artifacts/26-5-onboarding-friction-reduction-early-voice-proof.md`
+  summary: No DB-level check constraint on `onboarding_step` range 1-4; enforcement is Pydantic-only in the PATCH endpoint.
+  evidence: Application-layer validation prevents out-of-range values through the normal API path, but a direct DB write (migration, admin tool) could store an invalid value. Prior stories follow the same Pydantic-only pattern; consistent with project conventions.
+
+- source_spec: `_bmad-output/implementation-artifacts/26-5-onboarding-friction-reduction-early-voice-proof.md`
+  summary: `VoiceProof` TanStack Query uses `staleTime: Infinity`, so the preview will not refresh if the user edits their brand voice profile mid-session and revisits the InlineProfileReview.
+  evidence: Onboarding is a linear one-time flow; mid-session BVP edits are not a supported path. If multi-session BVP editing + onboarding continuation becomes a use case, the staleTime should be reduced or a query invalidation added on BVP save.
+
 ## Deferred from: code review of 26-4-fidelity-repair-loop-per-mode-voice-differentiation (2026-09-08)
 
 - source_spec: `_bmad-output/implementation-artifacts/26-4-fidelity-repair-loop-per-mode-voice-differentiation.md`
