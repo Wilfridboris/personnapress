@@ -402,13 +402,10 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps = {}) {
     queryKey: ["clients-onboarding"],
     queryFn: async () => {
       const result = await clientsApi.list();
-      // Resume: if we have no createdClientId yet but there are clients, hydrate from most recent
+      // Resume: if we have no createdClientId yet but there are clients, hydrate from the last one
+      // (ClientListItem has no created_at; the API returns clients in insertion order)
       if (result.clients.length > 0 && !createdClientId) {
-        // Sort by created_at descending to reliably pick the newest client
-        const sorted = [...result.clients].sort(
-          (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
-        );
-        setCreatedClientId(sorted[0].id);
+        setCreatedClientId(result.clients[result.clients.length - 1].id);
       }
       return result;
     },
