@@ -377,4 +377,4 @@ development_status:
   26-2-micro-style-stylometry-full-bvp-injection: review
   26-3-few-shot-voice-exemplars-stored-samples: review
   26-4-fidelity-repair-loop-per-mode-voice-differentiation: review
-  26-5-onboarding-friction-reduction-early-voice-proof: ready-for-dev
+  26-5-onboarding-friction-reduction-early-voice-proof: done

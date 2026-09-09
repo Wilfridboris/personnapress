@@ -22,8 +22,9 @@ def create_session_token(
     plan_tier: str,
     verified: bool,
     onboarding_completed: bool = False,
+    onboarding_step: int | None = None,
 ) -> str:
-    payload = {
+    payload: dict = {
         "user_id": str(user_id),
         "email": email,
         "plan_tier": plan_tier,
@@ -31,6 +32,8 @@ def create_session_token(
         "onboarding_completed": onboarding_completed,
         "exp": datetime.now(timezone.utc) + timedelta(days=SESSION_EXPIRY_DAYS),
     }
+    if onboarding_step is not None:
+        payload["onboarding_step"] = onboarding_step
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=ALGORITHM)
 
 

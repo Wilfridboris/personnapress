@@ -11,11 +11,14 @@ interface Props {
   oauthError?: string | null;
   onContinue: () => void;
   onSkip: () => void;
+  /** Campaign context for post-onboarding navigation (persisted through OAuth round-trip). */
+  campaignId?: string | null;
+  campaignJobId?: string | null;
 }
 
 const ONBOARDING_PLATFORMS = ["wordpress", "x", "linkedin", "webflow"] as const;
 
-export function OnboardingPlatformStep({ clientId, oauthError, onContinue, onSkip }: Props) {
+export function OnboardingPlatformStep({ clientId, oauthError, onContinue, onSkip, campaignId, campaignJobId }: Props) {
   const { data: connections, isLoading, isError } = useQuery({
     queryKey: ["platform-connections", clientId],
     queryFn: () => publishingApi.listConnections(clientId),
@@ -63,6 +66,9 @@ export function OnboardingPlatformStep({ clientId, oauthError, onContinue, onSki
                   e.preventDefault();
                   try {
                     sessionStorage.setItem("onboarding_client_id", clientId);
+                    // Persist campaign context so the OAuth return can redirect to the campaign page
+                    if (campaignId) sessionStorage.setItem("onboarding_campaign_id", campaignId);
+                    if (campaignJobId) sessionStorage.setItem("onboarding_job_id", campaignJobId);
                   } catch {
                     // storage unavailable — OAuth return detection won't work; user restarts from step 1
                   }

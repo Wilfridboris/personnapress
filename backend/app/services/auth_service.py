@@ -99,6 +99,7 @@ async def _issue_session(user: User, db: AsyncSession) -> JSONResponse:
         plan_tier,
         verified=bool(user.verified),
         onboarding_completed=bool(user.onboarding_completed),
+        onboarding_step=user.onboarding_step,
     )
     redirect = "/dashboard" if user.onboarding_completed else "/onboarding"
     response = JSONResponse({"redirect_url": redirect})
@@ -208,6 +209,7 @@ async def login_user(email: str, password: str, db: AsyncSession) -> JSONRespons
         plan_tier,
         verified=bool(user.verified),
         onboarding_completed=bool(user.onboarding_completed),
+        onboarding_step=user.onboarding_step,
     )
     response = JSONResponse({"success": True})
     set_session_cookie(response, token)
@@ -255,6 +257,7 @@ async def complete_onboarding(user_id: uuid.UUID, db: AsyncSession) -> JSONRespo
         raise HTTPException(status_code=404, detail=_err("NOT_FOUND", "User not found."))
 
     user.onboarding_completed = True
+    user.onboarding_step = None  # clear step persistence on completion
     await db.commit()
 
     result_sub = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
@@ -268,5 +271,36 @@ async def complete_onboarding(user_id: uuid.UUID, db: AsyncSession) -> JSONRespo
         onboarding_completed=True,
     )
     response = JSONResponse({"status": "ok"})
+    set_session_cookie(response, token)
+    return response
+
+
+async def patch_onboarding_step(user_id: uuid.UUID, step: int, db: AsyncSession) -> JSONResponse:
+    """Persist the most recently completed onboarding step for resume-on-return.
+
+    Refreshes the session cookie so the JWT immediately carries the new step value,
+    enabling the frontend to read it from the cookie payload on next page load.
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail=_err("NOT_FOUND", "User not found."))
+
+    user.onboarding_step = step
+    await db.commit()
+
+    # Refresh the session token so the JWT payload carries the updated onboarding_step.
+    result_sub = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
+    sub = result_sub.scalar_one_or_none()
+    plan_tier = sub.plan_tier if sub else "growth"
+    token = create_session_token(
+        user.id,
+        user.email,
+        plan_tier,
+        verified=bool(user.verified),
+        onboarding_completed=bool(user.onboarding_completed),
+        onboarding_step=step,
+    )
+    response = JSONResponse({"status": "ok", "onboarding_step": step})
     set_session_cookie(response, token)
     return response

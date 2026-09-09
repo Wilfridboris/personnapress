@@ -48,6 +48,9 @@ export async function proxy(request: NextRequest) {
       const requestHeaders = new Headers(request.headers);
       requestHeaders.set("x-user-id", payload.user_id as string);
       requestHeaders.set("x-plan-tier", payload.plan_tier as string);
+      if (payload.onboarding_step != null) {
+        requestHeaders.set("x-onboarding-step", String(payload.onboarding_step));
+      }
       return NextResponse.next({ request: { headers: requestHeaders } });
     } catch {
       const response = NextResponse.redirect(new URL("/login", request.url));

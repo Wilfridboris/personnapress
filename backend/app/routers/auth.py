@@ -1,7 +1,8 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
@@ -13,6 +14,7 @@ from app.services.auth_service import (
     complete_onboarding,
     login_user,
     logout_user,
+    patch_onboarding_step,
     register_user,
     resend_verification,
     verify_email_token,
@@ -66,3 +68,24 @@ async def complete_onboarding_endpoint(
 ) -> JSONResponse:
     user_id = uuid.UUID(current_user["user_id"])
     return await complete_onboarding(user_id, db)
+
+
+class OnboardingStepRequest(BaseModel):
+    step: int = Field(ge=1, le=4)
+
+
+@router.patch("/onboarding-step", response_model=None)
+async def patch_onboarding_step_endpoint(
+    body: OnboardingStepRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> JSONResponse:
+    """Persist the most recently completed onboarding step (1-4).
+
+    Fire-and-forget from the frontend: failure never blocks the UI.
+    """
+    try:
+        user_id = uuid.UUID(current_user["user_id"])
+    except (ValueError, KeyError):
+        raise HTTPException(status_code=401, detail={"error": {"code": "INVALID_SESSION", "message": "Invalid session.", "detail": {}}})
+    return await patch_onboarding_step(user_id, body.step, db)
