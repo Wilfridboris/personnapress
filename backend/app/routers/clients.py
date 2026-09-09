@@ -555,12 +555,16 @@ _VOICE_PREVIEW_SOURCE = (
 _VOICE_PREVIEW_TIMEOUT = 10.0  # seconds; preview must never block step progression
 
 
-def _get_gemini_client():  # type: ignore[return]
+_gemini_client_instance = None  # module-level singleton
+
+
+def _get_gemini_client():
     """Return a module-level cached Gemini client (lazy-init to avoid import at startup)."""
-    from google import genai as _genai  # type: ignore[import]
-    if not hasattr(_get_gemini_client, "_client"):
-        _get_gemini_client._client = _genai.Client(api_key=settings.GEMINI_API_KEY)  # type: ignore[attr-defined]
-    return _get_gemini_client._client  # type: ignore[attr-defined]
+    global _gemini_client_instance
+    if _gemini_client_instance is None:
+        from google import genai as _genai  # type: ignore[import]
+        _gemini_client_instance = _genai.Client(api_key=settings.GEMINI_API_KEY)  # type: ignore[assignment]
+    return _gemini_client_instance
 
 
 async def _call_llm_preview(voice_section: str) -> str:
@@ -579,7 +583,7 @@ async def _call_llm_preview(voice_section: str) -> str:
     if settings.LLM_PROVIDER == "anthropic":
         from app.integrations.anthropic_client import _call as anthropic_call  # type: ignore[import]
         return await asyncio.wait_for(anthropic_call(prompt, max_tokens=256), timeout=_VOICE_PREVIEW_TIMEOUT)
-    else:
+    elif settings.LLM_PROVIDER == "gemini":
         # Use the same google-genai SDK and async client pattern as integrations/gemini.py
         gemini_client = _get_gemini_client()
         response = await asyncio.wait_for(
@@ -590,6 +594,8 @@ async def _call_llm_preview(voice_section: str) -> str:
             timeout=_VOICE_PREVIEW_TIMEOUT,
         )
         return (response.text or "").strip()
+    else:
+        raise ValueError(f"Unknown LLM_PROVIDER: {settings.LLM_PROVIDER!r}")
 
 
 class VoicePreviewResponse(BaseModel):
@@ -627,7 +633,10 @@ async def get_voice_preview(
 
     try:
         preview_text = await _call_llm_preview(voice_section)
-    except (asyncio.TimeoutError, Exception) as exc:
+    except asyncio.TimeoutError:
+        logger.warning("voice-preview: timeout for client %s after %.0fs", client_id, _VOICE_PREVIEW_TIMEOUT)
+        raise HTTPException(status_code=502, detail={"error": {"code": "PROVIDER_ERROR", "message": "Voice preview unavailable.", "detail": {}}})
+    except Exception as exc:
         logger.warning("voice-preview: provider error for client %s: %s", client_id, exc)
         raise HTTPException(status_code=502, detail={"error": {"code": "PROVIDER_ERROR", "message": "Voice preview unavailable.", "detail": {}}})
 

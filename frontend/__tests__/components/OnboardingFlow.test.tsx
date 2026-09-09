@@ -49,9 +49,10 @@ vi.mock("@/lib/stores/useClientStore", () => ({
     selector({ activeClientId: _activeClientId }),
 }));
 
-// Mock useJobStatus
+// Mock useJobStatus -- configurable per test
+let _mockJob: { status: string; error_details?: string } | null = null;
 vi.mock("@/hooks/useJobStatus", () => ({
-  useJobStatus: () => ({ job: null }),
+  useJobStatus: () => ({ job: _mockJob }),
 }));
 
 // Mock TanStack Query -- OnboardingPlatformStep uses useQuery; PlatformConnectionCard uses useQueryClient
@@ -66,6 +67,8 @@ const _sessionStorage: Record<string, string> = {};
 const _localStorage: Record<string, string> = {};
 
 beforeEach(() => {
+  // Reset configurable mocks
+  _mockJob = null;
   Object.defineProperty(window, "sessionStorage", {
     value: {
       getItem: (k: string) => _sessionStorage[k] ?? null,
@@ -422,13 +425,17 @@ describe("OnboardingFlow -- Step 2 scrape failure explanation (AC: 3)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     _activeClientId = null;
+    _mockJob = null;
   });
 
-  it("shows no_content explanation above questionnaire", async () => {
-    // Mock job status to return a failed job with no_content error
-    vi.mock("@/hooks/useJobStatus", () => ({
-      useJobStatus: () => ({ job: { status: "failed", error_details: "no_content" } }),
-    }));
+  afterEach(() => {
+    _mockJob = null;
+  });
+
+  it("shows no_content explanation copy above questionnaire", async () => {
+    // Set _mockJob BEFORE render so the mock is active when Step2Content mounts.
+    // The job returned by useJobStatus drives the questionnaire view.
+    _mockJob = { status: "failed", error_details: "no_content" };
 
     vi.mocked(clientsApi.create).mockResolvedValue({
       id: "client-1",
@@ -446,11 +453,37 @@ describe("OnboardingFlow -- Step 2 scrape failure explanation (AC: 3)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /create client/i }));
 
-    // In a real test, the job status would trigger the questionnaire view
-    // We verify the canonical copy string is in the codebase by checking the component renders
     await waitFor(() => {
-      // Step 2 should be visible
-      expect(screen.getByText(/voice setup/i)).toBeInTheDocument();
+      // The no_content copy should appear above the questionnaire
+      expect(
+        screen.getByText(/could not read enough text from your site/i)
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("shows generic scrape failure copy for non-no_content errors", async () => {
+    _mockJob = { status: "failed", error_details: "scrape_timeout" };
+
+    vi.mocked(clientsApi.create).mockResolvedValue({
+      id: "client-1",
+      name: "Test",
+      job_id: "job-1",
+    } as never);
+
+    render(<OnboardingFlow />);
+
+    fireEvent.change(screen.getByLabelText(/client name/i), {
+      target: { value: "Test" },
+    });
+    fireEvent.change(screen.getByLabelText(/website url/i), {
+      target: { value: "https://example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /create client/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/could not finish analyzing your site/i)
+      ).toBeInTheDocument();
     });
   });
 });

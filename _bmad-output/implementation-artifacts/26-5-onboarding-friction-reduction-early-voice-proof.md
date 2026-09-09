@@ -1,6 +1,6 @@
 # Story 26.5: Onboarding Friction Reduction and Early Voice Proof
 
-Status: done
+Status: in-review
 
 ## Story
 

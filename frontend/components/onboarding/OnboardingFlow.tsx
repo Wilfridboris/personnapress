@@ -310,6 +310,11 @@ function readDraft(): { text: string; savedAt: number } | null {
     const parsed = JSON.parse(raw) as { text: string; savedAt: number };
     if (typeof parsed.text !== "string" || typeof parsed.savedAt !== "number") return null;
     if (isNaN(parsed.savedAt)) return null;
+    if (parsed.savedAt > Date.now()) {
+      // future timestamp (clock skew or tampering) -- treat as expired
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+      return null;
+    }
     if (Date.now() - parsed.savedAt > DRAFT_MAX_AGE_MS) {
       localStorage.removeItem(DRAFT_STORAGE_KEY);
       return null;
@@ -366,7 +371,7 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps = {}) {
   // Step 3 state (brain dump -- new position after reorder)
   const [brainDump, setBrainDump] = useState("");
   const [showRestoreBanner, setShowRestoreBanner] = useState(false);
-  const [draftSaveTimeout, setDraftSaveTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userHasTypedRef = useRef(false);
   const brainDumpTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const linkCount = useMemo(
@@ -556,9 +561,8 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps = {}) {
     setBrainDump(value);
     setShowRestoreBanner(false); // hide banner once user starts typing
 
-    if (draftSaveTimeout) clearTimeout(draftSaveTimeout);
-    const t = setTimeout(() => saveDraft(value), 600);
-    setDraftSaveTimeout(t);
+    if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+    draftSaveTimeoutRef.current = setTimeout(() => saveDraft(value), 600);
   };
 
   // ── Restore draft ─────────────────────────────────────────────────────────
@@ -803,6 +807,7 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps = {}) {
   // ══════════════════════════════════════════════════════════════════════════
   if (step === 3) {
     const clientId = createdClientId ?? activeClientId;
+    if (!clientId) return null; // brief flash until guard useEffect resolves
     return (
       <div className="w-full max-w-lg">
         <ProgressIndicator step={3} />

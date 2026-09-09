@@ -13,7 +13,8 @@ export default async function OnboardingPage() {
   // from this value so returning users resume where they left off (AC 1).
   const headerStore = await headers();
   const rawStep = headerStore.get("x-onboarding-step");
-  const initialStep = rawStep != null ? parseInt(rawStep, 10) : null;
+  const parsed = rawStep != null ? parseInt(rawStep, 10) : NaN;
+  const initialStep = Number.isFinite(parsed) ? parsed : null;
 
   return <OnboardingFlow initialStep={initialStep} />;
 }

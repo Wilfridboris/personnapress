@@ -204,3 +204,31 @@ async def test_voice_preview_client_not_found_returns_404():
             await get_voice_preview(uuid.uuid4(), current_user, db)
 
     assert exc_info.value.status_code == 404
+
+
+async def test_voice_preview_legacy_bvp_uses_default_voice():
+    """Legacy BVP without voice_brief falls back to _DEFAULT_VOICE passed to LLM."""
+    from app.routers.clients import get_voice_preview
+    from app.integrations.generation_prompts import _DEFAULT_VOICE
+
+    user_id = uuid.uuid4()
+    # Legacy BVP: no voice_brief field
+    legacy_bvp = {"tone": ["professional"], "cadence": {}, "banned_jargon": []}
+    client = _Client(user_id, brand_voice_profile=legacy_bvp)
+
+    current_user = {"user_id": str(user_id)}
+    db = AsyncMock()
+
+    captured_args: list = []
+
+    async def capture_call(voice_section: str) -> str:
+        captured_args.append(voice_section)
+        return "A professional preview sentence for legacy voice."
+
+    with patch("app.routers.clients.get_client", return_value=client), \
+         patch("app.routers.clients._call_llm_preview", new=capture_call):
+        resp = await get_voice_preview(client.id, current_user, db)
+
+    assert resp.preview == "A professional preview sentence for legacy voice."
+    assert len(captured_args) == 1
+    assert captured_args[0] == _DEFAULT_VOICE
