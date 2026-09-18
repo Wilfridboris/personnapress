@@ -13,6 +13,7 @@ export async function proxy(request: NextRequest) {
     pathname === "/" ||
     pathname === "/sitemap.xml" ||
     pathname === "/robots.txt" ||
+    pathname === "/llms.txt" ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
     pathname.startsWith("/verify-email") ||
@@ -21,6 +22,14 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/api/email-capture") ||
     pathname.startsWith("/headless-blog-api") ||
     pathname.startsWith("/github-publisher") ||
+    pathname.startsWith("/brand-voice-generator") ||
+    pathname.startsWith("/best-ai-blog-writers") ||
+    pathname.startsWith("/jasper-alternatives") ||
+    pathname.startsWith("/copy-ai-alternatives") ||
+    pathname.startsWith("/writesonic-alternatives") ||
+    pathname.startsWith("/ai-blog-writer-for-saas-founders") ||
+    pathname.startsWith("/ai-content-for-coaches") ||
+    pathname.startsWith("/white-label-content-for-agencies") ||
     pathname.startsWith("/privacy") ||
     pathname.startsWith("/terms") ||
     pathname.startsWith("/blog") ||
