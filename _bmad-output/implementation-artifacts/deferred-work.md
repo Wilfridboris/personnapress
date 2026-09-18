@@ -692,3 +692,17 @@ Cross-cutting gaps found while reviewing the post-analytics feature end-to-end (
 - source_spec: `_bmad-output/implementation-artifacts/26-3-few-shot-voice-exemplars-stored-samples.md`
   summary: Second delete triggered while first is still in-flight targets a shifted index after optimistic UI update
   evidence: In `ClientDetail.tsx:handleDeleteSample`, the optimistic `setVoiceSamples` filter runs immediately, shifting subsequent indexes. If the user clicks a second delete before the first API call completes, the index passed to `clientsApi.deleteSample` refers to the pre-filter list position but the backend still holds the original array (no optimistic update on the server). The mismatch deletes a different sample than intended. Fix by disabling all delete buttons while any delete is in-flight.
+
+## Deferred from: SEO Comparison & Alternative Pages Cluster P1.4 (2026-09-18)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-seo-comparison-alternative-pages.md`
+  summary: No empty-array guards in ComparisonPage for competitorStrengths, differentiators, or relatedLinks — section headings render with no content if any array is empty.
+  evidence: Current data is fixed and typed so no runtime risk, but a future data entry with an empty array would render orphaned section headings. Edge Case Hunter surfaced this.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-seo-comparison-alternative-pages.md`
+  summary: No automated test verifies that FAQ accordion visible text matches FAQPage JSON-LD text (same data source, but parity is unverified at the consumer boundary).
+  evidence: Symbol search across frontend/__tests__ found no test covering ComparisonPage, comparisons.data, or any of the four new routes. Verification Gap reviewer confirmed the gap.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-seo-comparison-alternative-pages.md`
+  summary: competitorUrl in ComparisonPage strips only "https://" prefix for display; an "http://" URL would show the protocol in link text.
+  evidence: All current data entries use https:// so no runtime risk. A more robust strip would be `.replace(/^https?:\/\//, "")`.

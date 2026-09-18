@@ -57,6 +57,10 @@ export function PublicFooter() {
               >
                 How to use AI to write blog posts
               </Link>
+              <Link href="/best-ai-blog-writers" className="font-mono text-xs text-graphite hover:text-ink transition-colors leading-snug focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1">Best AI blog writers</Link>
+              <Link href="/jasper-alternatives" className="font-mono text-xs text-graphite hover:text-ink transition-colors leading-snug focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1">Jasper alternatives</Link>
+              <Link href="/copy-ai-alternatives" className="font-mono text-xs text-graphite hover:text-ink transition-colors leading-snug focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1">Copy.ai alternatives</Link>
+              <Link href="/writesonic-alternatives" className="font-mono text-xs text-graphite hover:text-ink transition-colors leading-snug focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1">Writesonic alternatives</Link>
             </div>
 
             {/* Account */}
