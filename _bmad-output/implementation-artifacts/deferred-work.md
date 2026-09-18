@@ -706,3 +706,55 @@ Cross-cutting gaps found while reviewing the post-analytics feature end-to-end (
 - source_spec: `_bmad-output/implementation-artifacts/spec-seo-comparison-alternative-pages.md`
   summary: competitorUrl in ComparisonPage strips only "https://" prefix for display; an "http://" URL would show the protocol in link text.
   evidence: All current data entries use https:// so no runtime risk. A more robust strip would be `.replace(/^https?:\/\//, "")`.
+
+## Deferred from: SEO/AEO/GEO audit P2 split (2026-09-18)
+
+- source_spec: none
+  summary: P2.6 - Build definitional/glossary AEO pages ("What is brand voice", "What is a headless blog API", "What is AI content that ranks"), each answer-first (40-60 word direct answer, then depth).
+  evidence: Split from the audit P2 build to keep scope to a single shippable goal (P2.5 persona pages chosen first). Independent content cluster, separate PR.
+
+- source_spec: none
+  summary: P2.7 - Add /llms.txt (and optionally /llms-full.txt) plus explicit Google-Extended and OAI-SearchBot allowances in robots.ts.
+  evidence: Split from the audit P2 build. Lightweight technical AEO plumbing, independent of the persona pages.
+
+- source_spec: none
+  summary: P2.8 - Add BreadcrumbList JSON-LD to every deep marketing page (currently only /pricing has it).
+  evidence: Split from the audit P2 build. Cross-cutting schema change; should run after new persona/glossary pages exist so they get breadcrumbs too.
+
+## Deferred from: code review of spec-p2-5-persona-use-case-landing-pages (2026-09-18)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-p2-5-persona-use-case-landing-pages.md`
+  summary: APP_URL is evaluated at module scope in each persona page, so NEXT_PUBLIC_APP_URL is resolved once at build time with no warning if the env var is empty or wrong — baked canonical and JSON-LD URLs ship to production with no runtime recovery.
+  evidence: Pre-existing pattern across all public marketing pages (jasper-alternatives, about, brand-voice-generator, etc.); consistent with project conventions. Verification Gap reviewer confirmed no test covers this.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-p2-5-persona-use-case-landing-pages.md`
+  summary: OG image URL is a relative path (/images/PersonnaPress-opengraph.png) rather than an absolute URL — some OG parsers and crawlers may fail to resolve it.
+  evidence: Pre-existing pattern across all marketing pages; Next.js metadataBase in layout.tsx provides the base for resolution in most crawlers. Address when OG image delivery is audited project-wide.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-p2-5-persona-use-case-landing-pages.md`
+  summary: No unit tests for generateMetadata output, buildPersonaJsonLd, or the JSON-LD breadcrumb/canonical URL values on the three new persona routes.
+  evidence: Consistent with existing static SEO marketing pages (comparison/alternatives pages also have no tests). The npm run build check confirms static prerendering; URL correctness depends on NEXT_PUBLIC_APP_URL being set correctly at build time.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-p2-5-persona-use-case-landing-pages.md`
+  summary: The slug field on PersonaPageData is required by the spec interface but is never consumed anywhere — it can drift silently from the actual route URL.
+  evidence: All three persona keys, persona route folders, canonical paths, and sitemap entries use hardcoded strings. Remove the field or use it to drive routing in a future cleanup.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-p2-5-persona-use-case-landing-pages.md`
+  summary: The three persona page files are structurally identical — the JSON-LD script block is duplicated in each thin route rather than living in PersonaPage or a shared wrapper.
+  evidence: Established pattern consistent with the comparison pages (jasper-alternatives etc.). Adding a fourth JSON-LD type requires editing all three files. Consolidate into PersonaPage when a fourth persona or JSON-LD type is needed.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-p2-5-persona-use-case-landing-pages.md`
+  summary: FaqAccordion aria-controls references a non-existent DOM id when the panel is collapsed — same pre-existing bug surfaced in the 23-1 review.
+  evidence: FaqAccordion is a shared component not modified by this story. Fix requires always-rendering the panel div with hidden attribute instead of conditional render, same as the pre-existing defer from 23-1.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-p2-5-persona-use-case-landing-pages.md`
+  summary: Offer prices ($29/$79/$199) in the SoftwareApplication JSON-LD are hardcoded string literals with no connection to the pricing constants or Stripe product catalog.
+  evidence: Same pre-existing pattern as the GitHub Publisher and pricing pages. A price change in Stripe or in the pricing constants requires a separate edit here.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-p2-5-persona-use-case-landing-pages.md`
+  summary: twitter.images is absent from generateMetadata on all three persona pages — Twitter falls back to OG image tags but the explicit twitter:image tag is missing.
+  evidence: Pre-existing pattern across marketing pages; Twitter's crawler reads og:image as fallback so cards still render. Add explicit twitter.images when twitter card fidelity is audited project-wide.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-p2-5-persona-use-case-landing-pages.md`
+  summary: No explicit robots metadata (index/follow/googleBot) on the three persona pages — Next.js defaults to indexing but explicit crawl directives are absent.
+  evidence: Pre-existing gap across all marketing pages except those that explicitly set noindex. Low priority given Next.js defaults are correct; add explicit robots metadata in a focused SEO hardening pass.

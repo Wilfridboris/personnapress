@@ -63,6 +63,14 @@ export function PublicFooter() {
               <Link href="/writesonic-alternatives" className="font-mono text-xs text-graphite hover:text-ink transition-colors leading-snug focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1">Writesonic alternatives</Link>
             </div>
 
+            {/* Use cases */}
+            <div className="flex flex-col gap-3">
+              <p className="font-mono text-[10px] uppercase tracking-widest text-graphite/50">Use cases</p>
+              <Link href="/ai-blog-writer-for-saas-founders" className="font-mono text-xs text-graphite hover:text-ink transition-colors leading-snug focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1">For SaaS founders</Link>
+              <Link href="/ai-content-for-coaches" className="font-mono text-xs text-graphite hover:text-ink transition-colors leading-snug focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1">For coaches</Link>
+              <Link href="/white-label-content-for-agencies" className="font-mono text-xs text-graphite hover:text-ink transition-colors leading-snug focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1">For agencies</Link>
+            </div>
+
             {/* Account */}
             <div className="flex flex-col gap-3">
               <p className="font-mono text-[10px] uppercase tracking-widest text-graphite/50">Account</p>
