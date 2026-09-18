@@ -18,9 +18,6 @@ export function PersonaPage({ data }: { data: PersonaPageData }) {
       {/* Hero */}
       <section className="max-w-6xl mx-auto px-6 pt-12 md:pt-24 pb-16 md:pb-20">
         <div className="max-w-3xl">
-          <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-4">
-            {data.persona}
-          </p>
           <h1 className="font-display text-5xl lg:text-6xl font-bold text-ink leading-tight tracking-tight text-balance mb-8">
             {data.h1}
           </h1>
