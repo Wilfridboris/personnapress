@@ -12,7 +12,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.personnapress.co
 
 export const metadata: Metadata = {
   title: {
-    absolute: "PersonnaPress | Official Site - AI Content Platform",
+    absolute: "AI Blog Writer That Sounds Like You | PersonnaPress",
   },
   description:
     "PersonnaPress learns your brand voice and turns ideas into SEO-ranked blog posts and social campaigns. Publishes to WordPress, Webflow, LinkedIn, and X.",
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     canonical: APP_URL,
   },
   openGraph: {
-    title: "PersonnaPress | Official Site - The AI Content Platform That Publishes in Your Brand Voice",
+    title: "AI Content Platform That Publishes in Your Brand Voice | PersonnaPress",
     description:
       "Turn rough ideas into blog posts and social campaigns in your brand voice. You approve everything before it goes live. Publishes to WordPress, Webflow, LinkedIn, and X.",
     url: APP_URL,
@@ -94,8 +94,28 @@ const schemaOrganization = {
     name: "Boris Kwayep",
     url: `${APP_URL}/about`,
   },
+  foundingDate: "2026",
+  address: {
+    "@type": "PostalAddress",
+    addressLocality: "Scarborough",
+    addressRegion: "ON",
+    addressCountry: "CA",
+  },
+  contactPoint: {
+    "@type": "ContactPoint",
+    contactType: "customer support",
+    email: "support@personnapress.com",
+    url: `${APP_URL}/about`,
+    availableLanguage: ["English"],
+  },
   sameAs: [
     "https://www.facebook.com/personnapress/",
+    "https://alternativeto.net/software/personnapress/",
+    "https://www.saashub.com/personnapress",
+    "https://www.capterra.ca/software/1108715/PersonnaPress",
+    "https://www.softwareadvice.com/product/560892-PersonnaPress/",
+    "https://www.getapp.com/all-software/a/personnapress/",
+    "https://www.g2.com/products/personnapress/reviews",
   ],
   knowsAbout: [
     "AI content generation",

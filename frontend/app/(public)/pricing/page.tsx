@@ -3,16 +3,16 @@ import Link from "next/link";
 import { CheckCircle2, X } from "lucide-react";
 import { EmailCaptureWidget } from "@/components/marketing/EmailCaptureWidget";
 
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://personnapress.com").replace(/\/$/, "");
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://www.personnapress.com").replace(/\/$/, "");
 
 export const metadata: Metadata = {
-  title: "PersonnaPress Pricing — AI Content Automation Plans",
+  title: "AI Content Automation Pricing & Plans",
   description:
     "AI blog writer pricing starts at $29 per month. Three plans for individuals, growing businesses, and agencies. 14-day free trial, no credit card required.",
   robots: { index: true, follow: true },
   alternates: { canonical: `${APP_URL}/pricing` },
   openGraph: {
-    title: "PersonnaPress Pricing — AI Content Automation Plans",
+    title: "AI Content Automation Pricing & Plans | PersonnaPress",
     description:
       "AI blog writer pricing starts at $29 per month. 14-day free trial included on all plans.",
     url: `${APP_URL}/pricing`,

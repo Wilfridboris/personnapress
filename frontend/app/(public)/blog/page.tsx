@@ -64,12 +64,12 @@ function formatDate(iso: string): string {
 }
 
 export const metadata: Metadata = {
-  title: "Blog",
+  title: "AI Content Marketing & Brand Voice Strategy",
   description:
     "Insights on AI writing, brand voice, and content strategy from Boris Kwayep and the PersonnaPress team.",
   alternates: { canonical: "/blog" },
   openGraph: {
-    title: "Blog | PersonnaPress",
+    title: "AI Content Marketing & Brand Voice Strategy | PersonnaPress",
     description:
       "Insights on AI writing, brand voice, and content strategy from Boris Kwayep and the PersonnaPress team.",
     url: "/blog",
@@ -85,7 +85,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Blog | PersonnaPress",
+    title: "AI Content Marketing & Brand Voice Strategy | PersonnaPress",
     description:
       "Insights on AI writing, brand voice, and content strategy from Boris Kwayep and the PersonnaPress team.",
   },
