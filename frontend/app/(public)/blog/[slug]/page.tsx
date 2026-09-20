@@ -54,18 +54,29 @@ async function fetchArticle(slug: string): Promise<ArticleDetail | null> {
 }
 
 export async function generateStaticParams(): Promise<{ slug: string }[]> {
+  const slugs: { slug: string }[] = [];
   try {
     const token = process.env.PERSONNAPRESS_DELIVERY_TOKEN;
-    if (!token) return [];
-    const res = await fetch(`${API_BASE}/public/v1/articles?page_size=50`, {
-      headers: { Authorization: `Bearer ${token}` },
-      next: { revalidate: 3600 },
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.data ?? []).map((a: { slug: string }) => ({ slug: a.slug }));
+    if (!token) return slugs;
+    const PAGE_SIZE = 100;
+    const MAX_PAGES = 100; // safety bound: caps prebuild at 10k articles
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const res = await fetch(
+        `${API_BASE}/public/v1/articles?page=${page}&page_size=${PAGE_SIZE}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          next: { revalidate: 3600 },
+        }
+      );
+      if (!res.ok) break;
+      const data = await res.json();
+      const items: { slug: string }[] = data.data ?? [];
+      for (const a of items) slugs.push({ slug: a.slug });
+      if (items.length < PAGE_SIZE) break; // last page reached
+    }
+    return slugs;
   } catch {
-    return [];
+    return slugs;
   }
 }
 
