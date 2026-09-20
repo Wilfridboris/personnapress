@@ -62,15 +62,23 @@ class RoadmapCreateRequest(BaseModel):
     client_id: uuid.UUID
     linkedin_count: int = Field(default=0, ge=0, le=14)
     twitter_count: int = Field(default=0, ge=0, le=14)
+    facebook_count: int = Field(default=0, ge=0, le=14)
+    instagram_count: int = Field(default=0, ge=0, le=14)
     blog_enabled: bool = True
     generate_images: bool = True
     week_start_date: Optional[date] = None
 
     @model_validator(mode="after")
     def at_least_one_post(self) -> "RoadmapCreateRequest":
-        total = self.linkedin_count + self.twitter_count + (1 if self.blog_enabled else 0)
+        total = (
+            self.linkedin_count
+            + self.twitter_count
+            + self.facebook_count
+            + self.instagram_count
+            + (1 if self.blog_enabled else 0)
+        )
         if total == 0:
-            raise ValueError("At least one post type must be enabled (blog, LinkedIn, or X).")
+            raise ValueError("At least one post type must be enabled (blog, LinkedIn, X, Facebook, or Instagram).")
         return self
 
 
@@ -85,6 +93,8 @@ class CampaignSummary(BaseModel):
     platform_hint: str
     x_post: Optional[str] = None
     linkedin_post: Optional[str] = None
+    facebook_post: Optional[str] = None
+    instagram_caption: Optional[str] = None
     blog_title: Optional[str] = None
     image_url: Optional[str] = None
     status: str
@@ -107,6 +117,10 @@ def _platform_hint(campaign: Campaign) -> str:
         return "blog_full"
     if campaign.linkedin_post is not None:
         return "linkedin"
+    if campaign.instagram_caption is not None:
+        return "instagram"
+    if campaign.facebook_post is not None:
+        return "facebook_page"
     return "x"
 
 
@@ -196,6 +210,8 @@ async def create_roadmap(
     client.roadmap_config = {
         "linkedin_count": body.linkedin_count,
         "twitter_count": body.twitter_count,
+        "facebook_count": body.facebook_count,
+        "instagram_count": body.instagram_count,
         "blog_enabled": body.blog_enabled,
         "images_enabled": body.generate_images,
     }
@@ -253,6 +269,8 @@ async def get_roadmap_status(
             platform_hint=_platform_hint(c),
             x_post=c.x_post,
             linkedin_post=c.linkedin_post,
+            facebook_post=c.facebook_post,
+            instagram_caption=c.instagram_caption,
             blog_title=_blog_title(c),
             image_url=c.image_url,
             status=c.status.value,

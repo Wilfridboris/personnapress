@@ -476,6 +476,8 @@ async def revoke_client_delivery_token(
 class RoadmapConfigRequest(BaseModel):
     linkedin_count: int = Field(ge=0, le=14)
     twitter_count: int = Field(ge=0, le=14)
+    facebook_count: int = Field(default=0, ge=0, le=14)
+    instagram_count: int = Field(default=0, ge=0, le=14)
     blog_enabled: bool
     images_enabled: bool
 
@@ -503,6 +505,8 @@ async def patch_roadmap_config(
     client.roadmap_config = {
         "linkedin_count": body.linkedin_count,
         "twitter_count": body.twitter_count,
+        "facebook_count": body.facebook_count,
+        "instagram_count": body.instagram_count,
         "blog_enabled": body.blog_enabled,
         "images_enabled": body.images_enabled,
     }

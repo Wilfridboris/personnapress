@@ -320,6 +320,8 @@ export const roadmapsApi = {
     client_id: string;
     linkedin_count: number;
     twitter_count: number;
+    facebook_count: number;
+    instagram_count: number;
     blog_enabled: boolean;
     generate_images: boolean;
   }) =>

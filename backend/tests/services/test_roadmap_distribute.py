@@ -5,15 +5,27 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.services.roadmap import distribute_schedule
+from app.services.roadmap import (
+    _campaign_platform,
+    _prioritize_image_targets,
+    distribute_schedule,
+)
 
 
-def _campaign(blog_html=None, linkedin_post=None, x_post=None):
+def _campaign(
+    blog_html=None,
+    linkedin_post=None,
+    x_post=None,
+    instagram_caption=None,
+    facebook_post=None,
+):
     c = SimpleNamespace(
         id=uuid.uuid4(),
         blog_html=blog_html,
         linkedin_post=linkedin_post,
         x_post=x_post,
+        instagram_caption=instagram_caption,
+        facebook_post=facebook_post,
     )
     return c
 
@@ -176,3 +188,70 @@ def test_distribute_is_deterministic():
     r2 = distribute_schedule(posts, MONDAY)
     for c in posts:
         assert r1[c.id] == r2[c.id]
+
+
+# ---------------------------------------------------------------------------
+# Platform classification for Meta lanes
+# ---------------------------------------------------------------------------
+
+def test_campaign_platform_classifies_instagram_and_facebook():
+    ig = SimpleNamespace(blog_html=None, linkedin_post=None, instagram_caption="cap", facebook_post=None)
+    fb = SimpleNamespace(blog_html=None, linkedin_post=None, instagram_caption=None, facebook_post="post")
+    assert _campaign_platform(ig) == "instagram"
+    assert _campaign_platform(fb) == "facebook"
+
+
+# ---------------------------------------------------------------------------
+# Meta lanes get their per-lane base hour (Instagram 11:00, Facebook 14:00)
+# ---------------------------------------------------------------------------
+
+def test_single_instagram_post_scheduled_at_1100():
+    ig = _campaign(instagram_caption="cap")
+    result = distribute_schedule([ig], MONDAY)
+    assert result[ig.id] == datetime(MONDAY.year, MONDAY.month, MONDAY.day, 11, 0, 0)
+
+
+def test_single_facebook_post_scheduled_at_1400():
+    fb = _campaign(facebook_post="post")
+    result = distribute_schedule([fb], MONDAY)
+    assert result[fb.id] == datetime(MONDAY.year, MONDAY.month, MONDAY.day, 14, 0, 0)
+
+
+def test_mixed_lanes_land_on_expected_hours_same_day():
+    blog = _campaign(blog_html="<h1>t</h1>")
+    li = _campaign(linkedin_post="li")
+    ig = _campaign(instagram_caption="cap")
+    fb = _campaign(facebook_post="post")
+    x = _campaign(x_post="x")
+    result = distribute_schedule([blog, li, ig, fb, x], MONDAY)
+    # First round assigns one post per lane to Monday at its base hour (X cycles from 08:00).
+    assert result[blog.id].hour == 9
+    assert result[li.id].hour == 9
+    assert result[ig.id].hour == 11
+    assert result[fb.id].hour == 14
+    assert result[x.id].hour == 8
+    for c in (blog, li, ig, fb, x):
+        assert result[c.id].date() == MONDAY
+
+
+# ---------------------------------------------------------------------------
+# Image assignment priority: Instagram wins scarce quota (I/O matrix)
+# ---------------------------------------------------------------------------
+
+def test_prioritize_image_targets_puts_instagram_first():
+    blog_id, x_id, ig_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    campaign_ids = [blog_id, x_id, ig_id]  # Instagram generated last
+    title_hints = ["Blog", "X post 1", "Instagram post 1"]
+    instagram_targets = [(ig_id, "Instagram post 1")]
+
+    queue = _prioritize_image_targets(campaign_ids, title_hints, instagram_targets)
+
+    # Instagram is first despite being generated last; no duplicates; all present.
+    assert queue[0] == (ig_id, "Instagram post 1")
+    assert [cid for cid, _ in queue] == [ig_id, blog_id, x_id]
+
+
+def test_prioritize_image_targets_no_instagram_keeps_order():
+    blog_id, x_id = uuid.uuid4(), uuid.uuid4()
+    queue = _prioritize_image_targets([blog_id, x_id], ["Blog", "X post 1"], [])
+    assert [cid for cid, _ in queue] == [blog_id, x_id]

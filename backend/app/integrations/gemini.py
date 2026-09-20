@@ -38,7 +38,7 @@ from app.integrations.generation_prompts import (
     _md_to_html,
     _strip_blog_trailer,
 )
-from app.services.angles import ANGLE_LABELS, KNOWN_CODES, _LINKEDIN_ORDER, _X_ORDER
+from app.services.angles import ANGLE_LABELS, KNOWN_CODES, _LINKEDIN_ORDER, _X_ORDER, _FACEBOOK_ORDER, _INSTAGRAM_ORDER
 from app.services.platform_limits import HARD_LIMITS, over_limit, sentence_boundary_truncate
 
 logger = logging.getLogger(__name__)
@@ -870,13 +870,17 @@ async def generate_week_plan(
     brand_voice_profile: dict | None,
     linkedin_count: int,
     twitter_count: int,
+    facebook_count: int = 0,
+    instagram_count: int = 0,
 ) -> dict:
     """Plan a diverse week of social posts -- one LLM call that sees all slots at once.
 
     Returns:
         {
-          "linkedin": [{"angle": str, "hook": str, "facet": str}, ...],  # linkedin_count entries
-          "x":        [{"angle": str, "hook": str, "facet": str}, ...],  # twitter_count entries
+          "linkedin":  [{"angle": str, "hook": str, "facet": str}, ...],  # linkedin_count entries
+          "x":         [{"angle": str, "hook": str, "facet": str}, ...],  # twitter_count entries
+          "facebook":  [{"angle": str, "hook": str, "facet": str}, ...],  # facebook_count entries
+          "instagram": [{"angle": str, "hook": str, "facet": str}, ...],  # instagram_count entries
         }
 
     Each entry uses a distinct angle code from the taxonomy. Shape is validated and
@@ -889,14 +893,20 @@ async def generate_week_plan(
     )
     linkedin_angles = ", ".join(_LINKEDIN_ORDER)
     x_angles = ", ".join(_X_ORDER)
+    facebook_angles = ", ".join(_FACEBOOK_ORDER)
+    instagram_angles = ", ".join(_INSTAGRAM_ORDER)
 
     prompt = _WEEK_PLAN_PROMPT.format(
         bvp_json=bvp_json,
         brain_dump=brain_dump,
         linkedin_count=linkedin_count,
         twitter_count=twitter_count,
+        facebook_count=facebook_count,
+        instagram_count=instagram_count,
         linkedin_angles=linkedin_angles,
         x_angles=x_angles,
+        facebook_angles=facebook_angles,
+        instagram_angles=instagram_angles,
     )
 
     response = await _client.aio.models.generate_content(
@@ -917,6 +927,14 @@ async def generate_week_plan(
 
     data["linkedin"] = _repair_plan_entries(data["linkedin"], linkedin_count, "linkedin")
     data["x"] = _repair_plan_entries(data["x"], twitter_count, "x")
+    data["facebook"] = _repair_plan_entries(
+        data.get("facebook") if isinstance(data.get("facebook"), list) else [],
+        facebook_count, "facebook",
+    )
+    data["instagram"] = _repair_plan_entries(
+        data.get("instagram") if isinstance(data.get("instagram"), list) else [],
+        instagram_count, "instagram",
+    )
 
     return data
 
@@ -951,8 +969,20 @@ def _repair_plan_entries(entries: list, expected: int, platform: str) -> list:
     return valid
 
 
+_PLAN_POOLS: dict[str, list[str]] = {
+    "linkedin": _LINKEDIN_ORDER,
+    "x": _X_ORDER,
+    "facebook": _FACEBOOK_ORDER,
+    "instagram": _INSTAGRAM_ORDER,
+}
+
+
+def _plan_pool(platform: str) -> list[str]:
+    return _PLAN_POOLS.get(platform, _X_ORDER)
+
+
 def _next_fallback(platform: str, used: list[str]) -> str:
-    pool = _LINKEDIN_ORDER if platform == "linkedin" else _X_ORDER
+    pool = _plan_pool(platform)
     for code in pool:
         if code not in used:
             return code
@@ -960,7 +990,7 @@ def _next_fallback(platform: str, used: list[str]) -> str:
 
 
 def _pad_fallback(platform: str, used: list[str], count: int) -> list[str]:
-    pool = _LINKEDIN_ORDER if platform == "linkedin" else _X_ORDER
+    pool = _plan_pool(platform)
     result: list[str] = []
     # Prefer codes not yet used before cycling
     for code in pool:

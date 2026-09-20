@@ -20,6 +20,10 @@ interface PlanConfig {
   linkedinCount: number;
   twitterOn: boolean;
   twitterCount: number;
+  facebookOn: boolean;
+  facebookCount: number;
+  instagramOn: boolean;
+  instagramCount: number;
   blogOn: boolean;
   generateImages: boolean;
 }
@@ -29,6 +33,10 @@ const DEFAULT_CONFIG: PlanConfig = {
   linkedinCount: 3,
   twitterOn: false,
   twitterCount: 5,
+  facebookOn: false,
+  facebookCount: 3,
+  instagramOn: false,
+  instagramCount: 3,
   blogOn: true,
   generateImages: true,
 };
@@ -150,6 +158,8 @@ export function PlanMyWeekClient() {
   );
   const hasLinkedIn = connectionsData ? connectedPlatforms.has("linkedin") : true;
   const hasTwitter = connectionsData ? connectedPlatforms.has("x") : true;
+  const hasFacebook = connectionsData ? connectedPlatforms.has("facebook_page") : true;
+  const hasInstagram = connectionsData ? connectedPlatforms.has("instagram") : true;
 
   useEffect(() => {
     if (!connectionsData) return;
@@ -160,6 +170,8 @@ export function PlanMyWeekClient() {
       ...prev,
       linkedinOn: prev.linkedinOn && connected.has("linkedin"),
       twitterOn: prev.twitterOn && connected.has("x"),
+      facebookOn: prev.facebookOn && connected.has("facebook_page"),
+      instagramOn: prev.instagramOn && connected.has("instagram"),
     }));
   }, [connectionsData]);
 
@@ -176,6 +188,10 @@ export function PlanMyWeekClient() {
       linkedinCount: (cfg.linkedin_count ?? 0) > 0 ? cfg.linkedin_count : 3,
       twitterOn: (cfg.twitter_count ?? 0) > 0,
       twitterCount: (cfg.twitter_count ?? 0) > 0 ? cfg.twitter_count : 5,
+      facebookOn: (cfg.facebook_count ?? 0) > 0,
+      facebookCount: (cfg.facebook_count ?? 0) > 0 ? cfg.facebook_count : 3,
+      instagramOn: (cfg.instagram_count ?? 0) > 0,
+      instagramCount: (cfg.instagram_count ?? 0) > 0 ? cfg.instagram_count : 3,
       blogOn: cfg.blog_enabled ?? true,
       generateImages: cfg.images_enabled ?? true,
     });
@@ -210,12 +226,24 @@ export function PlanMyWeekClient() {
     ? subscription.plan_limits.image_gens - subscription.image_gen_used
     : null;
 
+  const instagramPosts = config.instagramOn ? config.instagramCount : 0;
+
   const totalPosts =
     (config.linkedinOn ? config.linkedinCount : 0) +
     (config.twitterOn ? config.twitterCount : 0) +
+    (config.facebookOn ? config.facebookCount : 0) +
+    instagramPosts +
     (config.blogOn ? 1 : 0);
 
   const imageQuotaLocked = imageQuota !== null && imageQuota <= 0;
+
+  // Instagram cannot publish without an image. Warn when Instagram is enabled but
+  // image generation is off or the remaining quota cannot cover every Instagram post.
+  const imagesEffectivelyOn = config.generateImages && !imageQuotaLocked;
+  const instagramImageShortfall =
+    instagramPosts > 0 &&
+    (!imagesEffectivelyOn ||
+      (imageQuota !== null && imageQuota < instagramPosts));
   const roadmapsUsed = subscription?.roadmaps_used ?? 0;
   const roadmapsLimit = subscription?.plan_limits.roadmaps ?? Infinity;
   const roadmapLimitHit = roadmapsUsed >= roadmapsLimit;
@@ -242,6 +270,8 @@ export function PlanMyWeekClient() {
         client_id: activeClientId,
         linkedin_count: config.linkedinOn ? config.linkedinCount : 0,
         twitter_count: config.twitterOn ? config.twitterCount : 0,
+        facebook_count: config.facebookOn ? config.facebookCount : 0,
+        instagram_count: config.instagramOn ? config.instagramCount : 0,
         blog_enabled: config.blogOn,
         generate_images: config.generateImages && !imageQuotaLocked,
       });
@@ -379,6 +409,64 @@ export function PlanMyWeekClient() {
               )}
             </div>
 
+            {/* Facebook */}
+            <div className="space-y-1">
+              <div className="flex items-center gap-4">
+                <Toggle
+                  id="facebook-toggle"
+                  label="Facebook"
+                  checked={config.facebookOn}
+                  onChange={(v) => updateConfig({ facebookOn: v })}
+                  disabled={!hasFacebook}
+                />
+                {config.facebookOn && hasFacebook && (
+                  <Spinner
+                    value={config.facebookCount}
+                    onChange={(v) => updateConfig({ facebookCount: v })}
+                    min={1}
+                    max={7}
+                  />
+                )}
+              </div>
+              {!hasFacebook && activeClientId && connectionsData && (
+                <p className="font-body text-xs text-graphite">
+                  Not connected.{" "}
+                  <Link href={`/clients/${activeClientId}/connections`} className="underline hover:text-ink">
+                    Connect Facebook
+                  </Link>
+                </p>
+              )}
+            </div>
+
+            {/* Instagram */}
+            <div className="space-y-1">
+              <div className="flex items-center gap-4">
+                <Toggle
+                  id="instagram-toggle"
+                  label="Instagram"
+                  checked={config.instagramOn}
+                  onChange={(v) => updateConfig({ instagramOn: v })}
+                  disabled={!hasInstagram}
+                />
+                {config.instagramOn && hasInstagram && (
+                  <Spinner
+                    value={config.instagramCount}
+                    onChange={(v) => updateConfig({ instagramCount: v })}
+                    min={1}
+                    max={7}
+                  />
+                )}
+              </div>
+              {!hasInstagram && activeClientId && connectionsData && (
+                <p className="font-body text-xs text-graphite">
+                  Not connected.{" "}
+                  <Link href={`/clients/${activeClientId}/connections`} className="underline hover:text-ink">
+                    Connect Instagram
+                  </Link>
+                </p>
+              )}
+            </div>
+
             {/* Blog */}
             <Toggle
               id="blog-toggle"
@@ -424,6 +512,15 @@ export function PlanMyWeekClient() {
                 </p>
               )}
             </div>
+
+            {/* Instagram publish-safety warning */}
+            {instagramImageShortfall && (
+              <div className="bg-[#FFF1B8] border border-[#111111] px-3 py-2">
+                <p className="font-body text-xs text-ink">
+                  Instagram posts need an image to publish. Turn on Generate images or they will be skipped.
+                </p>
+              </div>
+            )}
 
             <div className="pt-2">
               <Button
