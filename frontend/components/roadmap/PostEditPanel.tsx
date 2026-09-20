@@ -51,8 +51,15 @@ export function PostEditPanel({
   const charCount = text.length;
   const atCapacity = charLimit > 0 && charCount >= charLimit * 0.95;
 
-  function getPostFieldKey(): "x_post" | "linkedin_post" | "blog_title" {
+  function getPostFieldKey():
+    | "x_post"
+    | "linkedin_post"
+    | "facebook_post"
+    | "instagram_caption"
+    | "blog_title" {
     if (campaign.platform_hint === "linkedin") return "linkedin_post";
+    if (campaign.platform_hint === "facebook_page") return "facebook_post";
+    if (campaign.platform_hint === "instagram") return "instagram_caption";
     if (campaign.platform_hint === "blog_full") return "blog_title";
     return "x_post";
   }
@@ -66,10 +73,12 @@ export function PostEditPanel({
     }
     setIsSaving(true);
     setSaveError(null);
-    const patchData =
-      postFieldKey === "linkedin_post"
-        ? { linkedin_post: text }
-        : { x_post: text };
+    const patchData: {
+      x_post?: string;
+      linkedin_post?: string;
+      facebook_post?: string;
+      instagram_caption?: string;
+    } = { [postFieldKey]: text };
     try {
       onUpdate({ [postFieldKey]: text });
       await campaignsApi.patch(campaign.id, patchData);

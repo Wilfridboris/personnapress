@@ -28,6 +28,32 @@ _X_ORDER: list[str] = [
     "engagement_q",
 ]
 
+# Instagram favors visual/story-driven angles. At least as many codes as the max
+# per-channel post count so a full week never forces a duplicate angle.
+_INSTAGRAM_ORDER: list[str] = [
+    "personal_story",
+    "how_to",
+    "quick_tip",
+    "lesson_learned",
+    "engagement_q",
+    "data_proof",
+    "contrarian",
+    "myth_bust",
+]
+
+# Facebook favors community/discussion angles. At least as many codes as the max
+# per-channel post count so a full week never forces a duplicate angle.
+_FACEBOOK_ORDER: list[str] = [
+    "engagement_q",
+    "personal_story",
+    "how_to",
+    "contrarian",
+    "myth_bust",
+    "quick_tip",
+    "data_proof",
+    "lesson_learned",
+]
+
 ANGLE_LABELS: dict[str, str] = {
     "personal_story": "Personal story",
     "lesson_learned": "Lesson learned",
@@ -46,6 +72,8 @@ KNOWN_CODES: frozenset[str] = frozenset(ANGLE_LABELS)
 _PLATFORM_ORDER: dict[str, list[str]] = {
     "linkedin": _LINKEDIN_ORDER,
     "x": _X_ORDER,
+    "instagram": _INSTAGRAM_ORDER,
+    "facebook": _FACEBOOK_ORDER,
 }
 
 

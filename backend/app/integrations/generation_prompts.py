@@ -1140,10 +1140,14 @@ deliberate series, not the same idea restated multiple times.
 SLOT COUNTS:
 - LinkedIn posts: {linkedin_count}
 - X (Twitter) posts: {twitter_count}
+- Facebook posts: {facebook_count}
+- Instagram posts: {instagram_count}
 
 ALLOWED ANGLES per platform:
 - LinkedIn: {linkedin_angles}
 - X: {x_angles}
+- Facebook: {facebook_angles}
+- Instagram: {instagram_angles}
 
 RULES:
 1. Every entry must use a DIFFERENT angle from the ones already used in that platform's list.
@@ -1165,11 +1169,21 @@ Return ONLY a valid JSON object (no markdown, no explanation):
   "x": [
     {{"angle": "<code>", "hook": "<one-line opening thesis>", "facet": "<brain-dump facet used>"}},
     ...
+  ],
+  "facebook": [
+    {{"angle": "<code>", "hook": "<one-line opening thesis>", "facet": "<brain-dump facet used>"}},
+    ...
+  ],
+  "instagram": [
+    {{"angle": "<code>", "hook": "<one-line opening thesis>", "facet": "<brain-dump facet used>"}},
+    ...
   ]
 }}
 
 The "linkedin" list must have exactly {linkedin_count} entries.
 The "x" list must have exactly {twitter_count} entries.
+The "facebook" list must have exactly {facebook_count} entries.
+The "instagram" list must have exactly {instagram_count} entries.
 """
 
 _ANGLE_DIRECTIVE_TEMPLATE = """

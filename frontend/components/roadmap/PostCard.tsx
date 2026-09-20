@@ -26,6 +26,12 @@ export function getPlatformInfo(campaign: RoadmapCampaignSummary): {
   if (campaign.platform_hint === "linkedin") {
     return { label: "LinkedIn", charLimit: 1300, postText: campaign.linkedin_post, platformKey: "linkedin" };
   }
+  if (campaign.platform_hint === "facebook_page") {
+    return { label: "Facebook", charLimit: 63206, postText: campaign.facebook_post, platformKey: "facebook_page" };
+  }
+  if (campaign.platform_hint === "instagram") {
+    return { label: "Instagram", charLimit: 2200, postText: campaign.instagram_caption, platformKey: "instagram" };
+  }
   return { label: "X", charLimit: 280, postText: campaign.x_post, platformKey: "x" };
 }
 
@@ -68,6 +74,14 @@ export function PostCard({
   const { label: platformLabel, postText, platformKey } = getPlatformInfo(campaign);
   const timeLabel = formatScheduledTime(scheduledFor);
   const angleLabel = getAngleLabel(campaign.angle);
+
+  // Instagram cannot publish without an image. Flag Instagram cards missing one
+  // so the user can add an image before the post is scheduled.
+  const needsImageToPublish =
+    campaign.platform_hint === "instagram" &&
+    !campaign.image_url &&
+    !isRemoved &&
+    campaign.status !== "published";
 
   // Transient blob preview overrides persisted image only during upload
   const displayedImage = pendingPreview ?? campaign.image_url;
@@ -146,6 +160,15 @@ export function PostCard({
           <p className="font-body text-xs text-graphite uppercase tracking-[0.08em]">
             {timeLabel}
           </p>
+        )}
+
+        {/* Instagram publish-safety cue */}
+        {needsImageToPublish && (
+          <div className="bg-[#FFF1B8] border border-[#111111] px-2 py-1">
+            <p className="font-body text-xs text-ink">
+              Needs an image to publish
+            </p>
+          </div>
         )}
 
         {/* Post preview */}

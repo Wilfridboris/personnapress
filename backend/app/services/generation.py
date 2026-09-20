@@ -341,6 +341,8 @@ async def plan_week_angles(
     bvp: dict | None,
     linkedin_count: int,
     twitter_count: int,
+    facebook_count: int = 0,
+    instagram_count: int = 0,
 ) -> dict:
     """Call the week planner once and return a validated angle plan.
 
@@ -349,8 +351,10 @@ async def plan_week_angles(
 
     Returns:
         {
-          "linkedin": [{"angle": str, "hook": str | None, "facet": str}, ...],
-          "x":        [{"angle": str, "hook": str | None, "facet": str}, ...],
+          "linkedin":  [{"angle": str, "hook": str | None, "facet": str}, ...],
+          "x":         [{"angle": str, "hook": str | None, "facet": str}, ...],
+          "facebook":  [{"angle": str, "hook": str | None, "facet": str}, ...],
+          "instagram": [{"angle": str, "hook": str | None, "facet": str}, ...],
         }
     """
     from app.services.angles import fallback_angles
@@ -362,11 +366,15 @@ async def plan_week_angles(
             bvp,
             linkedin_count,
             twitter_count,
+            facebook_count,
+            instagram_count,
         )
         logger.info(
-            "plan_week_angles: planner returned %d linkedin, %d x slots",
+            "plan_week_angles: planner returned %d linkedin, %d x, %d facebook, %d instagram slots",
             len(plan.get("linkedin", [])),
             len(plan.get("x", [])),
+            len(plan.get("facebook", [])),
+            len(plan.get("instagram", [])),
         )
         return plan
     except Exception as exc:
@@ -375,6 +383,8 @@ async def plan_week_angles(
         return {
             "linkedin": [{"angle": a, "hook": None, "facet": ""} for a in fallback_angles("linkedin", linkedin_count)],
             "x": [{"angle": a, "hook": None, "facet": ""} for a in fallback_angles("x", twitter_count)],
+            "facebook": [{"angle": a, "hook": None, "facet": ""} for a in fallback_angles("facebook", facebook_count)],
+            "instagram": [{"angle": a, "hook": None, "facet": ""} for a in fallback_angles("instagram", instagram_count)],
         }
 
 

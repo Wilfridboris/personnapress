@@ -11,7 +11,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.angles import fallback_angles, ANGLE_LABELS, KNOWN_CODES, _LINKEDIN_ORDER, _X_ORDER
+from app.services.angles import (
+    fallback_angles,
+    ANGLE_LABELS,
+    KNOWN_CODES,
+    _LINKEDIN_ORDER,
+    _X_ORDER,
+    _FACEBOOK_ORDER,
+    _INSTAGRAM_ORDER,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -222,3 +230,99 @@ def test_pad_fallback_avoids_already_used_angles():
     # hot_take and how_to are the next unused X pool codes
     for code in result:
         assert code not in used[:len(result)], f"Padded code {code!r} repeats an already-used angle"
+
+
+# ---------------------------------------------------------------------------
+# Meta channels (Facebook + Instagram) coverage
+# ---------------------------------------------------------------------------
+
+def test_fallback_angles_facebook_and_instagram_sequences():
+    assert fallback_angles("facebook", 3) == _FACEBOOK_ORDER[:3]
+    assert fallback_angles("instagram", 3) == _INSTAGRAM_ORDER[:3]
+    for code in fallback_angles("facebook", len(_FACEBOOK_ORDER)):
+        assert code in KNOWN_CODES
+    for code in fallback_angles("instagram", len(_INSTAGRAM_ORDER)):
+        assert code in KNOWN_CODES
+
+
+@pytest.mark.asyncio
+async def test_plan_week_angles_includes_meta_keys():
+    """Planner success path returns facebook + instagram lists with distinct angles."""
+    plan_return = {
+        "linkedin": [{"angle": "personal_story", "hook": "h", "facet": "f"}],
+        "x": [{"angle": "contrarian", "hook": "h", "facet": "f"}],
+        "facebook": [
+            {"angle": "engagement_q", "hook": "h", "facet": "f"},
+            {"angle": "personal_story", "hook": "h", "facet": "f"},
+        ],
+        "instagram": [
+            {"angle": "personal_story", "hook": "h", "facet": "f"},
+            {"angle": "how_to", "hook": "h", "facet": "f"},
+        ],
+    }
+    with patch("app.services.generation._llm") as mock_llm:
+        mock_llm.generate_week_plan = AsyncMock(return_value=plan_return)
+        from app.services.generation import plan_week_angles
+        plan = await plan_week_angles(
+            "dump", None, linkedin_count=1, twitter_count=1,
+            facebook_count=2, instagram_count=2,
+        )
+
+    assert "facebook" in plan and "instagram" in plan
+    assert len(plan["facebook"]) == 2
+    assert len(plan["instagram"]) == 2
+    for entry in plan["facebook"] + plan["instagram"]:
+        assert entry["angle"] in KNOWN_CODES
+
+
+@pytest.mark.asyncio
+async def test_plan_week_angles_meta_fallback_on_planner_failure():
+    """When the planner raises, Meta slots still receive valid fallback angles."""
+    with patch("app.services.generation._llm") as mock_llm, \
+         patch("app.services.generation.sentry_sdk"):
+        mock_llm.generate_week_plan = AsyncMock(side_effect=ValueError("LLM error"))
+        from app.services.generation import plan_week_angles
+        plan = await plan_week_angles(
+            "dump", None, linkedin_count=0, twitter_count=0,
+            facebook_count=2, instagram_count=3,
+        )
+
+    assert len(plan["facebook"]) == 2
+    assert len(plan["instagram"]) == 3
+    for entry in plan["facebook"] + plan["instagram"]:
+        assert entry["angle"] in KNOWN_CODES
+
+
+def test_roadmap_create_request_counts_meta_toward_validator():
+    """blog off + only Meta counts should pass the at-least-one validator."""
+    from app.routers.roadmaps import RoadmapCreateRequest
+
+    req = RoadmapCreateRequest(
+        brain_dump="x" * 25,
+        client_id=uuid.uuid4(),
+        linkedin_count=0,
+        twitter_count=0,
+        facebook_count=1,
+        instagram_count=1,
+        blog_enabled=False,
+    )
+    assert req.facebook_count == 1
+    assert req.instagram_count == 1
+
+
+def test_roadmap_create_request_rejects_all_zero():
+    """blog off + all four social counts zero is rejected by the validator."""
+    import pytest as _pytest
+    from pydantic import ValidationError
+    from app.routers.roadmaps import RoadmapCreateRequest
+
+    with _pytest.raises(ValidationError):
+        RoadmapCreateRequest(
+            brain_dump="x" * 25,
+            client_id=uuid.uuid4(),
+            linkedin_count=0,
+            twitter_count=0,
+            facebook_count=0,
+            instagram_count=0,
+            blog_enabled=False,
+        )

@@ -38,6 +38,8 @@ export interface Client {
 export interface RoadmapConfig {
   linkedin_count: number;
   twitter_count: number;
+  facebook_count: number;
+  instagram_count: number;
   blog_enabled: boolean;
   images_enabled: boolean;
 }
@@ -71,6 +73,8 @@ export interface RoadmapCampaignSummary {
   platform_hint: string;
   x_post: string | null;
   linkedin_post: string | null;
+  facebook_post: string | null;
+  instagram_caption: string | null;
   blog_title: string | null;
   image_url: string | null;
   status: string;

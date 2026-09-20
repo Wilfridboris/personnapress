@@ -64,9 +64,17 @@ async def generate_roadmap(roadmap_id: uuid.UUID, db: AsyncSession) -> None:
 
         linkedin_count: int = config.get("linkedin_count", 0)
         twitter_count: int = config.get("twitter_count", 0)
+        facebook_count: int = config.get("facebook_count", 0)
+        instagram_count: int = config.get("instagram_count", 0)
         blog_enabled: bool = not roadmap.skip_blog
 
-        total_posts = twitter_count + linkedin_count + (1 if blog_enabled else 0)
+        total_posts = (
+            twitter_count
+            + linkedin_count
+            + facebook_count
+            + instagram_count
+            + (1 if blog_enabled else 0)
+        )
         generate_images = roadmap.generate_images and config.get("images_enabled", True)
 
         if generate_images and total_posts > 0:
@@ -74,13 +82,17 @@ async def generate_roadmap(roadmap_id: uuid.UUID, db: AsyncSession) -> None:
         else:
             allowed_images = 0
 
-        # Track generated campaigns in order for image assignment
+        # Track generated campaigns in generation order for scheduling/status.
         campaign_ids: list[uuid.UUID] = []
         title_hints: list[str] = []
+        # Instagram campaigns collected separately so they win scarce image quota
+        # (Instagram cannot publish without an image; publishing.py skips it silently).
+        instagram_image_targets: list[tuple[uuid.UUID, str]] = []
 
         # ── Step 4a: Plan angles for the week (best-effort; fallback on failure) ──
         plan = await generation_service.plan_week_angles(
-            roadmap.brain_dump, bvp, linkedin_count, twitter_count
+            roadmap.brain_dump, bvp, linkedin_count, twitter_count,
+            facebook_count, instagram_count,
         )
 
         # ── Step 4: Blog + social slot ────────────────────────────────────────
@@ -162,10 +174,69 @@ async def generate_roadmap(roadmap_id: uuid.UUID, db: AsyncSession) -> None:
             campaign_ids.append(li_campaign.id)
             title_hints.append(f"Roadmap LinkedIn post {i + 1}")
 
+        # ── Facebook-only slots ───────────────────────────────────────────────
+        fb_plan = plan.get("facebook", [])
+        for i in range(facebook_count):
+            fb_campaign = Campaign(
+                client_id=roadmap.client_id,
+                brain_dump=roadmap.brain_dump,
+                status=CampaignStatus.pending_approval,
+                roadmap_id=roadmap_id,
+            )
+            db.add(fb_campaign)
+            await db.flush()
+            await db.refresh(fb_campaign)
+            await db.commit()
+
+            slot = fb_plan[i] if i < len(fb_plan) else {}
+            slot_angle = slot.get("angle") or None
+            slot_hook = slot.get("hook") or None
+
+            await generation_service.generate_social_only(
+                roadmap.brain_dump, bvp, "facebook_page", fb_campaign.id, db,
+                angle=slot_angle, hook=slot_hook, voice_samples=voice_samples,
+            )
+
+            campaign_ids.append(fb_campaign.id)
+            title_hints.append(f"Roadmap Facebook post {i + 1}")
+
+        # ── Instagram-only slots ──────────────────────────────────────────────
+        ig_plan = plan.get("instagram", [])
+        for i in range(instagram_count):
+            ig_campaign = Campaign(
+                client_id=roadmap.client_id,
+                brain_dump=roadmap.brain_dump,
+                status=CampaignStatus.pending_approval,
+                roadmap_id=roadmap_id,
+            )
+            db.add(ig_campaign)
+            await db.flush()
+            await db.refresh(ig_campaign)
+            await db.commit()
+
+            slot = ig_plan[i] if i < len(ig_plan) else {}
+            slot_angle = slot.get("angle") or None
+            slot_hook = slot.get("hook") or None
+
+            await generation_service.generate_social_only(
+                roadmap.brain_dump, bvp, "instagram", ig_campaign.id, db,
+                angle=slot_angle, hook=slot_hook, voice_samples=voice_samples,
+            )
+
+            campaign_ids.append(ig_campaign.id)
+            hint = f"Roadmap Instagram post {i + 1}"
+            title_hints.append(hint)
+            instagram_image_targets.append((ig_campaign.id, hint))
+
         # ── Step 5: Generate images for first allowed_images campaigns ────────
+        # Instagram cannot publish without an image, so Instagram campaigns win
+        # scarce image quota first, then blog/X/LinkedIn/Facebook in generation
+        # order. Facebook publishes fine as text, so it comes last.
         if generate_images and allowed_images > 0:
-            for idx, cid in enumerate(campaign_ids[:allowed_images]):
-                hint = title_hints[idx] if idx < len(title_hints) else "Untitled"
+            image_queue = _prioritize_image_targets(
+                campaign_ids, title_hints, instagram_image_targets
+            )
+            for cid, hint in image_queue[:allowed_images]:
                 await image_service.generate_image_for_roadmap_campaign(cid, user_id, hint, db)
 
         # ── Step 6: Mark ready ────────────────────────────────────────────────
@@ -193,6 +264,27 @@ async def generate_roadmap(roadmap_id: uuid.UUID, db: AsyncSession) -> None:
             logger.exception("generate_roadmap: could not mark roadmap %s as failed", roadmap_id)
 
 
+def _prioritize_image_targets(
+    campaign_ids: list[uuid.UUID],
+    title_hints: list[str],
+    instagram_targets: list[tuple[uuid.UUID, str]],
+) -> list[tuple[uuid.UUID, str]]:
+    """Order campaigns for image assignment: Instagram first, then generation order.
+
+    Instagram cannot publish without an image (publishing.py silently skips it), so
+    Instagram campaigns must win scarce image quota. The rest follow in their original
+    generation order (blog, X, LinkedIn, Facebook). Returns [(campaign_id, hint), ...].
+    """
+    instagram_ids = {cid for cid, _ in instagram_targets}
+    queue: list[tuple[uuid.UUID, str]] = list(instagram_targets)
+    for idx, cid in enumerate(campaign_ids):
+        if cid in instagram_ids:
+            continue
+        hint = title_hints[idx] if idx < len(title_hints) else "Untitled"
+        queue.append((cid, hint))
+    return queue
+
+
 def _extract_title(blog_html: str) -> str:
     """Extract plain text from the first H1 in blog HTML."""
     import re
@@ -204,8 +296,16 @@ def _extract_title(blog_html: str) -> str:
 
 
 _X_TIMES = [8, 12, 17]
-_PLATFORM_ORDER = ["blog_full", "linkedin", "x"]
+_PLATFORM_ORDER = ["blog_full", "linkedin", "instagram", "facebook", "x"]
 _STAGGER_HOURS = 3
+
+# Base posting hour per non-X lane (X uses the cycling _X_TIMES).
+_BASE_HOURS = {
+    "blog_full": 9,
+    "linkedin": 9,
+    "instagram": 11,
+    "facebook": 14,
+}
 
 
 def _campaign_platform(c) -> str:
@@ -213,6 +313,10 @@ def _campaign_platform(c) -> str:
         return "blog_full"
     if getattr(c, "linkedin_post", None) is not None:
         return "linkedin"
+    if getattr(c, "instagram_caption", None) is not None:
+        return "instagram"
+    if getattr(c, "facebook_post", None) is not None:
+        return "facebook"
     return "x"
 
 
@@ -265,8 +369,9 @@ def distribute_schedule(campaigns: list, week_start_date: date) -> dict[uuid.UUI
                     x_global_idx += 1
                 else:
                     hour = max(existing) + _STAGGER_HOURS
-            else:  # blog_full or linkedin: base 09:00, stagger 3h if collision
-                hour = 9 if not existing else max(existing) + _STAGGER_HOURS
+            else:  # blog_full / linkedin / instagram / facebook: per-lane base hour
+                base = _BASE_HOURS.get(platform, 9)
+                hour = base if not existing else max(existing) + _STAGGER_HOURS
 
             if hour < 24:
                 day_hours.setdefault(key, []).append(hour)
