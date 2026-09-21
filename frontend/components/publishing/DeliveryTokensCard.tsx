@@ -7,7 +7,7 @@ import { deliveryTokensApi } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { useUIStore } from "@/lib/stores/useUIStore";
-import type { DeliveryTokenCreateResponse } from "@/lib/types";
+import type { DeliveryTokenCreateResponse, DeliveryTokenScope } from "@/lib/types";
 
 interface Props {
   clientId: string;
@@ -20,6 +20,7 @@ export function DeliveryTokensCard({ clientId }: Props) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showRevealModal, setShowRevealModal] = useState(false);
   const [newTokenName, setNewTokenName] = useState("");
+  const [newTokenScope, setNewTokenScope] = useState<DeliveryTokenScope>("read");
   const [nameError, setNameError] = useState<string | null>(null);
   const [revealedToken, setRevealedToken] = useState<DeliveryTokenCreateResponse | null>(null);
   const [copied, setCopied] = useState(false);
@@ -32,11 +33,13 @@ export function DeliveryTokensCard({ clientId }: Props) {
   });
 
   const createMutation = useMutation({
-    mutationFn: (name: string) => deliveryTokensApi.create(clientId, name),
+    mutationFn: ({ name, scope }: { name: string; scope: DeliveryTokenScope }) =>
+      deliveryTokensApi.create(clientId, name, scope),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["delivery-tokens", clientId] });
       setShowCreateModal(false);
       setNewTokenName("");
+      setNewTokenScope("read");
       setRevealedToken(result);
       setShowRevealModal(true);
       setCopied(false);
@@ -66,7 +69,7 @@ export function DeliveryTokensCard({ clientId }: Props) {
       return;
     }
     setNameError(null);
-    createMutation.mutate(trimmed);
+    createMutation.mutate({ name: trimmed, scope: newTokenScope });
   }
 
   function handleCopy() {
@@ -91,6 +94,7 @@ export function DeliveryTokensCard({ clientId }: Props) {
           variant="secondary"
           onClick={() => {
             setNewTokenName("");
+            setNewTokenScope("read");
             setNameError(null);
             setShowCreateModal(true);
           }}
@@ -122,6 +126,16 @@ export function DeliveryTokensCard({ clientId }: Props) {
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-[#111111] font-medium truncate max-w-[180px]">
                     {token.name}
+                  </span>
+                  <span
+                    className="text-[10px] text-[#555555] border border-[#111111] px-1 py-0 leading-4 uppercase tracking-wide"
+                    title={
+                      token.scope === "write"
+                        ? "Write token: can create articles via the API"
+                        : "Read-only token: can fetch published articles only"
+                    }
+                  >
+                    {token.scope === "write" ? "write" : "read"}
                   </span>
                   {token.revoked && (
                     <span className="text-[10px] text-[#cc3300] border border-[#cc3300] px-1 py-0 leading-4">
@@ -177,6 +191,45 @@ export function DeliveryTokensCard({ clientId }: Props) {
             />
             {nameError && <p className="text-xs text-[#cc3300] mt-1">{nameError}</p>}
           </div>
+          <fieldset>
+            <legend className="block text-sm font-medium text-[#111111] mb-2">Scope</legend>
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 border border-[#111111] rounded-none p-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="token-scope"
+                  value="read"
+                  checked={newTokenScope === "read"}
+                  onChange={() => setNewTokenScope("read")}
+                  className="mt-0.5 accent-[#111111]"
+                />
+                <span>
+                  <span className="block text-sm text-[#111111] font-medium">Read-only</span>
+                  <span className="block text-xs text-[#555555]">
+                    Fetch published articles from the public API. Prefix{" "}
+                    <code className="bg-[#f5f5f5] px-1">ppd_</code>.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 border border-[#111111] rounded-none p-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="token-scope"
+                  value="write"
+                  checked={newTokenScope === "write"}
+                  onChange={() => setNewTokenScope("write")}
+                  className="mt-0.5 accent-[#111111]"
+                />
+                <span>
+                  <span className="block text-sm text-[#111111] font-medium">Write (create articles)</span>
+                  <span className="block text-xs text-[#555555]">
+                    Post articles directly to this client as hidden drafts. Prefix{" "}
+                    <code className="bg-[#f5f5f5] px-1">ppw_</code>.
+                  </span>
+                </span>
+              </label>
+            </div>
+          </fieldset>
           <div className="flex justify-end gap-2">
             <Button
               variant="secondary"

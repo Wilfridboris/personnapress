@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
@@ -126,6 +126,7 @@ class ClientListResponse(BaseModel):
 
 class DeliveryTokenCreate(BaseModel):
     name: str
+    scope: Literal["read", "write"] = "read"
 
     @field_validator("name")
     @classmethod
@@ -142,6 +143,7 @@ class DeliveryTokenResponse(BaseModel):
     id: uuid.UUID
     name: str
     token_prefix: str
+    scope: str
     created_at: datetime
     last_used_at: Optional[datetime] = None
     revoked: bool
@@ -153,6 +155,7 @@ class DeliveryTokenCreateResponse(BaseModel):
     id: uuid.UUID
     name: str
     token_prefix: str
+    scope: str
     created_at: datetime
     token: str
 

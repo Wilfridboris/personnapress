@@ -339,6 +339,10 @@ class DeliveryToken(SQLModel, table=True):
     name: str = Field(sa_column=Column(Text, nullable=False))
     token_prefix: str = Field(sa_column=Column(Text, nullable=False, index=True))
     token_hash: str = Field(sa_column=Column(Text, nullable=False))
+    scope: str = Field(
+        default="read",
+        sa_column=Column(Text, nullable=False, server_default="read"),
+    )
     revoked_at: Optional[datetime] = Field(default=None, nullable=True)
     last_used_at: Optional[datetime] = Field(default=None, nullable=True)
     created_at: datetime = Field(default_factory=utcnow)

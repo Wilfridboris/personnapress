@@ -401,13 +401,14 @@ async def create_client_delivery_token(
     if not client or client.user_id != user_id:
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
 
-    token_record, raw_token = await create_delivery_token(db, client_id, body.name)
+    token_record, raw_token = await create_delivery_token(db, client_id, body.name, body.scope)
     await db.commit()
 
     return DeliveryTokenCreateResponse(
         id=token_record.id,
         name=token_record.name,
         token_prefix=token_record.token_prefix,
+        scope=token_record.scope,
         created_at=token_record.created_at,
         token=raw_token,
     )
@@ -434,6 +435,7 @@ async def list_client_delivery_tokens(
             id=t.id,
             name=t.name,
             token_prefix=t.token_prefix,
+            scope=t.scope,
             created_at=t.created_at,
             last_used_at=t.last_used_at,
             revoked=t.revoked_at is not None,

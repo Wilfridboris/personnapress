@@ -13,11 +13,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.repositories.models import DeliveryToken, utcnow
 
 _TOKEN_PREFIX = "ppd_"
+_WRITE_TOKEN_PREFIX = "ppw_"
 _TOUCH_INTERVAL_SECONDS = 60
 
 
-def generate_raw_token() -> str:
-    return _TOKEN_PREFIX + secrets.token_urlsafe(32)
+def generate_raw_token(scope: str = "read") -> str:
+    """Return a raw token whose prefix encodes its scope.
+
+    write -> ``ppw_``, read (default) -> ``ppd_``. Both are followed by
+    ``secrets.token_urlsafe(32)``.
+    """
+    prefix = _WRITE_TOKEN_PREFIX if scope == "write" else _TOKEN_PREFIX
+    return prefix + secrets.token_urlsafe(32)
 
 
 def hash_token(raw: str) -> str:
@@ -29,15 +36,16 @@ def verify_token(raw: str, stored_hash: str) -> bool:
 
 
 async def create_delivery_token(
-    session: AsyncSession, client_id: uuid.UUID, name: str
+    session: AsyncSession, client_id: uuid.UUID, name: str, scope: str = "read"
 ) -> tuple[DeliveryToken, str]:
     """Create a new delivery token. Returns (record, raw_token). Raw token shown once."""
-    raw = generate_raw_token()
+    raw = generate_raw_token(scope)
     token = DeliveryToken(
         client_id=client_id,
         name=name,
         token_prefix=raw[:8],
         token_hash=hash_token(raw),
+        scope=scope,
     )
     session.add(token)
     await session.flush()

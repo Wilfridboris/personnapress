@@ -46,6 +46,9 @@ nh3==0.3.6
 # Markdown conversion (GitHub publish pipeline)
 markdownify>=0.13.1
 
+# Markdown -> HTML rendering (Story 12.7 ingestion API; raw-HTML passthrough disabled)
+markdown-it-py>=3.0.0
+
 # Stylometric analysis (Story 16.1)
 textstat
 spacy

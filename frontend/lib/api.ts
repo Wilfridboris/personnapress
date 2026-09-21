@@ -1,4 +1,4 @@
-import type { Article, ArticleListResponse, ExpandedBrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, DeliveryToken, DeliveryTokenCreateResponse, DeliveryTokenListResponse, FileListResponse, GitHubDetectionResult, Job, LinkedInOrg, LinkedInTargetPayload, PlatformConnectionStatus, PublishHeadlessResponse, QuestionnairePayload, RevisionDetail, RevisionListResponse, RoadmapConfig, RoadmapCreateResponse, RoadmapListResponse, RoadmapStatusResponse, SubscriptionInfo } from "./types";
+import type { Article, ArticleListResponse, ExpandedBrandVoiceProfile, CampaignCreate, CampaignListResponse, ClientListResponse, ClientResponse, Campaign, ConnectionCreatePayload, DashboardStats, DeliveryToken, DeliveryTokenCreateResponse, DeliveryTokenListResponse, DeliveryTokenScope, FileListResponse, GitHubDetectionResult, Job, LinkedInOrg, LinkedInTargetPayload, PlatformConnectionStatus, PublishHeadlessResponse, QuestionnairePayload, RevisionDetail, RevisionListResponse, RoadmapConfig, RoadmapCreateResponse, RoadmapListResponse, RoadmapStatusResponse, SubscriptionInfo } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE = `${API_URL}/api/v1`;
@@ -208,10 +208,10 @@ export const subscriptionsApi = {
 export const deliveryTokensApi = {
   list: (clientId: string) =>
     apiFetch<DeliveryTokenListResponse>(`/clients/${clientId}/delivery-tokens`),
-  create: (clientId: string, name: string) =>
+  create: (clientId: string, name: string, scope: DeliveryTokenScope = "read") =>
     apiFetch<DeliveryTokenCreateResponse>(`/clients/${clientId}/delivery-tokens`, {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, scope }),
     }),
   revoke: (clientId: string, tokenId: string) =>
     apiFetch<void>(`/clients/${clientId}/delivery-tokens/${tokenId}`, { method: "DELETE" }),

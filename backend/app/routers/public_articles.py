@@ -7,25 +7,48 @@ It does NOT share middleware or exception handlers with the main app.
 """
 
 import hashlib
+import logging
 import uuid
-from typing import Annotated, Optional
+from typing import Annotated, List, Optional
 
-from fastapi import Depends, FastAPI, Query, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+from app.core.html_sanitize import _sanitize_html
 from app.db.connection import get_session
-from app.db.repositories.articles import get_article_by_slug, list_articles
+from app.db.repositories.articles import (
+    create_article,
+    get_article_by_slug,
+    list_articles,
+    update_article_content,
+)
 from app.db.repositories.delivery_tokens import (
     get_active_token_by_prefix,
     touch_last_used,
     verify_token,
 )
-from app.db.repositories.models import Article, ArticleStatus
+from app.db.repositories.models import (
+    Article,
+    ArticleRevision,
+    ArticleStatus,
+    utcnow,
+)
+from app.integrations.github import slug_from_title
+from app.services.articles import _reading_time, _unique_slug
+
+logger = logging.getLogger(__name__)
+
+# Cap the raw request body at 200 KB before parsing/rendering (AC 4).
+_MAX_BODY_BYTES = 200 * 1024
+_WRITE_RATE_LIMIT = "60/minute"
 
 # ---------------------------------------------------------------------------
 # Rate limiter keyed on token prefix, falling back to IP
@@ -33,7 +56,7 @@ from app.db.repositories.models import Article, ArticleStatus
 
 def _token_or_ip(request: Request) -> str:
     auth = request.headers.get("Authorization", "")
-    if auth.startswith("Bearer ppd_"):
+    if auth.startswith("Bearer ppd_") or auth.startswith("Bearer ppw_"):
         raw = auth[len("Bearer "):]
         return raw[:8]  # prefix
     from slowapi.util import get_remote_address
@@ -76,6 +99,10 @@ _ARTICLE_NOT_FOUND = {
 }
 
 
+def _error_detail(code: str, message: str) -> dict:
+    return {"error": {"code": code, "message": message}}
+
+
 from fastapi.exception_handlers import http_exception_handler as _default_http_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -99,6 +126,28 @@ async def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONR
     return JSONResponse(
         status_code=429,
         content={"detail": {"error": {"code": "RATE_LIMIT_EXCEEDED", "message": "Too many requests"}}},
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@public_app.exception_handler(RequestValidationError)
+async def _validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Return Pydantic body-validation failures in the nested VALIDATION_ERROR shape.
+
+    A body that exceeds the size cap, an unknown field (extra="forbid"), or any
+    field constraint violation lands here. The first error's message is surfaced;
+    raw internals are never leaked.
+    """
+    errors = exc.errors()
+    message = "Request body failed validation."
+    if errors:
+        first = errors[0]
+        loc = ".".join(str(p) for p in first.get("loc", []) if p != "body")
+        detail = first.get("msg", "invalid")
+        message = f"{loc}: {detail}" if loc else detail
+    return JSONResponse(
+        status_code=422,
+        content={"detail": _error_detail("VALIDATION_ERROR", message)},
         headers={"Cache-Control": "no-store"},
     )
 
@@ -141,12 +190,62 @@ async def get_delivery_client(
 
 
 def _token_401():
-    from fastapi import HTTPException
     return HTTPException(
         status_code=401,
         detail=_INVALID_TOKEN["detail"],
         headers={"Cache-Control": "no-store"},
     )
+
+
+def _write_scope_403():
+    return HTTPException(
+        status_code=403,
+        detail=_error_detail(
+            "WRITE_SCOPE_REQUIRED",
+            "This token is read-only. A write-scoped token is required for this endpoint.",
+        ),
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+async def get_delivery_client_write(
+    request: Request,
+    db: AsyncSession = Depends(get_session),
+) -> uuid.UUID:
+    """Resolve a write-scoped delivery token to a client_id.
+
+    401 INVALID_DELIVERY_TOKEN on any identity failure (missing/malformed header,
+    non-ppw_ prefix, unknown or revoked token, hash mismatch). 403 WRITE_SCOPE_REQUIRED
+    when the token is a valid identity but read-scoped.
+    """
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer ppw_"):
+        raise _token_401()
+
+    raw = auth[len("Bearer "):]
+    if len(raw) < 8:
+        raise _token_401()
+
+    prefix = raw[:8]
+    token = await get_active_token_by_prefix(db, prefix)
+    if token is None:
+        raise _token_401()
+
+    if not verify_token(raw, token.token_hash):
+        raise _token_401()
+
+    # Valid identity — now enforce scope. Read-scoped tokens are rejected with 403.
+    if getattr(token, "scope", "read") != "write":
+        raise _write_scope_403()
+
+    await touch_last_used(db, token)
+    try:
+        await db.commit()
+    except Exception:
+        logger.warning("touch_last_used commit failed", exc_info=True)
+        await db.rollback()
+
+    return token.client_id
 
 
 # ---------------------------------------------------------------------------
@@ -373,3 +472,234 @@ async def get_tags_and_categories(
         content=body,
         headers={"ETag": etag, "Cache-Control": _CACHE_PUBLIC},
     )
+
+
+# ---------------------------------------------------------------------------
+# Ingestion (write) endpoint — POST /public/v1/articles (Story 12.7)
+# ---------------------------------------------------------------------------
+
+# markdown-it-py with raw-HTML passthrough disabled. html=False means any raw
+# HTML in the Markdown source is emitted as escaped text, not injected — so the
+# only HTML that reaches the sanitizer is what the renderer itself produced.
+_md_renderer = None
+
+
+def _render_markdown(text: str) -> str:
+    """Render Markdown to HTML with raw-HTML passthrough disabled."""
+    global _md_renderer
+    if _md_renderer is None:
+        from markdown_it import MarkdownIt
+
+        _md_renderer = MarkdownIt("commonmark", {"html": False})
+    return _md_renderer.render(text)
+
+
+class ArticleIngestRequest(BaseModel):
+    """Body for POST /public/v1/articles. extra='forbid' rejects unknown fields."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(..., max_length=300)
+    content: str = Field(...)
+    format: str = Field(...)
+    slug: Optional[str] = Field(default=None, max_length=200)
+    excerpt: Optional[str] = Field(default=None, max_length=500)
+    meta_description: Optional[str] = Field(default=None, max_length=320)
+    author: Optional[str] = Field(default=None, max_length=200)
+    category: Optional[str] = Field(default=None, max_length=100)
+    featured_image_alt: Optional[str] = Field(default=None, max_length=300)
+    featured_image_url: Optional[str] = Field(default=None)
+    tags: Optional[List[str]] = Field(default=None)
+
+    @field_validator("title")
+    @classmethod
+    def _title_not_empty(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("title must not be empty")
+        return v
+
+    @field_validator("content")
+    @classmethod
+    def _content_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("content must not be empty")
+        return v
+
+    @field_validator("format")
+    @classmethod
+    def _format_allowed(cls, v: str) -> str:
+        if v not in ("markdown", "html"):
+            raise ValueError("format must be 'markdown' or 'html'")
+        return v
+
+    @field_validator("tags")
+    @classmethod
+    def _tags_valid(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return v
+        if len(v) > 20:
+            raise ValueError("tags must contain at most 20 entries")
+        for tag in v:
+            if not isinstance(tag, str):
+                raise ValueError("each tag must be a string")
+            if len(tag) > 50:
+                raise ValueError("each tag must be 50 characters or fewer")
+        return v
+
+    @field_validator("featured_image_url")
+    @classmethod
+    def _image_url_valid(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not v.strip():
+            return None
+        v = v.strip()
+        from urllib.parse import urlparse
+
+        parsed = urlparse(v)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise ValueError("featured_image_url must be a valid http(s) URL")
+        return v
+
+
+def _ingest_response(article: Article, updated: bool, status_code: int) -> JSONResponse:
+    app_url = settings.APP_URL.rstrip("/")
+    body = {
+        "id": str(article.id),
+        "slug": article.slug,
+        "status": article.status.value if hasattr(article.status, "value") else article.status,
+        "edit_url": f"{app_url}/articles/{article.id}",
+        "created_at": article.created_at.isoformat(),
+        "updated_at": article.updated_at.isoformat(),
+        "updated": updated,
+    }
+    return JSONResponse(
+        status_code=status_code,
+        content=body,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@public_app.post("/v1/articles")
+@public_limiter.limit(_WRITE_RATE_LIMIT)
+async def ingest_article(
+    request: Request,
+    client_id: uuid.UUID = Depends(get_delivery_client_write),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    """Create (or upsert-if-hidden) an article verbatim from a write-scoped token.
+
+    No generation, fidelity, or voice code is ever invoked. Content is rendered
+    (Markdown) and/or sanitized (HTML allowlist) only.
+    """
+    # 1) Enforce the 200 KB body cap BEFORE parsing/rendering.
+    raw_body = await request.body()
+    if len(raw_body) > _MAX_BODY_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=_error_detail(
+                "CONTENT_TOO_LARGE",
+                f"Request body exceeds the {_MAX_BODY_BYTES // 1024} KB limit.",
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
+
+    # 2) Parse + validate the body. Validation failures raise RequestValidationError,
+    #    handled into the nested VALIDATION_ERROR shape by _validation_handler.
+    try:
+        payload = ArticleIngestRequest.model_validate_json(raw_body)
+    except ValueError as exc:
+        raise RequestValidationError(_pydantic_errors(exc)) from exc
+
+    # 3) Content pipeline — render (markdown) then sanitize, or sanitize (html).
+    if payload.format == "markdown":
+        rendered = _render_markdown(payload.content)
+        html = _sanitize_html(rendered)
+    else:
+        html = _sanitize_html(payload.content)
+
+    content_fields = {
+        "title": payload.title,
+        "html": html,
+        "excerpt": payload.excerpt,
+        "meta_description": payload.meta_description,
+        "tags": payload.tags,
+        "category": payload.category,
+        "author": payload.author,
+    }
+
+    # 4) Slug resolution + idempotency.
+    if payload.slug:
+        base = slug_from_title(payload.slug) or slug_from_title(payload.title)
+        existing = await get_article_by_slug(db, client_id, base)
+        if existing is not None:
+            if existing.status == ArticleStatus.published or existing.status == "published":
+                raise HTTPException(
+                    status_code=409,
+                    detail=_error_detail(
+                        "SLUG_CONFLICT_PUBLISHED",
+                        "An article with this slug is already published and cannot be overwritten via the API.",
+                    ),
+                    headers={"Cache-Control": "no-store"},
+                )
+            # Hidden article with this slug -> update content (versions only if changed).
+            article = await update_article_content(db, existing, content_fields, source="edit")
+            if payload.featured_image_url is not None:
+                article.featured_image_url = payload.featured_image_url
+            if payload.featured_image_alt is not None:
+                article.featured_image_alt = payload.featured_image_alt
+            db.add(article)
+            await db.commit()
+            await db.refresh(article)
+            return _ingest_response(article, updated=True, status_code=200)
+        slug = base
+    else:
+        base = slug_from_title(payload.title)
+        slug = await _unique_slug(db, client_id, base)
+
+    # 5) Create path — hidden article + explicit initial revision.
+    article = await create_article(
+        db,
+        client_id=client_id,
+        campaign_id=None,
+        slug=slug,
+        title=payload.title,
+        html=html,
+        excerpt=payload.excerpt,
+        meta_description=payload.meta_description,
+        featured_image_url=payload.featured_image_url,
+        featured_image_alt=payload.featured_image_alt,
+        author=payload.author,
+        tags=payload.tags,
+        category=payload.category,
+        status=ArticleStatus.hidden,
+        reading_time_minutes=_reading_time(html),
+        published_at=utcnow(),
+    )
+    revision = ArticleRevision(
+        article_id=article.id,
+        revision_number=1,
+        title=payload.title,
+        html=html,
+        excerpt=payload.excerpt,
+        meta_description=payload.meta_description,
+        tags=payload.tags,
+        category=payload.category,
+        author=payload.author,
+        source="initial",
+    )
+    db.add(revision)
+    await db.flush()
+    await db.commit()
+    await db.refresh(article)
+    return _ingest_response(article, updated=False, status_code=201)
+
+
+def _pydantic_errors(exc: ValueError) -> list:
+    """Normalize a Pydantic ValidationError into the list RequestValidationError expects."""
+    errs = getattr(exc, "errors", None)
+    if callable(errs):
+        try:
+            return exc.errors()  # type: ignore[attr-defined]
+        except Exception:
+            pass
+    return [{"loc": ("body",), "msg": str(exc), "type": "value_error"}]

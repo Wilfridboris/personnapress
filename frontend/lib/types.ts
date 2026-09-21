@@ -384,10 +384,13 @@ export interface SubscriptionResponse {
 
 export type SubscriptionInfo = SubscriptionResponse;
 
+export type DeliveryTokenScope = "read" | "write";
+
 export interface DeliveryToken {
   id: string;
   name: string;
   token_prefix: string;
+  scope: DeliveryTokenScope;
   created_at: string;
   last_used_at: string | null;
   revoked: boolean;
@@ -401,6 +404,7 @@ export interface DeliveryTokenCreateResponse {
   id: string;
   name: string;
   token_prefix: string;
+  scope: DeliveryTokenScope;
   created_at: string;
   token: string;
 }

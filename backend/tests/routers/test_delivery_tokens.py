@@ -39,13 +39,14 @@ def _make_client(user_id=None, client_id=None):
     return c
 
 
-def _make_token_record(client_id=None, revoked=False):
+def _make_token_record(client_id=None, revoked=False, scope="read", token_prefix="ppd_abc1"):
     t = MagicMock()
     t.id = uuid.uuid4()
     t.client_id = client_id or uuid.uuid4()
     t.name = "My Token"
-    t.token_prefix = "ppd_abc1"
+    t.token_prefix = token_prefix
     t.token_hash = "fakehash"
+    t.scope = scope
     t.revoked_at = _utc() if revoked else None
     t.last_used_at = None
     t.created_at = _utc()
@@ -81,6 +82,62 @@ async def test_create_token_returns_raw_token_once():
     assert result.token == raw
     assert result.id == token_record.id
     assert result.name == "My Token"
+    assert result.scope == "read"
+
+
+async def test_create_write_token_uses_ppw_prefix_and_stores_scope():
+    """A scope=write create produces a ppw_ prefix and the stored scope is 'write'."""
+    from app.routers.clients import create_client_delivery_token
+    from app.schemas.client import DeliveryTokenCreate
+
+    user_id = uuid.uuid4()
+    client_id = uuid.uuid4()
+    client = _make_client(user_id=user_id, client_id=client_id)
+    token_record = _make_token_record(client_id=client_id, scope="write", token_prefix="ppw_xyz9")
+    raw = "ppw_rawsecretvalue12345678901234567890"
+
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    create_mock = AsyncMock(return_value=(token_record, raw))
+
+    with patch("app.routers.clients.get_client", new=AsyncMock(return_value=client)):
+        with patch("app.routers.clients.create_delivery_token", new=create_mock):
+            result = await create_client_delivery_token(
+                client_id=client_id,
+                body=DeliveryTokenCreate(name="CI writer", scope="write"),
+                current_user={"user_id": str(user_id)},
+                db=db,
+            )
+
+    # scope is forwarded to the repo layer
+    assert create_mock.call_args.args[3] == "write"
+    assert result.token == raw
+    assert result.token_prefix == "ppw_xyz9"
+    assert result.scope == "write"
+
+
+def test_create_schema_defaults_scope_read():
+    from app.schemas.client import DeliveryTokenCreate
+
+    body = DeliveryTokenCreate(name="default")
+    assert body.scope == "read"
+
+
+def test_create_schema_rejects_invalid_scope():
+    """An unknown scope value is a validation error (surfaces as 422 at the route)."""
+    import pydantic
+    from app.schemas.client import DeliveryTokenCreate
+
+    with pytest.raises(pydantic.ValidationError):
+        DeliveryTokenCreate(name="bad", scope="admin")
+
+
+def test_generate_raw_token_prefix_by_scope():
+    from app.db.repositories.delivery_tokens import generate_raw_token
+
+    assert generate_raw_token("write").startswith("ppw_")
+    assert generate_raw_token("read").startswith("ppd_")
+    assert generate_raw_token().startswith("ppd_")  # default is read
 
 
 async def test_create_token_wrong_user_404():
@@ -153,6 +210,7 @@ async def test_list_tokens_omits_secrets():
     assert not hasattr(item, "token")
     assert not hasattr(item, "token_hash")
     assert item.token_prefix == "ppd_abc1"
+    assert item.scope == "read"
 
 
 async def test_list_tokens_shows_revoked_state():

@@ -764,3 +764,11 @@ Cross-cutting gaps found while reviewing the post-analytics feature end-to-end (
 - source_spec: `_bmad-output/implementation-artifacts/spec-switch-image-model-nano-banana-2.md`
   summary: PRD and addendum still describe the image provider as "Replicate FLUX.1 [pro] or Google Nano Banana Pro" and omit Nano Banana 2, now the shipped default.
   evidence: prd.md (~line 352, 502) and addendum.md (~line 5) predate this cost-driven default change; planning docs are now inconsistent with the code default. Pre-existing doc drift, not introduced by this config change.
+
+- source_spec: `_bmad-output/implementation-artifacts/12-7-public-article-ingestion-api.md`
+  summary: reading_time_minutes is not recomputed when an article's body is replaced via the shared update_article_content path (hidden-slug upsert in the ingest API, and the in-app editor PATCH), leaving a stale reading time.
+  evidence: update_article_content in backend/app/db/repositories/articles.py updates only _CONTENT_FIELDS and never touches reading_time_minutes; the ingest upsert path (public_articles.py) delegates to it, so a content-replace keeps the reading time from creation. Pre-existing behavior of the shared repo function, surfaced by the new write path. Fix belongs in the shared function to stay consistent across editor + API.
+
+- source_spec: `_bmad-output/implementation-artifacts/12-7-public-article-ingestion-api.md`
+  summary: _sanitize_html permits <a target="_blank"> without forcing rel="noopener noreferrer", a reverse-tabnabbing vector now reachable via untrusted third-party HTML through the ingestion API.
+  evidence: backend/app/core/html_sanitize.py allows target and rel on <a> and only strips non-_blank target values; it never adds rel="noopener". Pre-existing shared sanitizer (lifted unchanged from routers/articles.py, so it also affects the in-app editor). Severity low today because modern browsers default target=_blank to noopener, but the write API is a new untrusted input path. Fix belongs in the shared sanitizer.

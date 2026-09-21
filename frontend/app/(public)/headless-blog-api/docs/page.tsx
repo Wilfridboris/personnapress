@@ -74,6 +74,7 @@ const TOC_SECTIONS = [
   { id: "list-articles", label: "List Articles" },
   { id: "get-article", label: "Get Article" },
   { id: "list-tags", label: "List Tags" },
+  { id: "create-article", label: "Create Article" },
   { id: "errors", label: "Error Reference" },
   { id: "caching", label: "Caching" },
   { id: "examples", label: "Code Examples" },
@@ -146,6 +147,43 @@ const LIST_TAGS_RESPONSE = `{
     { "name": "Marketing", "count": 9 }
   ]
 }`;
+
+const CREATE_ARTICLE_REQUEST = `{
+  "title": "How We Cut Onboarding Time in Half",
+  "format": "markdown",
+  "content": "## The problem\\n\\nNew accounts took **three days** to activate.\\n\\n- Manual review\\n- Slow email loops\\n",
+  "slug": "cut-onboarding-time-in-half",
+  "excerpt": "A short summary shown in list views.",
+  "meta_description": "How we cut onboarding time in half with two workflow changes.",
+  "author": "Alex Morgan",
+  "category": "Operations",
+  "tags": ["onboarding", "ops"],
+  "featured_image_alt": "Before and after onboarding timeline"
+}`;
+
+const CREATE_ARTICLE_RESPONSE = `{
+  "id": "0f9c1e7a-4b2d-4a11-9c3e-2a7f8b6d5c40",
+  "slug": "cut-onboarding-time-in-half",
+  "status": "hidden",
+  "edit_url": "https://app.personnapress.com/articles/0f9c1e7a-4b2d-4a11-9c3e-2a7f8b6d5c40",
+  "created_at": "2026-09-20T14:02:11+00:00",
+  "updated_at": "2026-09-20T14:02:11+00:00",
+  "updated": false
+}`;
+
+const CREATE_CURL_SAMPLE = `# Create a hidden article from Markdown (Claude / terminal)
+curl --silent --fail-with-body \\
+  -X POST "https://api.personnapress.com/public/v1/articles" \\
+  -H "Authorization: Bearer ppw_your_write_token_here" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "title": "How We Cut Onboarding Time in Half",
+    "format": "markdown",
+    "content": "## The problem\\n\\nNew accounts took three days to activate.\\n"
+  }'
+
+# The article lands as \"hidden\" in your Article Manager.
+# Open edit_url from the response to review and publish it.`;
 
 const ERROR_RESPONSE = `{
   "detail": {
@@ -468,6 +506,9 @@ interface EndpointBlockProps {
   description: string;
   params?: ParamRow[];
   paramsCaption?: string;
+  paramsLabel?: string;
+  requestJson?: string;
+  requestAriaLabel?: string;
   responseJson: string;
   responseAriaLabel: string;
   children?: React.ReactNode;
@@ -479,16 +520,22 @@ function EndpointBlock({
   description,
   params,
   paramsCaption,
+  paramsLabel,
+  requestJson,
+  requestAriaLabel,
   responseJson,
   responseAriaLabel,
   children,
 }: EndpointBlockProps) {
+  // POST endpoints use a distinct badge so the mutating verb is visually obvious.
+  const badgeClass =
+    method === "POST"
+      ? "border border-highlighter bg-highlighter/10 text-ink font-mono text-xs px-2 py-0.5"
+      : "border border-success bg-success-muted text-success font-mono text-xs px-2 py-0.5";
   return (
     <div className="border border-border">
       <div className="border-b border-border px-6 py-4 flex items-baseline gap-3 flex-wrap">
-        <span className="border border-success bg-success-muted text-success font-mono text-xs px-2 py-0.5">
-          {method}
-        </span>
+        <span className={badgeClass}>{method}</span>
         <code className="font-mono text-base text-ink">{path}</code>
         <span className="text-sm text-graphite">{description}</span>
       </div>
@@ -500,11 +547,22 @@ function EndpointBlock({
       {params && params.length > 0 && (
         <div className="px-6 py-4 border-b border-border">
           <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-3">
-            Query Parameters
+            {paramsLabel ?? "Query Parameters"}
           </p>
           <ParamTable
             caption={paramsCaption ?? `Parameters for ${method} ${path}`}
             rows={params}
+          />
+        </div>
+      )}
+      {requestJson && (
+        <div className="px-6 py-4 border-b border-border">
+          <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-3">
+            Request Body
+          </p>
+          <TerminalBlock
+            content={requestJson}
+            ariaLabel={requestAriaLabel ?? `Example request body for ${method} ${path}`}
           />
         </div>
       )}
@@ -547,6 +605,20 @@ const LIST_ARTICLES_PARAMS: ParamRow[] = [
   },
 ];
 
+const CREATE_ARTICLE_PARAMS: ParamRow[] = [
+  { name: "title", type: "string", defaultVal: "-", description: "Article title. Trimmed, 1 to 300 characters.", required: true },
+  { name: "content", type: "string", defaultVal: "-", description: "Article body in the given format. Non-empty.", required: true },
+  { name: "format", type: '"markdown" | "html"', defaultVal: "-", description: "How to interpret content. Markdown is rendered to HTML; HTML is sanitized directly.", required: true },
+  { name: "slug", type: "string", defaultVal: "auto", description: "URL slug (max 200). Omit to derive a unique slug from the title.", required: false },
+  { name: "excerpt", type: "string", defaultVal: "-", description: "Short summary, max 500 characters.", required: false },
+  { name: "meta_description", type: "string", defaultVal: "-", description: "SEO meta description, max 320 characters.", required: false },
+  { name: "author", type: "string", defaultVal: "-", description: "Author name, max 200 characters.", required: false },
+  { name: "category", type: "string", defaultVal: "-", description: "Category name, max 100 characters.", required: false },
+  { name: "tags", type: "string[]", defaultVal: "-", description: "Up to 20 tags, each max 50 characters.", required: false },
+  { name: "featured_image_alt", type: "string", defaultVal: "-", description: "Alt text for the featured image, max 300 characters.", required: false },
+  { name: "featured_image_url", type: "string", defaultVal: "-", description: "Featured image URL. Must be a valid http(s) URL.", required: false },
+];
+
 const ERROR_ROWS: ErrorRow[] = [
   {
     code: "INVALID_DELIVERY_TOKEN",
@@ -554,14 +626,34 @@ const ERROR_ROWS: ErrorRow[] = [
     when: "Token missing, malformed, revoked, or does not match any active token.",
   },
   {
+    code: "WRITE_SCOPE_REQUIRED",
+    status: "403",
+    when: "A valid read-only (ppd_) token was used on the create endpoint. Use a write (ppw_) token.",
+  },
+  {
     code: "ARTICLE_NOT_FOUND",
     status: "404",
     when: "Slug does not exist, article is hidden, or belongs to another client.",
   },
   {
+    code: "SLUG_CONFLICT_PUBLISHED",
+    status: "409",
+    when: "Create request used a slug that already belongs to a published article. Published posts are never overwritten via the API.",
+  },
+  {
+    code: "CONTENT_TOO_LARGE",
+    status: "413",
+    when: "Request body exceeds the 200 KB limit.",
+  },
+  {
+    code: "VALIDATION_ERROR",
+    status: "422",
+    when: "Create request body failed validation (missing/oversized field, bad format, or an unknown field).",
+  },
+  {
     code: "RATE_LIMIT_EXCEEDED",
     status: "429",
-    when: "More than 120 requests per minute for this token.",
+    when: "More than 120 requests per minute (reads) or 60 per minute (writes) for this token.",
   },
   {
     code: "INTERNAL_ERROR",
@@ -844,6 +936,104 @@ export default function HeadlessBlogApiDocsPage() {
                     pages on your site.
                   </p>
                 </EndpointBlock>
+              </section>
+
+              {/* Create Article (write endpoint) */}
+              <section id="create-article">
+                <h2 className="font-display text-2xl font-bold text-ink mb-6">Create Article</h2>
+                <div className="space-y-4 text-sm text-ink leading-relaxed mb-6">
+                  <p>
+                    Post a blog article directly to a client with a write-scoped token. The article
+                    is stored verbatim after HTML sanitization and lands as{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">hidden</code>{" "}
+                    in the Article Manager, ready for you to review and publish in the app. No voice,
+                    generation, or AI transformation is applied. This endpoint is ideal for a
+                    terminal or an AI agent such as Claude.
+                  </p>
+                  <p>
+                    Authentication uses a{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      Bearer ppw_&lt;token&gt;
+                    </code>{" "}
+                    header. Create a write token in the app under your client&apos;s Connections tab
+                    and choose the Write scope. A read-only{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">ppd_</code>{" "}
+                    token returns{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      403 WRITE_SCOPE_REQUIRED
+                    </code>{" "}
+                    here. This route is rate limited to 60 requests per minute per token. The request
+                    body is capped at 200 KB.
+                  </p>
+                  <p>
+                    Provide a{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">slug</code>{" "}
+                    to make the call idempotent: if a hidden article with that slug already exists it
+                    is updated and the response is{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">200</code>{" "}
+                    with{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      updated: true
+                    </code>
+                    . If the slug belongs to a published article the call returns{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      409 SLUG_CONFLICT_PUBLISHED
+                    </code>{" "}
+                    and never overwrites a live post. Omit the slug and a unique one is derived from
+                    the title, always creating a new article ({" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">201</code>
+                    ).
+                  </p>
+                </div>
+                <EndpointBlock
+                  method="POST"
+                  path="/public/v1/articles"
+                  description="Create or upsert a hidden article verbatim."
+                  params={CREATE_ARTICLE_PARAMS}
+                  paramsLabel="Request Fields"
+                  paramsCaption="Fields accepted by POST /public/v1/articles"
+                  requestJson={CREATE_ARTICLE_REQUEST}
+                  requestAriaLabel="Example JSON request body for POST /public/v1/articles"
+                  responseJson={CREATE_ARTICLE_RESPONSE}
+                  responseAriaLabel="Example success response for POST /public/v1/articles showing the hidden article and edit_url"
+                />
+                <div className="mt-6">
+                  <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-3">
+                    cURL example
+                  </p>
+                  <TerminalBlock
+                    content={CREATE_CURL_SAMPLE}
+                    ariaLabel="cURL example that creates a hidden article from Markdown using a write token"
+                  />
+                </div>
+                <div className="mt-6 border border-border p-6 bg-paper">
+                  <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-3">
+                    Known limits in v1
+                  </p>
+                  <ul className="space-y-2 text-sm text-ink leading-relaxed list-disc pl-5">
+                    <li>
+                      Inline images whose{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">src</code>{" "}
+                      is not a PersonnaPress-hosted URL are stripped by the sanitizer. Upload images
+                      in the app and reference the hosted URL, or set{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                        featured_image_url
+                      </code>
+                      .
+                    </li>
+                    <li>
+                      Markdown tables,{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">h5</code>{" "}
+                      and{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">h6</code>{" "}
+                      headings, and horizontal rules are flattened by the HTML allowlist. Use{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">h2</code>{" "}
+                      to{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">h4</code>{" "}
+                      for structure.
+                    </li>
+                  </ul>
+                </div>
               </section>
 
               {/* Error Reference */}
