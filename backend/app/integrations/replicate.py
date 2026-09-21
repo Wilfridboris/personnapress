@@ -1,7 +1,9 @@
 """Replicate image generation integration.
 
 Model and schema are controlled by IMAGE_MODEL / IMAGE_PROVIDER settings.
-Called ONLY from services/image.py (AR-19).
+Two input-schema branches: FLUX models (black-forest-labs/*) take custom
+width/height; all other models (google/nano-banana-2, google/nano-banana-pro)
+share the 1:1 aspect_ratio payload. Called ONLY from services/image.py (AR-19).
 """
 
 import asyncio
@@ -48,7 +50,7 @@ async def generate_image(prompt: str, width: int = 1080, height: int = 1080) -> 
             "safety_tolerance": 2,
         }
     else:
-        # Nano Banana Pro (and other non-FLUX Replicate models)
+        # Nano Banana 2 (default) and other non-FLUX Google Replicate models
         input_payload = {
             "prompt": prompt,
             "aspect_ratio": "1:1",

@@ -758,3 +758,9 @@ Cross-cutting gaps found while reviewing the post-analytics feature end-to-end (
 - source_spec: `_bmad-output/implementation-artifacts/spec-p2-5-persona-use-case-landing-pages.md`
   summary: No explicit robots metadata (index/follow/googleBot) on the three persona pages — Next.js defaults to indexing but explicit crawl directives are absent.
   evidence: Pre-existing gap across all marketing pages except those that explicitly set noindex. Low priority given Next.js defaults are correct; add explicit robots metadata in a focused SEO hardening pass.
+
+## Deferred from: one-shot switch-image-model-nano-banana-2 (2026-09-20)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-switch-image-model-nano-banana-2.md`
+  summary: PRD and addendum still describe the image provider as "Replicate FLUX.1 [pro] or Google Nano Banana Pro" and omit Nano Banana 2, now the shipped default.
+  evidence: prd.md (~line 352, 502) and addendum.md (~line 5) predate this cost-driven default change; planning docs are now inconsistent with the code default. Pre-existing doc drift, not introduced by this config change.

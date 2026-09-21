@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
     REPLICATE_API_TOKEN: str = ""
     IMAGE_PROVIDER: str = "replicate"  # "replicate" | "gemini"
-    IMAGE_MODEL: str = "google/nano-banana-pro"
+    IMAGE_MODEL: str = "google/nano-banana-2"
     OPENAI_API_KEY: str = ""
 
     SENTRY_DSN: str = ""

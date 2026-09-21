@@ -20,6 +20,7 @@ def _make_prediction(prediction_id="pred_abc123", status="succeeded", output=Non
 @pytest.mark.parametrize(
     "model,expected_aspect_ratio,expect_width_height",
     [
+        ("google/nano-banana-2", "1:1", False),
         ("google/nano-banana-pro", "1:1", False),
         ("black-forest-labs/flux-1.1-pro", "custom", True),
     ],
