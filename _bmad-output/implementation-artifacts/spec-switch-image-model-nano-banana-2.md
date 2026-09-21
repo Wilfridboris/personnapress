@@ -12,7 +12,7 @@ route: 'one-shot'
 
 **Problem:** Image generation defaulted to `google/nano-banana-pro` (Gemini 3 Pro Image), the premium high-cost model, driving up per-image spend.
 
-**Approach:** Switch the default `IMAGE_MODEL` to `google/nano-banana-2` (Gemini 3.1 Flash Image), a cheaper Flash-tier Replicate model. Its Replicate input schema is identical to Nano Banana Pro (`prompt`, `aspect_ratio: "1:1"`, `output_format: "png"`), so it flows through the existing non-FLUX branch in `replicate.py` with no integration code change. Verified against Replicate's model schema. Cost per image drops from roughly $0.12-$0.15 (Pro tier) to ~$0.04 or less (Flash tier).
+**Approach:** Switch the default `IMAGE_MODEL` to `google/nano-banana-2` (Gemini 3.1 Flash Image), a cheaper Flash-tier Replicate model. Its Replicate input schema is identical to Nano Banana Pro (`prompt`, `aspect_ratio: "1:1"`, `output_format: "png"`), so it flows through the existing non-FLUX branch in `replicate.py` with no integration code change. Verified against Replicate's model schema. At the 1K resolution tier used here, cost per image roughly halves: from ~$0.134 (Pro) to ~$0.067 (Flash), a ~50% reduction (Google list rates; sync predictions, so batch rates do not apply).
 
 ## Suggested Review Order
 
