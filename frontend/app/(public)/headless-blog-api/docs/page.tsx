@@ -75,6 +75,7 @@ const TOC_SECTIONS = [
   { id: "get-article", label: "Get Article" },
   { id: "list-tags", label: "List Tags" },
   { id: "create-article", label: "Create Article" },
+  { id: "read-back", label: "Read Back Articles" },
   { id: "errors", label: "Error Reference" },
   { id: "caching", label: "Caching" },
   { id: "examples", label: "Code Examples" },
@@ -619,6 +620,92 @@ const CREATE_ARTICLE_PARAMS: ParamRow[] = [
   { name: "featured_image_url", type: "string", defaultVal: "-", description: "Featured image URL. Must be a valid http(s) URL.", required: false },
 ];
 
+const AUTHORED_LIST_RESPONSE = `{
+  "data": [
+    {
+      "id": "0f9c1e7a-4b2d-4a11-9c3e-2a7f8b6d5c40",
+      "slug": "cut-onboarding-time-in-half",
+      "status": "hidden",
+      "title": "How We Cut Onboarding Time in Half",
+      "excerpt": "A short summary shown in list views.",
+      "featured_image_url": null,
+      "featured_image_alt": null,
+      "author": "Alex Morgan",
+      "tags": ["onboarding", "ops"],
+      "category": "Operations",
+      "published_at": "2026-09-20T14:02:11+00:00",
+      "updated_at": "2026-09-20T14:02:11+00:00",
+      "reading_time_minutes": 2,
+      "edit_url": "https://app.personnapress.com/articles/0f9c1e7a-4b2d-4a11-9c3e-2a7f8b6d5c40",
+      "api_authored": true
+    }
+  ],
+  "meta": { "page": 1, "page_size": 20, "total": 1 }
+}`;
+
+const AUTHORED_DETAIL_RESPONSE = `{
+  "id": "0f9c1e7a-4b2d-4a11-9c3e-2a7f8b6d5c40",
+  "slug": "cut-onboarding-time-in-half",
+  "status": "hidden",
+  "title": "How We Cut Onboarding Time in Half",
+  "excerpt": "A short summary shown in list views.",
+  "featured_image_url": null,
+  "featured_image_alt": null,
+  "author": "Alex Morgan",
+  "tags": ["onboarding", "ops"],
+  "category": "Operations",
+  "published_at": "2026-09-20T14:02:11+00:00",
+  "updated_at": "2026-09-20T14:02:11+00:00",
+  "reading_time_minutes": 2,
+  "edit_url": "https://app.personnapress.com/articles/0f9c1e7a-4b2d-4a11-9c3e-2a7f8b6d5c40",
+  "api_authored": true,
+  "html": "<h2>The problem</h2><p>New accounts took three days to activate.</p>",
+  "meta_description": "How we cut onboarding time in half with two workflow changes.",
+  "seo": {
+    "reading_time_minutes": 2,
+    "meta_description": "How we cut onboarding time in half with two workflow changes.",
+    "og": {
+      "title": "How We Cut Onboarding Time in Half",
+      "description": "How we cut onboarding time in half with two workflow changes."
+    },
+    "json_ld": {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": "How We Cut Onboarding Time in Half",
+      "description": "How we cut onboarding time in half with two workflow changes.",
+      "datePublished": "2026-09-20T14:02:11+00:00",
+      "author": { "@type": "Person", "name": "Alex Morgan" }
+    }
+  }
+}`;
+
+const READ_BACK_CURL_SAMPLE = `# Step 1: create an article and capture the id
+RESPONSE=$(curl --silent --fail-with-body \\
+  -X POST "https://api.personnapress.com/public/v1/articles" \\
+  -H "Authorization: Bearer ppw_your_write_token_here" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "title": "How We Cut Onboarding Time in Half",
+    "format": "markdown",
+    "content": "## The problem\\n\\nNew accounts took three days to activate."
+  }')
+
+ARTICLE_ID=$(echo "$RESPONSE" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+
+# Step 2: read it back by id
+curl --silent --fail-with-body \\
+  "https://api.personnapress.com/public/v1/authored/articles/$ARTICLE_ID" \\
+  -H "Authorization: Bearer ppw_your_write_token_here"`;
+
+const AUTHORED_LIST_PARAMS: ParamRow[] = [
+  { name: "page", type: "int", defaultVal: "1", description: "Page number for pagination.", required: false },
+  { name: "page_size", type: "int", defaultVal: "20", description: "Items per page. Minimum 1, maximum 50.", required: false },
+  { name: "status", type: '"hidden" | "published"', defaultVal: "-", description: "Filter by status. Omit to return articles at every status.", required: false },
+  { name: "tag", type: "string", defaultVal: "-", description: "Filter by tag.", required: false },
+  { name: "category", type: "string", defaultVal: "-", description: "Filter by category name.", required: false },
+  { name: "slug", type: "string", defaultVal: "-", description: "Exact slug match (normalized). Returns at most one article. Use this to check whether a slug is taken before posting.", required: false },
+];
+
 const ERROR_ROWS: ErrorRow[] = [
   {
     code: "INVALID_DELIVERY_TOKEN",
@@ -1033,6 +1120,100 @@ export default function HeadlessBlogApiDocsPage() {
                       for structure.
                     </li>
                   </ul>
+                </div>
+              </section>
+
+              {/* Read Back Your Articles */}
+              <section id="read-back">
+                <h2 className="font-display text-2xl font-bold text-ink mb-6">
+                  Read Back Your Articles
+                </h2>
+                <div className="space-y-4 text-sm text-ink leading-relaxed mb-6">
+                  <p>
+                    After creating an article with a write token, use these endpoints to verify
+                    what you created, list all your client&apos;s articles at any status, or check
+                    whether a slug is already taken before posting. Both endpoints require a{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      Bearer ppw_
+                    </code>{" "}
+                    write token. A read-only{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">ppd_</code>{" "}
+                    token returns{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      403 WRITE_SCOPE_REQUIRED
+                    </code>{" "}
+                    here. Use the public read routes for published content delivery.
+                  </p>
+                  <p>
+                    All responses from these endpoints carry{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      Cache-Control: no-store
+                    </code>{" "}
+                    and are never cached. Each item includes{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      api_authored
+                    </code>
+                    , a boolean that is{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">true</code>{" "}
+                    when the article was created through this ingestion API and{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">false</code>{" "}
+                    for articles generated by in-app campaigns.
+                  </p>
+                </div>
+                <div className="space-y-8">
+                  <EndpointBlock
+                    method="GET"
+                    path="/public/v1/authored/articles"
+                    description="List all articles for the token's client at any status."
+                    params={AUTHORED_LIST_PARAMS}
+                    paramsCaption="Query parameters for GET /public/v1/authored/articles"
+                    responseJson={AUTHORED_LIST_RESPONSE}
+                    responseAriaLabel="Example response for GET /public/v1/authored/articles showing list with id and status fields"
+                  >
+                    <p className="text-sm text-graphite">
+                      Use the{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">slug</code>{" "}
+                      filter to check existence before posting: if the result is empty the slug is
+                      free; if the article is{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">hidden</code>{" "}
+                      it can be updated; if it is{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">published</code>{" "}
+                      a POST with that slug returns{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                        409 SLUG_CONFLICT_PUBLISHED
+                      </code>
+                      .
+                    </p>
+                  </EndpointBlock>
+                  <EndpointBlock
+                    method="GET"
+                    path="/public/v1/authored/articles/{id}"
+                    description="Return the full article by id at any status."
+                    responseJson={AUTHORED_DETAIL_RESPONSE}
+                    responseAriaLabel="Example response for GET /public/v1/authored/articles/id showing full article with html and seo"
+                  >
+                    <div className="space-y-2">
+                      <p>
+                        <strong>Path parameter:</strong>{" "}
+                        <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">id</code>{" "}
+                        (UUID, required) — the article&apos;s{" "}
+                        <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">id</code>{" "}
+                        from the create response. Returns{" "}
+                        <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">404</code>{" "}
+                        for unknown ids and for ids that belong to another client — both cases are
+                        indistinguishable by design.
+                      </p>
+                    </div>
+                  </EndpointBlock>
+                </div>
+                <div className="mt-8">
+                  <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-3">
+                    Create then read back — cURL example
+                  </p>
+                  <TerminalBlock
+                    content={READ_BACK_CURL_SAMPLE}
+                    ariaLabel="cURL example that creates a hidden article then reads it back by id"
+                  />
                 </div>
               </section>
 

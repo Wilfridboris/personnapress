@@ -26,6 +26,7 @@ from app.core.html_sanitize import _sanitize_html
 from app.db.connection import get_session
 from app.db.repositories.articles import (
     create_article,
+    get_article,
     get_article_by_slug,
     list_articles,
     update_article_content,
@@ -303,6 +304,22 @@ def _article_list_item(article: Article) -> dict:
         "published_at": article.published_at.isoformat(),
         "updated_at": article.updated_at.isoformat(),
         "reading_time_minutes": article.reading_time_minutes,
+    }
+
+
+def _authored_list_item(article: Article) -> dict:
+    """Serialiser for write-token read-back endpoints.
+
+    Extends the public list-item fields with id, status, edit_url, and api_authored.
+    The public serialiser intentionally omits these; this one is the authored surface.
+    """
+    app_url = settings.APP_URL.rstrip("/")
+    return {
+        **_article_list_item(article),
+        "id": str(article.id),
+        "status": article.status.value if hasattr(article.status, "value") else str(article.status),
+        "edit_url": f"{app_url}/articles/{article.id}",
+        "api_authored": article.campaign_id is None,
     }
 
 
@@ -703,3 +720,95 @@ def _pydantic_errors(exc: ValueError) -> list:
         except Exception:
             pass
     return [{"loc": ("body",), "msg": str(exc), "type": "value_error"}]
+
+
+# ---------------------------------------------------------------------------
+# Authored read-back endpoints — write-token required (Story 12.8)
+# ---------------------------------------------------------------------------
+
+@public_app.get("/v1/authored/articles")
+@public_limiter.limit("120/minute")
+async def list_authored_articles(
+    request: Request,
+    client_id: uuid.UUID = Depends(get_delivery_client_write),
+    db: AsyncSession = Depends(get_session),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    status: Optional[str] = Query(default=None),
+    tag: Optional[str] = Query(default=None),
+    category: Optional[str] = Query(default=None),
+    slug: Optional[str] = Query(default=None),
+) -> Response:
+    """List all articles for the token's client at any status.
+
+    Requires a write-scoped ppw_ token. A ppd_ read token receives 403.
+    All responses carry Cache-Control: no-store.
+    """
+    # Validate status if provided — only "hidden" and "published" are valid.
+    mapped_status = None
+    if status is not None:
+        if status == ArticleStatus.hidden.value:
+            mapped_status = ArticleStatus.hidden
+        elif status == ArticleStatus.published.value:
+            mapped_status = ArticleStatus.published
+        else:
+            raise RequestValidationError(
+                [{"loc": ("query", "status"), "msg": "status must be 'hidden' or 'published'", "type": "value_error"}]
+            )
+
+    # Slug exact-match path: normalize first (mirror the write path) then resolve.
+    if slug is not None:
+        normalized = slug_from_title(slug)
+        article = await get_article_by_slug(db, client_id, normalized)
+        if article is None:
+            body = {"data": [], "meta": {"page": 1, "page_size": page_size, "total": 0}}
+        else:
+            body = {"data": [_authored_list_item(article)], "meta": {"page": 1, "page_size": page_size, "total": 1}}
+        return JSONResponse(content=body, headers={"Cache-Control": _CACHE_PRIVATE})
+
+    # Normal paginated list.
+    articles, total = await list_articles(
+        db,
+        client_id=client_id,
+        status=mapped_status,
+        tag=tag,
+        category=category,
+        page=page,
+        page_size=page_size,
+    )
+    body = {
+        "data": [_authored_list_item(a) for a in articles],
+        "meta": {"page": page, "page_size": page_size, "total": total},
+    }
+    return JSONResponse(content=body, headers={"Cache-Control": _CACHE_PRIVATE})
+
+
+@public_app.get("/v1/authored/articles/{article_id}")
+@public_limiter.limit("120/minute")
+async def get_authored_article(
+    article_id: uuid.UUID,
+    request: Request,
+    client_id: uuid.UUID = Depends(get_delivery_client_write),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    """Return the full article by id for the token's client at any status.
+
+    Requires a write-scoped ppw_ token. 404 for unknown id or another client's id —
+    the two cases are indistinguishable by design (mirrors get_published_article).
+    """
+    article = await get_article(db, article_id)
+    if article is None or article.client_id != client_id:
+        return JSONResponse(
+            status_code=404,
+            content=_ARTICLE_NOT_FOUND,
+            headers={"Cache-Control": _CACHE_PRIVATE},
+        )
+
+    seo = _build_seo(article)
+    body = {
+        **_authored_list_item(article),
+        "html": _strip_scripts(article.html or ""),
+        "meta_description": article.meta_description,
+        "seo": seo,
+    }
+    return JSONResponse(content=body, headers={"Cache-Control": _CACHE_PRIVATE})

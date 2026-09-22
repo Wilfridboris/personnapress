@@ -1,5 +1,31 @@
 # Deferred Work
 
+## Deferred from: code review of 12-8-write-token-authored-article-readback (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/12-8-write-token-authored-article-readback.md`
+  summary: A `ppd_` read token presented to the authored endpoints receives 401 INVALID_DELIVERY_TOKEN, not 403 WRITE_SCOPE_REQUIRED as the spec and docs describe; only a token with `ppw_` prefix that has read scope in the DB receives 403.
+  evidence: `get_delivery_client_write` (public_articles.py:223) checks `if not auth.startswith("Bearer ppw_"):` before any DB lookup, so a `ppd_`-prefixed header fails on prefix alone. The spec says "a valid read-scoped (ppd_) token" should return 403, implying it should reach scope-check; the prefix guard fires first. Pre-existing from Story 12.7; 12.8 reuses the dep unchanged.
+
+- source_spec: `_bmad-output/implementation-artifacts/12-8-write-token-authored-article-readback.md`
+  summary: When both `slug` and `status` are provided to GET /v1/authored/articles, the status filter is silently ignored and the article is returned regardless of its status.
+  evidence: The slug fast-exit path in `list_authored_articles` returns immediately after `get_article_by_slug`, bypassing the mapped_status variable. A caller requesting `?slug=foo&status=published` may receive a hidden article. Behavior is untested and undocumented in the current docs section.
+
+- source_spec: `_bmad-output/implementation-artifacts/12-8-write-token-authored-article-readback.md`
+  summary: The docs caching section states "All successful responses include Cache-Control: public, max-age=60" but the authored endpoints use Cache-Control: no-store; no exception is carved out.
+  evidence: `frontend/app/(public)/headless-blog-api/docs/page.tsx` caching section is general and predates the authored endpoints. Authored endpoints always return `_CACHE_PRIVATE` ("no-store"), not the public cache headers described.
+
+- source_spec: `_bmad-output/implementation-artifacts/12-8-write-token-authored-article-readback.md`
+  summary: The docs authentication section describes only `ppd_` tokens; write-scoped `ppw_` tokens are not mentioned outside the new read-back section, leaving the auth section incomplete for API authors who read it first.
+  evidence: The existing auth section was written for Story 12.2 (read-only delivery). The authored endpoints require `ppw_` tokens but the auth section never introduces them or explains the scope model.
+
+- source_spec: `_bmad-output/implementation-artifacts/12-8-write-token-authored-article-readback.md`
+  summary: The docs error table's WRITE_SCOPE_REQUIRED row only mentions the create endpoint, not the two new read-back endpoints that also return 403 for read-only tokens.
+  evidence: ERROR_ROWS in `frontend/app/(public)/headless-blog-api/docs/page.tsx` — the `when` field for WRITE_SCOPE_REQUIRED describes the create scenario only.
+
+- source_spec: `_bmad-output/implementation-artifacts/12-8-write-token-authored-article-readback.md`
+  summary: `READ_BACK_CURL_SAMPLE` uses `grep -o '"id":"[^"]*"' | cut -d'"' -f4` to extract the article ID, which is fragile if the JSON is pretty-printed or field order changes; `jq -r .id` would be idiomatic.
+  evidence: Shell snippet in `frontend/app/(public)/headless-blog-api/docs/page.tsx`; works today because JSONResponse serializes the dict in key-insertion order with `id` first, but is not portable.
+
 ## Deferred from: bug-triage of scheduled-post reliability + calendar channel display (2026-09-21)
 
 - source_spec: none
