@@ -1,9 +1,12 @@
+from datetime import datetime, timezone
+
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.core.config import settings
 from app.workers.analytics import metrics_poll
 from app.workers.cleanup import subscription_cleanup
+from app.workers.publish_catchup import scheduled_publish_catchup
 from app.workers.reengagement import trial_reengagement_check
 
 
@@ -34,6 +37,19 @@ def create_scheduler() -> AsyncIOScheduler:
         id="trial_reengagement_check",
         replace_existing=True,
         misfire_grace_time=3600,
+    )
+
+    # Catch-up worker — recovers orphaned scheduled publishes every 5 minutes.
+    # next_run_time=datetime.now(timezone.utc) makes it fire once shortly after startup
+    # so missed posts during a deploy are recovered without waiting a full 5-minute cycle.
+    scheduler.add_job(
+        scheduled_publish_catchup,
+        trigger="interval",
+        minutes=5,
+        id="scheduled_publish_catchup",
+        replace_existing=True,
+        misfire_grace_time=300,
+        next_run_time=datetime.now(timezone.utc),
     )
 
     if settings.ANALYTICS_ENABLED:

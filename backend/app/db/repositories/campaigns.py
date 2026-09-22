@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -76,6 +76,30 @@ async def update_campaign_scheduled_at(
     await session.flush()
     await session.refresh(campaign)
     return campaign
+
+
+async def get_due_scheduled_campaigns(
+    session: AsyncSession,
+    cutoff: datetime,
+    limit: int,
+) -> Sequence[Campaign]:
+    """Return approved campaigns whose scheduled_at has passed the cutoff.
+
+    Uses ``with_for_update(skip_locked=True)`` so concurrent workers never
+    claim the same campaign.  Callers should set ``cutoff = utcnow() -
+    timedelta(seconds=60)`` to avoid racing an on-time APScheduler fire.
+    """
+    result = await session.execute(
+        select(Campaign)
+        .where(
+            Campaign.status == "approved",
+            Campaign.scheduled_at.is_not(None),
+            Campaign.scheduled_at <= cutoff,
+        )
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
+    return result.scalars().all()
 
 
 async def update_campaign_content(

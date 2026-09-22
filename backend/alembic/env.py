@@ -18,6 +18,7 @@ from app.db.repositories.models import (  # noqa: F401
     GenerationLog,
 )
 from app.core.config import settings
+from app.db.alembic_filters import include_name
 
 config = context.config
 
@@ -37,6 +38,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_name=include_name,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -47,6 +49,7 @@ def do_run_migrations(connection):
         connection=connection,
         target_metadata=target_metadata,
         compare_type=True,
+        include_name=include_name,
     )
     with context.begin_transaction():
         context.run_migrations()

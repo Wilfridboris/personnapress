@@ -794,3 +794,33 @@ Cross-cutting gaps found while reviewing the post-analytics feature end-to-end (
   summary: _sanitize_html permits <a target="_blank"> without forcing rel="noopener noreferrer", a reverse-tabnabbing vector now reachable via untrusted third-party HTML through the ingestion API.
   evidence: backend/app/core/html_sanitize.py allows target and rel on <a> and only strips non-_blank target values; it never adds rel="noopener". Pre-existing shared sanitizer (lifted unchanged from routers/articles.py, so it also affects the in-app editor). Severity low today because modern browsers default target=_blank to noopener, but the write API is a new untrusted input path. Fix belongs in the shared sanitizer.
   resolution: the shared `_sanitize_html` (backend/app/core/html_sanitize.py) now forces rel="noopener noreferrer" on every <a target="_blank">, preserving any existing rel tokens (e.g. nofollow). Covers the ingest API and the in-app article editor (both use this sanitizer). Tests added in tests/routers/test_articles.py. NOTE: campaigns.py has a separate `_sanitize_blog_html` (bleach-based) that is NOT touched here — see the older "fix-nofollow-link-target-blank" item (2026-07-23), whose campaigns.py half remains open.
+
+## Deferred from: code review of spec-fix-scheduled-publish-catchup-reconciler (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-fix-scheduled-publish-catchup-reconciler.md`
+  summary: `get_due_scheduled_campaigns` has no `ORDER BY scheduled_at` — under sustained backlog (>20 due campaigns) older orphans can be skipped indefinitely if the DB planner returns newer rows first.
+  evidence: The BATCH_LIMIT=20 `SELECT FOR UPDATE SKIP LOCKED` query has no ordering clause; PostgreSQL returns rows in undefined order. Oldest orphans may never reach the front of the batch until the backlog drains below 20.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-fix-scheduled-publish-catchup-reconciler.md`
+  summary: `test_get_due_scheduled_campaigns_sql_restrictions` builds its own `select` statement rather than calling the production function, so changes to the repository function's SQL are not caught by this test.
+  evidence: Lines 310-325 of test_publish_catchup.py import `get_due_scheduled_campaigns` but never invoke it; the compiled SQL is from a hand-authored statement. The function's actual WHERE clauses are untested by this test.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-fix-scheduled-publish-catchup-reconciler.md`
+  summary: `BATCH_LIMIT = 20` is an undocumented magic constant; if more than 20 campaigns are simultaneously overdue the remainder are silently deferred to the next 5-minute tick, with no log entry indicating the truncation.
+  evidence: No comment explains the chosen value or the expected maximum overdue rate. A burst scenario (after a long deploy) could leave campaigns waiting multiple ticks without any operator signal.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-fix-scheduled-publish-catchup-reconciler.md`
+  summary: The type of `sched_job.id` passed to `run_publish(job_id, ...)` is unverified — if `Job.id` is stored as str but `run_publish` expects UUID, a TypeError occurs at dispatch time.
+  evidence: `get_scheduled_job` returns a ScheduledPublish job row; the type of its `.id` field depends on the SQLModel column definition. The `run_publish` signature at backend/app/workers/publish.py:114 was not audited for the expected job_id type during this story.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-fix-scheduled-publish-catchup-reconciler.md`
+  summary: `scheduled_at=None` is committed before dispatch; a process crash mid-dispatch leaves some campaigns claimed (scheduled_at cleared) but never published, with no recovery path.
+  evidence: The worker commits the cleared scheduled_at as a single atomic batch, then dispatches outside the session. A SIGKILL between commit and dispatch leaves affected campaigns with scheduled_at=NULL, invisible to the next catchup tick.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-fix-scheduled-publish-catchup-reconciler.md`
+  summary: Row locks from `with_for_update(skip_locked=True)` are held for the entire classification loop (including async DB calls per campaign), potentially blocking concurrent writes to the campaigns table during busy periods.
+  evidence: The session stays open across get_scheduled_job and get_article_by_campaign_id calls for each campaign in the batch. Low impact at current scale; may be revisited if scheduling throughput increases.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-fix-scheduled-publish-catchup-reconciler.md`
+  summary: Grace-period tests mock scheduler.get_job to return the same live object for any key string, so a wrong APScheduler job ID lookup would not be caught.
+  evidence: `_catchup(..., scheduler_get_job_return=live_job)` is unconditional. The social branch looks up `str(sched_job.id)` and the headless branch `f"headless_{campaign.id}"` -- a typo in either key would still return the live mock.
