@@ -152,42 +152,51 @@ Key facts confirmed against the codebase before writing this story:
 
 ## Suggested Review Order
 
-**Auth and scope enforcement**
+**Entry point — list endpoint (auth, slug path, status filter)**
 
-- Write-scope dep: 401 on missing/wrong-prefix, 403 on read-scope; entry point for all authored routes.
-  [`public_articles.py:212`](../../backend/app/routers/public_articles.py#L212)
+- List route: write-scope dep, slug normalization + status filter applied, paginated fallback.
+  [`public_articles.py:731`](../../backend/app/routers/public_articles.py#L731)
 
-**Serializer — authored item shape**
+- Slug+status fix: `mapped_status` now applied in the slug fast-exit branch (was silently dropped).
+  [`public_articles.py:759`](../../backend/app/routers/public_articles.py#L759)
 
-- Extends public list-item with id, status, edit_url, api_authored; no PII or wide data.
-  [`public_articles.py:307`](../../backend/app/routers/public_articles.py#L307)
+**By-id endpoint — tenant isolation**
 
-**List endpoint logic**
+- Identical 404 for missing vs other-tenant; html through `_strip_scripts`; no-store cache.
+  [`public_articles.py:794`](../../backend/app/routers/public_articles.py#L794)
 
-- Status validation, slug normalization fast-exit, paginated list; Cache-Control: no-store.
-  [`public_articles.py:720`](../../backend/app/routers/public_articles.py#L720)
+**Serializer**
 
-**By-id endpoint logic**
+- Extends public list-item with `id`, `status`, `edit_url`, `api_authored`; public route unchanged.
+  [`public_articles.py:310`](../../backend/app/routers/public_articles.py#L310)
 
-- get_article then client_id check; identical 404 for missing vs other-tenant; html stripped.
-  [`public_articles.py:780`](../../backend/app/routers/public_articles.py#L780)
+**Tests — slug+status and empty-slug edge cases**
 
-**Tests — auth matrix and isolation**
+- Slug+status mismatch returns empty; empty slug falls through to list; tag/category forwarded.
+  [`test_authored_readback.py:401`](../../backend/tests/routers/test_authored_readback.py#L401)
 
-- Auth 401/403 matrix and tenant-isolation assertions; mirrors 12.7 test structure.
-  [`test_authored_readback.py:130`](../../backend/tests/routers/test_authored_readback.py#L130)
+**Tests — auth matrix**
 
-**Tests — serializer and filter correctness**
+- 401 (no token / malformed / revoked), 403 (ppd_ read token); mirrors 12.7 test structure.
+  [`test_authored_readback.py:135`](../../backend/tests/routers/test_authored_readback.py#L135)
 
-- status value assertions, api_authored, slug normalization, Cache-Control on slug path.
-  [`test_authored_readback.py:220`](../../backend/tests/routers/test_authored_readback.py#L220)
+**Tests — list and by-id correctness**
 
-**Tests — regression: public routes unchanged**
+- All list-item fields, api_authored, slug normalization, Cache-Control on every path.
+  [`test_authored_readback.py:194`](../../backend/tests/routers/test_authored_readback.py#L194)
 
-- Isolation: hidden articles absent from public list + detail; public status=published filter intact.
-  [`test_authored_readback.py:534`](../../backend/tests/routers/test_authored_readback.py#L534)
+- By-id happy path: html stripped, seo, meta_description, api_authored, no-store.
+  [`test_authored_readback.py:497`](../../backend/tests/routers/test_authored_readback.py#L497)
 
-**Developer docs — read-back section**
+**Tests — isolation: public routes untouched**
 
-- New section: two EndpointBlock components, AUTHORED_LIST_PARAMS, curl create+readback example.
-  [`page.tsx:1117`](../../frontend/app/(public)/headless-blog-api/docs/page.tsx#L1117)
+- Hidden article absent from public list and slug routes; public filter stays `status=published`.
+  [`test_authored_readback.py:617`](../../backend/tests/routers/test_authored_readback.py#L617)
+
+**Developer docs**
+
+- New "Read Back Articles" section: two EndpointBlock components + curl create+readback example.
+  [`page.tsx:1127`](../../frontend/app/(public)/headless-blog-api/docs/page.tsx#L1127)
+
+- WRITE_SCOPE_REQUIRED error table: description updated to include authored read-back endpoints.
+  [`page.tsx:716`](../../frontend/app/(public)/headless-blog-api/docs/page.tsx#L716)
