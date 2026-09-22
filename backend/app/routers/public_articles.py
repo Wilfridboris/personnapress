@@ -757,9 +757,15 @@ async def list_authored_articles(
             )
 
     # Slug exact-match path: normalize first (mirror the write path) then resolve.
-    if slug is not None:
+    # Empty slug string falls through to the normal list (no filter).
+    if slug is not None and slug.strip():
         normalized = slug_from_title(slug)
         article = await get_article_by_slug(db, client_id, normalized)
+        # Apply status filter: a match at the wrong status returns empty.
+        if article is not None and mapped_status is not None:
+            actual_status = article.status.value if hasattr(article.status, "value") else str(article.status)
+            if actual_status != mapped_status.value:
+                article = None
         if article is None:
             body = {"data": [], "meta": {"page": 1, "page_size": page_size, "total": 0}}
         else:

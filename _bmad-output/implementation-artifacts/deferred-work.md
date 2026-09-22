@@ -26,6 +26,24 @@
   summary: `READ_BACK_CURL_SAMPLE` uses `grep -o '"id":"[^"]*"' | cut -d'"' -f4` to extract the article ID, which is fragile if the JSON is pretty-printed or field order changes; `jq -r .id` would be idiomatic.
   evidence: Shell snippet in `frontend/app/(public)/headless-blog-api/docs/page.tsx`; works today because JSONResponse serializes the dict in key-insertion order with `id` first, but is not portable.
 
+## Deferred from: step-04 review of 12-8-write-token-authored-article-readback (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/12-8-write-token-authored-article-readback.md`
+  summary: `_CACHE_PRIVATE = "no-store"` is a misleading constant name; `no-store` prevents caching entirely, whereas "private" implies `Cache-Control: private` (user-agent caching allowed). Future code that copies the name expecting private-cache semantics will be wrong.
+  evidence: Pre-existing constant defined before Story 12.8 (Story 12.2). Story 12.8 reuses it correctly but the name remains misleading. Rename to `_CACHE_NO_STORE` or `_CACHE_AUTHORED`.
+
+- source_spec: `_bmad-output/implementation-artifacts/12-8-write-token-authored-article-readback.md`
+  summary: `_article_list_item` calls `.isoformat()` directly on `article.published_at` and `article.updated_at` without a None guard; if either field is None an AttributeError crashes serialization.
+  evidence: Pre-existing in `_article_list_item` (public_articles.py:304-305); affects all routes that call this serializer. The ORM model may guarantee these fields are non-null, but the guard is absent. Fix: `article.published_at.isoformat() if article.published_at else None`.
+
+- source_spec: `_bmad-output/implementation-artifacts/12-8-write-token-authored-article-readback.md`
+  summary: `_authored_list_item` builds `edit_url` via `settings.APP_URL.rstrip("/")` with no guard for an empty `APP_URL`; a misconfigured env would produce a relative URL like `/articles/<id>`.
+  evidence: Same pattern used in `_ingest_response` (12.7) and unchanged by this story. Pre-existing. Fix: add a startup assertion or a fallback that surfaces misconfiguration clearly.
+
+- source_spec: `_bmad-output/implementation-artifacts/12-8-write-token-authored-article-readback.md`
+  summary: `test_authored_module_does_not_import_generation` reads the module source with `open(mod.__file__)`, which fails for compiled `.pyc` files where `__file__` ends in `.pyc`.
+  evidence: Pre-existing pattern from `test_article_ingestion.py`. Fix: guard with `if mod.__file__.endswith('.py')` or use `inspect.getsource(mod)`.
+
 ## Deferred from: bug-triage of scheduled-post reliability + calendar channel display (2026-09-21)
 
 - source_spec: none

@@ -9,7 +9,10 @@ Covers:
 - slug filter returns one article or empty
 - By-id happy path: html, status, id, edit_url, seo, meta_description, api_authored
 - By-id 404 for unknown id and for another client's id (identical response)
-- Non-UUID article_id -> 422 (tested at unit level via get_authored_article logic)
+- Non-UUID article_id -> 422 (handled by FastAPI path-param validation before the function runs;
+  not testable via direct function calls — requires HTTP-layer TestClient)
+- page/page_size boundary constraints (ge=1, le=50) are enforced by FastAPI Query validation
+  before the function runs — not testable via direct function calls
 - Cache-Control: no-store on all authored responses
 - 429 via rate limiter
 - Isolation: client A token never sees client B articles; hidden article absent from public routes
@@ -53,7 +56,7 @@ sys.modules["slowapi.util"] = _slowapi_util
 # ---------------------------------------------------------------------------
 
 def _utc(year=2026, month=1, day=1) -> datetime:
-    return datetime(year, month, day, tzinfo=timezone.utc).replace(tzinfo=None)
+    return datetime(year, month, day, tzinfo=timezone.utc)
 
 
 def _make_article(
@@ -393,6 +396,98 @@ async def test_list_no_store_cache_header():
         )
 
     assert resp.headers.get("cache-control") == "no-store"
+
+
+async def test_slug_filter_with_status_applies_status():
+    """?slug=x&status=published must return empty when the matched article is hidden."""
+    from app.routers.public_articles import list_authored_articles
+    import json
+
+    client_id = uuid.uuid4()
+    # Article exists but is hidden
+    hidden_art = _make_article(client_id=client_id, slug="my-post", status="hidden")
+
+    with patch("app.routers.public_articles.get_article_by_slug", new=AsyncMock(return_value=hidden_art)):
+        resp = await list_authored_articles(
+            request=_make_request(), client_id=client_id, db=AsyncMock(),
+            page=1, page_size=20, status="published", tag=None, category=None, slug="my-post",
+        )
+
+    body = json.loads(resp.body)
+    assert body["meta"]["total"] == 0
+    assert body["data"] == []
+
+
+async def test_slug_filter_with_matching_status_returns_article():
+    """?slug=x&status=hidden returns the article when its status matches."""
+    from app.routers.public_articles import list_authored_articles
+    import json
+
+    client_id = uuid.uuid4()
+    hidden_art = _make_article(client_id=client_id, slug="my-post", status="hidden")
+
+    with patch("app.routers.public_articles.get_article_by_slug", new=AsyncMock(return_value=hidden_art)):
+        resp = await list_authored_articles(
+            request=_make_request(), client_id=client_id, db=AsyncMock(),
+            page=1, page_size=20, status="hidden", tag=None, category=None, slug="my-post",
+        )
+
+    body = json.loads(resp.body)
+    assert body["meta"]["total"] == 1
+    assert body["data"][0]["slug"] == "my-post"
+
+
+async def test_empty_slug_falls_through_to_list():
+    """slug="" (empty string) must not enter the slug-exact-match path."""
+    from app.routers.public_articles import list_authored_articles
+    import json
+
+    client_id = uuid.uuid4()
+    mock_list = AsyncMock(return_value=([], 0))
+    mock_get = AsyncMock()
+
+    with patch("app.routers.public_articles.list_articles", mock_list):
+        with patch("app.routers.public_articles.get_article_by_slug", mock_get):
+            await list_authored_articles(
+                request=_make_request(), client_id=client_id, db=AsyncMock(),
+                page=1, page_size=20, status=None, tag=None, category=None, slug="",
+            )
+
+    # Empty slug must NOT call get_article_by_slug; must fall through to list_articles
+    mock_get.assert_not_called()
+    mock_list.assert_called_once()
+
+
+async def test_tag_filter_forwarded_to_list_articles():
+    """tag query param is forwarded to list_articles."""
+    from app.routers.public_articles import list_authored_articles
+
+    client_id = uuid.uuid4()
+    mock_list = AsyncMock(return_value=([], 0))
+
+    with patch("app.routers.public_articles.list_articles", mock_list):
+        await list_authored_articles(
+            request=_make_request(), client_id=client_id, db=AsyncMock(),
+            page=1, page_size=20, status=None, tag="ops", category=None, slug=None,
+        )
+
+    assert mock_list.call_args.kwargs["tag"] == "ops"
+
+
+async def test_category_filter_forwarded_to_list_articles():
+    """category query param is forwarded to list_articles."""
+    from app.routers.public_articles import list_authored_articles
+
+    client_id = uuid.uuid4()
+    mock_list = AsyncMock(return_value=([], 0))
+
+    with patch("app.routers.public_articles.list_articles", mock_list):
+        await list_authored_articles(
+            request=_make_request(), client_id=client_id, db=AsyncMock(),
+            page=1, page_size=20, status=None, tag=None, category="Operations", slug=None,
+        )
+
+    assert mock_list.call_args.kwargs["category"] == "Operations"
 
 
 # ---------------------------------------------------------------------------

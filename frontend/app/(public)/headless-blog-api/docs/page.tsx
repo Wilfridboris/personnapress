@@ -690,7 +690,7 @@ RESPONSE=$(curl --silent --fail-with-body \\
     "content": "## The problem\\n\\nNew accounts took three days to activate."
   }')
 
-ARTICLE_ID=$(echo "$RESPONSE" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+ARTICLE_ID=$(echo "$RESPONSE" | jq -r '.id')
 
 # Step 2: read it back by id
 curl --silent --fail-with-body \\
@@ -715,7 +715,7 @@ const ERROR_ROWS: ErrorRow[] = [
   {
     code: "WRITE_SCOPE_REQUIRED",
     status: "403",
-    when: "A valid read-only (ppd_) token was used on the create endpoint. Use a write (ppw_) token.",
+    when: "A valid read-only (ppd_) token was used on the create or authored read-back endpoints. Use a write (ppw_) token.",
   },
   {
     code: "ARTICLE_NOT_FOUND",
