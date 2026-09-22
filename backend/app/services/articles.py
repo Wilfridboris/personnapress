@@ -8,13 +8,17 @@ from bs4 import BeautifulSoup
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.db.repositories.articles import _reading_time
 from app.db.repositories.models import Article, ArticleRevision, ArticleStatus, utcnow
 from app.integrations.github import slug_from_title
 from app.services.publishing import _extract_meta_description
 
 logger = logging.getLogger(__name__)
 
-_WORDS_PER_MINUTE = 225
+# _reading_time is re-exported from the repository layer (single source of truth,
+# shared with update_article_content). Kept importable from here for callers that
+# already import it from app.services.articles.
+__all__ = ["_reading_time"]
 
 
 def _extract_excerpt(html: str) -> str:
@@ -39,12 +43,6 @@ def _extract_excerpt(html: str) -> str:
             p.decompose()
     first_p = soup.find("p")
     return first_p.get_text(separator=" ", strip=True)[:300] if first_p else ""
-
-
-def _reading_time(html: str) -> int:
-    text = BeautifulSoup(html, "html.parser").get_text(separator=" ")
-    word_count = len(text.split())
-    return max(1, round(word_count / _WORDS_PER_MINUTE))
 
 
 def _extract_title(campaign) -> str:

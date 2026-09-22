@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: bug-triage of scheduled-post reliability + calendar channel display (2026-09-21)
+
+- source_spec: none
+  summary: Scheduled posts silently dropped when the backend is down past the 1h `misfire_grace_time` window, and a single-channel failure flips the whole campaign to `failed` even when other channels succeeded. Needs a catch-up reconciler (startup + periodic) that republishes `approved` campaigns whose `scheduled_at` has passed with no active/complete publish job, plus partial-success status handling in `run_publish`.
+  evidence: Split from the same bug report as the calendar channel-display fix (built first as the smaller, safer change). Root causes verified in `backend/app/scheduler/scheduler.py`, `backend/app/routers/publishing.py:1526-1533` (one-shot DateTrigger, no reconciliation), and `backend/app/workers/publish.py:138` (partial failure marks campaign failed). Corroborated by the pre-existing 2026-08-17 "spec-fix-scheduled-publish-misfire" deferral (orphan-job self-healing gap). User confirmed the missed post "still shows as scheduled" (approved + past scheduled_at).
+
 ## Deferred from: code review of 26-5-onboarding-friction-reduction-early-voice-proof (2026-09-08)
 
 - source_spec: `_bmad-output/implementation-artifacts/26-5-onboarding-friction-reduction-early-voice-proof.md`
@@ -366,7 +372,7 @@ Cross-cutting gaps found while reviewing the post-analytics feature end-to-end (
 
 ## Deferred from: code review of fix-nofollow-link-target-blank (2026-07-23)
 
-- No sanitizer-level enforcement that `target="_blank"` implies `rel="noopener noreferrer"` — API callers bypassing the editor can submit `target="_blank"` without noopener; editor always sets rel correctly so only a direct API caller is at risk. Add a post-sanitize transform enforcing rel when target is present if direct API access becomes a concern. [backend/app/routers/campaigns.py, backend/app/routers/articles.py]
+- [PARTIALLY RESOLVED 2026-09-21] No sanitizer-level enforcement that `target="_blank"` implies `rel="noopener noreferrer"` — API callers bypassing the editor can submit `target="_blank"` without noopener; editor always sets rel correctly so only a direct API caller is at risk. Add a post-sanitize transform enforcing rel when target is present if direct API access becomes a concern. [backend/app/routers/campaigns.py, backend/app/routers/articles.py] — articles.py half now enforced via the shared `_sanitize_html` (backend/app/core/html_sanitize.py); the campaigns.py `_sanitize_blog_html` (separate bleach sanitizer) still lacks the enforcement.
 - No UI label in link dialog indicating nofollow links open in a new tab — silent coupling; accessibility improvement (screen readers, keyboard nav). [frontend/components/campaigns/BlogEditor.tsx]
 - `_DOMPURIFY_CONFIG` comment claims it "mirrors" backend — DOMPurify uses flat ALLOWED_ATTR (global) while backend uses per-element dicts; comment is misleading. Pre-existing. [frontend/components/campaigns/BlogEditor.tsx:30]
 - `articles.py` uses `list[str]` and `campaigns.py` uses `set[str]` for allowed-attr maps — structural drift risk; changes to one may miss the other. Pre-existing. [backend/app/routers/articles.py, backend/app/routers/campaigns.py]
@@ -765,10 +771,12 @@ Cross-cutting gaps found while reviewing the post-analytics feature end-to-end (
   summary: PRD and addendum still describe the image provider as "Replicate FLUX.1 [pro] or Google Nano Banana Pro" and omit Nano Banana 2, now the shipped default.
   evidence: prd.md (~line 352, 502) and addendum.md (~line 5) predate this cost-driven default change; planning docs are now inconsistent with the code default. Pre-existing doc drift, not introduced by this config change.
 
-- source_spec: `_bmad-output/implementation-artifacts/12-7-public-article-ingestion-api.md`
+- [RESOLVED 2026-09-21] source_spec: `_bmad-output/implementation-artifacts/12-7-public-article-ingestion-api.md`
   summary: reading_time_minutes is not recomputed when an article's body is replaced via the shared update_article_content path (hidden-slug upsert in the ingest API, and the in-app editor PATCH), leaving a stale reading time.
   evidence: update_article_content in backend/app/db/repositories/articles.py updates only _CONTENT_FIELDS and never touches reading_time_minutes; the ingest upsert path (public_articles.py) delegates to it, so a content-replace keeps the reading time from creation. Pre-existing behavior of the shared repo function, surfaced by the new write path. Fix belongs in the shared function to stay consistent across editor + API.
+  resolution: `_reading_time` moved down to db/repositories/articles.py (single source of truth; re-exported from services/articles.py for existing callers). `update_article_content` now recomputes `reading_time_minutes` whenever the `html` field changes, so both the in-app editor PATCH and the ingest upsert stay in sync. Tests added in tests/services/test_article_repository.py.
 
-- source_spec: `_bmad-output/implementation-artifacts/12-7-public-article-ingestion-api.md`
+- [RESOLVED 2026-09-21] source_spec: `_bmad-output/implementation-artifacts/12-7-public-article-ingestion-api.md`
   summary: _sanitize_html permits <a target="_blank"> without forcing rel="noopener noreferrer", a reverse-tabnabbing vector now reachable via untrusted third-party HTML through the ingestion API.
   evidence: backend/app/core/html_sanitize.py allows target and rel on <a> and only strips non-_blank target values; it never adds rel="noopener". Pre-existing shared sanitizer (lifted unchanged from routers/articles.py, so it also affects the in-app editor). Severity low today because modern browsers default target=_blank to noopener, but the write API is a new untrusted input path. Fix belongs in the shared sanitizer.
+  resolution: the shared `_sanitize_html` (backend/app/core/html_sanitize.py) now forces rel="noopener noreferrer" on every <a target="_blank">, preserving any existing rel tokens (e.g. nofollow). Covers the ingest API and the in-app article editor (both use this sanitizer). Tests added in tests/routers/test_articles.py. NOTE: campaigns.py has a separate `_sanitize_blog_html` (bleach-based) that is NOT touched here — see the older "fix-nofollow-link-target-blank" item (2026-07-23), whose campaigns.py half remains open.

@@ -133,6 +133,36 @@ def test_sanitize_html_strips_iframe():
     assert "Text" in result
 
 
+def test_sanitize_html_forces_noopener_on_target_blank():
+    """target=_blank links get rel=noopener noreferrer (reverse-tabnabbing defense)."""
+    from app.routers.articles import _sanitize_html
+
+    result = _sanitize_html('<p><a href="https://x.com" target="_blank">link</a></p>')
+    assert 'target="_blank"' in result
+    assert "noopener" in result
+    assert "noreferrer" in result
+
+
+def test_sanitize_html_preserves_existing_rel_on_target_blank():
+    """Existing rel tokens (e.g. nofollow) are preserved, not clobbered."""
+    from app.routers.articles import _sanitize_html
+
+    result = _sanitize_html(
+        '<p><a href="https://x.com" target="_blank" rel="nofollow">link</a></p>'
+    )
+    assert "nofollow" in result
+    assert "noopener" in result
+    assert "noreferrer" in result
+
+
+def test_sanitize_html_no_rel_added_without_target_blank():
+    """A plain link without target=_blank is not forced to carry rel."""
+    from app.routers.articles import _sanitize_html
+
+    result = _sanitize_html('<p><a href="https://x.com">link</a></p>')
+    assert "noopener" not in result
+
+
 # ---------------------------------------------------------------------------
 # GET /articles
 # ---------------------------------------------------------------------------

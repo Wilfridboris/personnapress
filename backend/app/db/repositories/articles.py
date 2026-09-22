@@ -3,12 +3,22 @@
 import uuid
 from typing import Optional
 
+from bs4 import BeautifulSoup
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories.models import Article, ArticleRevision, utcnow
 
 _CONTENT_FIELDS = ("title", "html", "excerpt", "meta_description", "tags", "category", "author")
+
+_WORDS_PER_MINUTE = 225
+
+
+def _reading_time(html: str) -> int:
+    """Estimate reading time in minutes from HTML body text (min 1)."""
+    text = BeautifulSoup(html, "html.parser").get_text(separator=" ")
+    word_count = len(text.split())
+    return max(1, round(word_count / _WORDS_PER_MINUTE))
 
 
 async def create_article(session: AsyncSession, **fields) -> Article:
@@ -77,13 +87,22 @@ async def update_article_content(
 ) -> Article:
     """Update content fields and create a revision only if content actually changed."""
     changed = False
+    html_changed = False
     for field in _CONTENT_FIELDS:
         if field in fields and getattr(article, field) != fields[field]:
             setattr(article, field, fields[field])
             changed = True
+            if field == "html":
+                html_changed = True
 
     if not changed:
         return article
+
+    # Reading time is derived from the body; recompute it here (in the shared
+    # update path) so both the in-app editor and the ingestion API stay in sync
+    # when content is replaced.
+    if html_changed:
+        article.reading_time_minutes = _reading_time(article.html)
 
     article.updated_at = utcnow()
     session.add(article)

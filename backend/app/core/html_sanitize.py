@@ -96,6 +96,19 @@ def _sanitize_html(raw: str) -> str:
     for a_tag in soup.find_all("a"):
         if a_tag.get("target") not in ("_blank", None):
             del a_tag["target"]
+    # Force rel="noopener noreferrer" on target=_blank links (reverse-tabnabbing
+    # defense). Untrusted third-party HTML reaches this sanitizer via the public
+    # ingestion API, so the sanitizer must enforce this rather than trusting the
+    # editor to set rel correctly. Preserves any existing rel tokens (e.g. nofollow).
+    for a_tag in soup.find_all("a"):
+        if a_tag.get("target") == "_blank":
+            rel = a_tag.get("rel", [])
+            if isinstance(rel, str):
+                rel = rel.split()
+            for required in ("noopener", "noreferrer"):
+                if required not in rel:
+                    rel.append(required)
+            a_tag["rel"] = " ".join(rel)
     # Strip dangerous href schemes (javascript:, data:, vbscript:) from <a> tags
     for a_tag in soup.find_all("a"):
         href = a_tag.get("href", "")

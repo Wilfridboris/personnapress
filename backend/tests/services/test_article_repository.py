@@ -16,6 +16,7 @@ def _make_article(**kwargs):
     a.category = kwargs.get("category", None)
     a.author = kwargs.get("author", None)
     a.status = kwargs.get("status", "published")
+    a.reading_time_minutes = kwargs.get("reading_time_minutes", 1)
     a.updated_at = None
     return a
 
@@ -83,6 +84,45 @@ async def test_revision_numbers_increment():
 
     revisions = [obj for obj in added if isinstance(obj, ArticleRevision)]
     assert revisions[0].revision_number == 4
+
+
+async def test_update_article_content_recomputes_reading_time_on_html_change():
+    """Replacing the body recomputes reading_time_minutes (shared editor + API path)."""
+    from app.db.repositories.articles import update_article_content
+
+    article = _make_article(html="<p>short</p>", reading_time_minutes=1)
+    session = AsyncMock()
+
+    max_rev_result = MagicMock()
+    max_rev_result.scalar_one_or_none.return_value = 1
+    session.execute = AsyncMock(return_value=max_rev_result)
+    session.add = lambda obj: None
+    session.flush = AsyncMock()
+    session.refresh = AsyncMock()
+
+    long_body = "<p>" + " ".join(["word"] * 900) + "</p>"  # ~900 words / 225 wpm -> 4 min
+    await update_article_content(session, article, {"html": long_body}, source="edit")
+
+    assert article.reading_time_minutes == 4
+
+
+async def test_update_article_content_keeps_reading_time_when_html_unchanged():
+    """A non-html content change must not touch reading_time_minutes."""
+    from app.db.repositories.articles import update_article_content
+
+    article = _make_article(title="Old", html="<p>body</p>", reading_time_minutes=7)
+    session = AsyncMock()
+
+    max_rev_result = MagicMock()
+    max_rev_result.scalar_one_or_none.return_value = 1
+    session.execute = AsyncMock(return_value=max_rev_result)
+    session.add = lambda obj: None
+    session.flush = AsyncMock()
+    session.refresh = AsyncMock()
+
+    await update_article_content(session, article, {"title": "New"}, source="edit")
+
+    assert article.reading_time_minutes == 7
 
 
 async def test_set_article_status_creates_no_revision():
