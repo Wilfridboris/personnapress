@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import clsx from "clsx";
 import { useCalendarCampaigns } from "@/hooks/useCalendarCampaigns";
-import { usePlatformConnections } from "@/hooks/usePlatformConnections";
 import { useClientStore } from "@/lib/stores/useClientStore";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -69,13 +68,12 @@ const DOW_LABELS: Record<string, string> = {
 
 function CalendarEntry({
   campaign,
-  connectedPlatforms,
   onNavigate,
 }: {
   campaign: Campaign;
-  connectedPlatforms: string[];
   onNavigate: (id: string) => void;
 }) {
+  const publishedPlatforms = campaign.published_platforms ?? [];
   const title = campaign.blog_html
     ? extractTitle(campaign.blog_html)
     : (campaign.x_post?.trim() || null) ??
@@ -118,7 +116,7 @@ function CalendarEntry({
       <span className="block truncate">{shortTitle}</span>
       <div className="flex items-center gap-0.5 mt-0.5">
         {campaign.status === "published" &&
-          connectedPlatforms.map((p) => (
+          publishedPlatforms.map((p) => (
             <PlatformIcon key={p} platform={p} className="size-2.5 shrink-0" />
           ))}
         {timeLabel && (
@@ -152,15 +150,6 @@ export function ContentCalendar() {
   const [viewMonth, setViewMonth] = useState(initialMonth);
 
   const { data: campaigns, isLoading, isError } = useCalendarCampaigns(activeClientId);
-  const { data: connections } = usePlatformConnections(activeClientId);
-
-  const connectedPlatforms = useMemo(
-    () =>
-      (connections?.items ?? [])
-        .filter((p) => p.connected)
-        .map((p) => p.platform),
-    [connections]
-  );
 
   function prevMonth() {
     if (viewMonth === 0) {
@@ -316,7 +305,6 @@ export function ContentCalendar() {
                       <CalendarEntry
                         key={c.id}
                         campaign={c}
-                        connectedPlatforms={connectedPlatforms}
                         onNavigate={navigate}
                       />
                     ))}

@@ -202,6 +202,7 @@ export interface Campaign {
   client_id: string;
   client_name?: string | null;
   generation_job_status: string | null;
+  published_platforms?: string[];
   brain_dump: string;
   blog_html: string | null;
   x_post: string | null;

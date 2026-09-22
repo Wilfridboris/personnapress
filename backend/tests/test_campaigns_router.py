@@ -1707,3 +1707,222 @@ async def test_regenerate_preserves_generation_mode():
     assert result.campaign_id == new_campaign.id
     call_kwargs = mock_create.call_args[1]
     assert call_kwargs.get("generation_mode") == "assist"
+
+
+# ── GET /campaigns: published_platforms on list response ─────────────────────
+
+
+class _ListCampaign:
+    """Plain object so CampaignResponse.model_validate({**c.__dict__, ...}) works.
+
+    (A MagicMock's __dict__ holds mock internals, not the campaign attributes.)
+    """
+
+    def __init__(self, campaign_id, client_id, status="published"):
+        self.id = campaign_id
+        self.client_id = client_id
+        self.brain_dump = "This is a sample brain dump with enough content."
+        self.blog_html = None
+        self.x_post = None
+        self.linkedin_post = None
+        self.instagram_caption = None
+        self.facebook_post = None
+        self.threads_post = None
+        self.image_url = None
+        self.image_alt = None
+        self.status = status
+        self.voice_score = None
+        self.rejection_reason = None
+        self.scheduled_at = None
+        self.image_regen_count = 0
+        self.campaign_type = "blog_full"
+        self.skip_image = False
+        self.github_pr_url = None
+        self.roadmap_id = None
+        self.target_word_count = None
+        self.article_template = None
+        self.generation_mode = None
+        self.created_at = datetime(2026, 7, 2, 10, 0, 0, tzinfo=timezone.utc)
+        self.updated_at = datetime(2026, 7, 2, 10, 0, 0, tzinfo=timezone.utc)
+
+
+def _make_list_campaign(campaign_id, client_id, status="published"):
+    return _ListCampaign(campaign_id, client_id, status=status)
+
+
+def _client_row(client_id, name):
+    """A client-name row with a real .name (MagicMock reserves the name kwarg)."""
+    row = MagicMock()
+    row.id = client_id
+    row.name = name
+    return row
+
+
+def _list_campaigns_db(campaigns, client_rows, gen_rows, total=None):
+    """Build a db mock replaying list_campaigns' execute() call sequence.
+
+    Order: count → campaigns list → client-name rows → generation-job rows.
+    (get_published_platforms_for_campaigns is patched separately, not via execute.)
+    """
+    count_res = MagicMock()
+    count_res.scalar_one.return_value = total if total is not None else len(campaigns)
+
+    list_res = MagicMock()
+    list_res.scalars.return_value.all.return_value = campaigns
+
+    names_res = MagicMock()
+    names_res.all.return_value = client_rows
+
+    gen_res = MagicMock()
+    gen_res.all.return_value = gen_rows
+
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=[count_res, list_res, names_res, gen_res])
+    return db
+
+
+async def test_list_campaigns_published_platforms_subset():
+    """Published campaign returns only the platforms it actually reached, sorted."""
+    from app.routers.campaigns import list_campaigns
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_list_campaign(uuid.uuid4(), client.id, status="published")
+
+    db = _list_campaigns_db(
+        campaigns=[campaign],
+        client_rows=[_client_row(client.id, "Acme")],
+        gen_rows=[],
+    )
+
+    with patch(
+        "app.routers.campaigns.get_published_platforms_for_campaigns",
+        AsyncMock(return_value={campaign.id: {"x", "threads"}}),
+    ):
+        result = await list_campaigns(
+            client_id=None,
+            status=None,
+            page=1,
+            per_page=20,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.items[0].published_platforms == ["threads", "x"]
+
+
+async def test_list_campaigns_published_platforms_text_only_counts():
+    """success_text_only is treated as published (repo returns it in the set)."""
+    from app.routers.campaigns import list_campaigns
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_list_campaign(uuid.uuid4(), client.id, status="published")
+
+    db = _list_campaigns_db(
+        campaigns=[campaign],
+        client_rows=[_client_row(client.id, "Acme")],
+        gen_rows=[],
+    )
+
+    with patch(
+        "app.routers.campaigns.get_published_platforms_for_campaigns",
+        AsyncMock(return_value={campaign.id: {"x"}}),
+    ):
+        result = await list_campaigns(
+            client_id=None,
+            status=None,
+            page=1,
+            per_page=20,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.items[0].published_platforms == ["x"]
+
+
+async def test_list_campaigns_published_platforms_empty_when_no_job():
+    """A campaign with no complete publish job gets published_platforms == []."""
+    from app.routers.campaigns import list_campaigns
+
+    user_id = uuid.uuid4()
+    client = _make_client(user_id=user_id)
+    campaign = _make_list_campaign(uuid.uuid4(), client.id, status="approved")
+
+    db = _list_campaigns_db(
+        campaigns=[campaign],
+        client_rows=[_client_row(client.id, "Acme")],
+        gen_rows=[],
+    )
+
+    with patch(
+        "app.routers.campaigns.get_published_platforms_for_campaigns",
+        AsyncMock(return_value={}),
+    ):
+        result = await list_campaigns(
+            client_id=None,
+            status=None,
+            page=1,
+            per_page=20,
+            current_user={"user_id": str(user_id)},
+            db=db,
+        )
+
+    assert result.items[0].published_platforms == []
+
+
+async def test_get_published_platforms_for_campaigns_batched_and_malformed():
+    """Repo returns per-campaign unions, counts the three success statuses, and
+    swallows malformed error_details without dropping other campaigns."""
+    from app.db.repositories.jobs import get_published_platforms_for_campaigns
+
+    cid_a = uuid.uuid4()
+    cid_b = uuid.uuid4()
+
+    job_a1 = MagicMock(campaign_id=cid_a, error_details='{"x":"success","linkedin":"skipped"}')
+    job_a2 = MagicMock(campaign_id=cid_a, error_details='{"threads":"success_text_only"}')
+    job_b_bad = MagicMock(campaign_id=cid_b, error_details="not-json{")
+    job_b_ok = MagicMock(campaign_id=cid_b, error_details='{"facebook_page":"already_published"}')
+
+    exec_res = MagicMock()
+    exec_res.scalars.return_value.all.return_value = [job_a1, job_a2, job_b_bad, job_b_ok]
+    session = AsyncMock()
+    session.execute = AsyncMock(return_value=exec_res)
+
+    result = await get_published_platforms_for_campaigns(session, [cid_a, cid_b])
+
+    assert result[cid_a] == {"x", "threads"}
+    assert result[cid_b] == {"facebook_page"}
+
+
+async def test_get_published_platforms_for_campaigns_empty_input():
+    """Empty campaign_ids returns {} without hitting the DB."""
+    from app.db.repositories.jobs import get_published_platforms_for_campaigns
+
+    session = AsyncMock()
+    result = await get_published_platforms_for_campaigns(session, [])
+
+    assert result == {}
+    session.execute.assert_not_called()
+
+
+async def test_get_published_platforms_for_campaigns_filters_status_type_and_ids():
+    """Guards the load-bearing WHERE clause: the query must restrict to complete
+    publish/scheduled_publish jobs for the requested campaign ids. Without this,
+    a dropped/inverted filter (leaking in-progress, non-publish, or other
+    campaigns' jobs as 'published') would ship green."""
+    from app.db.repositories.jobs import get_published_platforms_for_campaigns
+
+    cid = uuid.uuid4()
+    exec_res = MagicMock()
+    exec_res.scalars.return_value.all.return_value = []
+    session = AsyncMock()
+    session.execute = AsyncMock(return_value=exec_res)
+
+    await get_published_platforms_for_campaigns(session, [cid])
+
+    stmt = session.execute.call_args.args[0]
+    sql = str(stmt.compile(compile_kwargs={"literal_binds": True})).lower()
+    assert "jobs.status" in sql and "complete" in sql
+    assert "jobs.job_type" in sql and "publish" in sql
+    assert "jobs.campaign_id" in sql

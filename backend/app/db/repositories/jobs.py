@@ -136,6 +136,45 @@ async def get_published_platforms_for_campaign(
     return published
 
 
+async def get_published_platforms_for_campaigns(
+    session: AsyncSession,
+    campaign_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, set[str]]:
+    """Return, per campaign, the set of platform names successfully published.
+
+    Batched sibling of get_published_platforms_for_campaign — resolves the whole
+    campaign list in a single query (no N+1). Unions results across all complete
+    publish/scheduled_publish jobs for each campaign, counting platforms whose
+    error_details status is in {"success", "already_published", "success_text_only"}.
+    Returns {} for empty input. Malformed error_details is swallowed per job.
+    """
+    if not campaign_ids:
+        return {}
+    result = await session.execute(
+        select(Job)
+        .where(
+            Job.campaign_id.in_(campaign_ids),
+            Job.job_type.in_(["publish", "scheduled_publish"]),
+            Job.status == "complete",
+        )
+    )
+    jobs = result.scalars().all()
+    published: dict[uuid.UUID, set[str]] = {}
+    for job in jobs:
+        if not job.error_details:
+            continue
+        try:
+            details = json.loads(job.error_details)
+        except (ValueError, AttributeError, TypeError):
+            continue
+        if not isinstance(details, dict):
+            continue
+        for platform, status in details.items():
+            if status in ("success", "already_published", "success_text_only"):
+                published.setdefault(job.campaign_id, set()).add(platform)
+    return published
+
+
 async def get_active_ingestion_job_for_client(
     session: AsyncSession,
     client_id: uuid.UUID,

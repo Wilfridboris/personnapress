@@ -15,6 +15,7 @@ afterAll(() => {
 const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // Mock zustand store
@@ -27,16 +28,17 @@ vi.mock("@/lib/stores/useClientStore", () => ({
 vi.mock("@/hooks/useCalendarCampaigns", () => ({
   useCalendarCampaigns: vi.fn(),
 }));
-vi.mock("@/hooks/usePlatformConnections", () => ({
-  usePlatformConnections: vi.fn(),
+
+// Mock PlatformIcon so rendered platform icons are queryable in assertions.
+vi.mock("@/components/ui/PlatformIcon", () => ({
+  PlatformIcon: ({ platform }: { platform: string }) => (
+    <span data-testid="platform-icon" data-platform={platform} />
+  ),
 }));
 
 const { useCalendarCampaigns } = await import("@/hooks/useCalendarCampaigns");
-const { usePlatformConnections } = await import("@/hooks/usePlatformConnections");
 
 import { ContentCalendar } from "@/components/calendar/ContentCalendar";
-
-const noConnections = { data: { items: [] }, isLoading: false };
 
 function makeCampaign(overrides: Record<string, unknown> = {}) {
   return {
@@ -74,7 +76,6 @@ function mockCalendarData(data: ReturnType<typeof makeCampaign>[] | undefined, o
 describe("ContentCalendar", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(usePlatformConnections).mockReturnValue(noConnections as unknown as ReturnType<typeof usePlatformConnections>);
   });
 
   it("renders current month header in H2", () => {
@@ -198,6 +199,58 @@ describe("ContentCalendar", () => {
       name: /July 17, 2026, 2 campaigns/i,
     });
     expect(cell).toBeInTheDocument();
+  });
+
+  it("renders exactly the published_platforms icons on a published entry", () => {
+    const campaign = makeCampaign({
+      id: "camp-pub",
+      status: "published",
+      updated_at: "2026-07-17T10:00:00Z",
+      published_platforms: ["threads", "x"],
+    });
+    mockCalendarData([campaign]);
+
+    render(<ContentCalendar />, { wrapper });
+
+    const icons = screen.getAllByTestId("platform-icon");
+    expect(icons).toHaveLength(2);
+    expect(icons.map((el) => el.getAttribute("data-platform")).sort()).toEqual([
+      "threads",
+      "x",
+    ]);
+  });
+
+  it("renders no platform icons and shows the time for a scheduled entry", () => {
+    const campaign = makeCampaign({
+      id: "camp-sched",
+      status: "approved",
+      scheduled_at: "2026-07-20T08:00:00Z",
+      updated_at: "2026-07-01T10:00:00Z",
+      // published_platforms would be [] from the API for a not-yet-published campaign
+      published_platforms: [],
+    });
+    mockCalendarData([campaign]);
+
+    render(<ContentCalendar />, { wrapper });
+
+    expect(screen.queryByTestId("platform-icon")).not.toBeInTheDocument();
+    // Scheduled time (8:00 AM UTC) is shown
+    const entryBtn = screen.getByRole("button", { name: /Scheduled/i });
+    expect(entryBtn).toHaveTextContent(/AM|PM/);
+  });
+
+  it("renders no icons for a published entry whose published_platforms is empty/absent", () => {
+    const campaign = makeCampaign({
+      id: "camp-nojob",
+      status: "published",
+      updated_at: "2026-07-17T10:00:00Z",
+      // no published_platforms field (undefined) → renders nothing
+    });
+    mockCalendarData([campaign]);
+
+    render(<ContentCalendar />, { wrapper });
+
+    expect(screen.queryByTestId("platform-icon")).not.toBeInTheDocument();
   });
 
   it("navigates to previous month on ChevronLeft click", () => {

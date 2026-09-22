@@ -6,6 +6,20 @@
   summary: Scheduled posts silently dropped when the backend is down past the 1h `misfire_grace_time` window, and a single-channel failure flips the whole campaign to `failed` even when other channels succeeded. Needs a catch-up reconciler (startup + periodic) that republishes `approved` campaigns whose `scheduled_at` has passed with no active/complete publish job, plus partial-success status handling in `run_publish`.
   evidence: Split from the same bug report as the calendar channel-display fix (built first as the smaller, safer change). Root causes verified in `backend/app/scheduler/scheduler.py`, `backend/app/routers/publishing.py:1526-1533` (one-shot DateTrigger, no reconciliation), and `backend/app/workers/publish.py:138` (partial failure marks campaign failed). Corroborated by the pre-existing 2026-08-17 "spec-fix-scheduled-publish-misfire" deferral (orphan-job self-healing gap). User confirmed the missed post "still shows as scheduled" (approved + past scheduled_at).
 
+## Deferred from: code review of spec-fix-calendar-published-platform-icons (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-fix-calendar-published-platform-icons.md`
+  summary: GitHub-Pages direct-published campaigns show no platform icon on the calendar because `publish_github_job` records its complete job's `error_details` as `{"commit_sha":..., "repo_full_name":...}` (not the `{platform: status}` shape `get_published_platforms_for_campaigns` reads), so `github_pages` is never added to `published_platforms`.
+  evidence: Verified in `backend/app/workers/publish.py:88-93` (direct-commit path sets campaign `published` with commit_sha/repo_full_name error_details). The batched lookup only counts values in `{success, already_published, success_text_only}`, so a GitHub-only publish yields `published_platforms == []`. Narrow case (blog-to-GitHub); the post is still correctly published, just unbadged. Fix by mapping a complete GitHub job to `github_pages` in the lookup, or by having the GitHub worker record a `{"github_pages":"success"}` result.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-fix-calendar-published-platform-icons.md`
+  summary: `get_published_platforms_for_campaign` (singular, used by `dispatch_publish` republish skip logic) counts only `success`/`already_published`, while the new batched sibling also counts `success_text_only` — the two now disagree on whether a text-only fallback means "published".
+  evidence: `backend/app/db/repositories/jobs.py:132` vs the new batched function. Divergence is intentional/spec-sanctioned for this story (spec forbade touching the singular fn), but reconcile during the scheduled-publish reliability work: on republish, a text-only X post is currently re-attempted because the singular fn does not treat it as already published.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-fix-calendar-published-platform-icons.md`
+  summary: Calendar published entries are not accessible — the entry `aria-label` says only "Published" (omits the platform names) and each `PlatformIcon` is `aria-hidden` with no text alternative, so screen-reader users get no channel information.
+  evidence: Pre-existing pattern in `frontend/components/calendar/ContentCalendar.tsx` (ariaLabel ~line 96; PlatformIcon renders `aria-hidden="true"`). Not caused by this change, but now that accurate per-post platforms exist, the fix would be to include them in the accessible label (e.g. "Published to X, Threads").
+
 ## Deferred from: code review of 26-5-onboarding-friction-reduction-early-voice-proof (2026-09-08)
 
 - source_spec: `_bmad-output/implementation-artifacts/26-5-onboarding-friction-reduction-early-voice-proof.md`

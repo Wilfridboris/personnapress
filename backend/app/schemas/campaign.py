@@ -60,6 +60,7 @@ class CampaignResponse(BaseModel):
     client_id: uuid.UUID
     client_name: Optional[str] = None
     generation_job_status: Optional[str] = None
+    published_platforms: list[str] = Field(default_factory=list)
     brain_dump: str
     blog_html: Optional[str]
     x_post: Optional[str]

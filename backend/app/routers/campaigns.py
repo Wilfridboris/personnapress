@@ -14,7 +14,11 @@ from app.core.html_sanitize import is_allowed_image_src
 from app.db.connection import get_session
 from app.db.repositories.campaigns import create_campaign, get_campaign
 from app.db.repositories.clients import get_client
-from app.db.repositories.jobs import create_job, get_publish_job_for_campaign
+from app.db.repositories.jobs import (
+    create_job,
+    get_publish_job_for_campaign,
+    get_published_platforms_for_campaigns,
+)
 from app.db.repositories.models import Article, Campaign, Client, Job
 from app.schemas.campaign import CampaignCreate, CampaignCreateResponse, CampaignDetailResponse, CampaignListResponse, CampaignPatch, CampaignResponse
 from app.services import image as image_service
@@ -196,6 +200,7 @@ async def list_campaigns(
         client_name_map = {row.id: row.name for row in name_rows.all()}
 
     campaign_ids = [c.id for c in campaigns]
+    pub_map = await get_published_platforms_for_campaigns(db, campaign_ids)
     gen_job_map: dict[uuid.UUID, str] = {}
     if campaign_ids:
         gen_job_rows = await db.execute(
@@ -218,6 +223,7 @@ async def list_campaigns(
                 **c.__dict__,
                 "client_name": client_name_map.get(c.client_id),
                 "generation_job_status": gen_job_map.get(c.id),
+                "published_platforms": sorted(pub_map.get(c.id, set())),
             })
             for c in campaigns
         ],
@@ -251,12 +257,15 @@ async def get_campaign_by_id(
     )
     article_row = article_result.first()
 
+    pub_map = await get_published_platforms_for_campaigns(db, [campaign_id])
+
     return CampaignDetailResponse.model_validate(
         {
             **campaign.__dict__,
             "publish_job": publish_job,
             "article_id": article_row[0] if article_row else None,
             "article_slug": article_row[1] if article_row else None,
+            "published_platforms": sorted(pub_map.get(campaign_id, set())),
         }
     )
 
