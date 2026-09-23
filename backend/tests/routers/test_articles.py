@@ -164,6 +164,86 @@ def test_sanitize_html_no_rel_added_without_target_blank():
 
 
 # ---------------------------------------------------------------------------
+# Story 12.10: _sanitize_html preserves newly-allowed elements
+# (These tests call _sanitize_html directly to verify the shared sanitizer,
+#  independent of the public-articles pipeline that also uses it.)
+# ---------------------------------------------------------------------------
+
+def test_sanitize_html_preserves_table_family():
+    """table/thead/tbody/tr/th/td/caption survive sanitization (AC 4)."""
+    from app.routers.articles import _sanitize_html
+
+    html = (
+        "<table>"
+        "<caption>My Table</caption>"
+        "<thead><tr><th>Header</th></tr></thead>"
+        "<tbody><tr><td>Cell</td></tr></tbody>"
+        "</table>"
+    )
+    result = _sanitize_html(html)
+    assert "<table" in result
+    assert "<caption" in result
+    assert "<thead" in result
+    assert "<tbody" in result
+    assert "<tr" in result
+    assert "<th>" in result
+    assert "<td>" in result
+    assert "Header" in result
+    assert "Cell" in result
+
+
+def test_sanitize_html_preserves_h5_h6_hr_s_del():
+    """h5, h6, hr, s, del survive sanitization (AC 4)."""
+    from app.routers.articles import _sanitize_html
+
+    html = "<h5>Five</h5><h6>Six</h6><hr><s>struck</s><del>deleted</del>"
+    result = _sanitize_html(html)
+    assert "<h5>" in result
+    assert "<h6>" in result
+    assert "<hr" in result
+    assert "<s>" in result
+    assert "<del>" in result
+
+
+def test_sanitize_html_table_style_to_align_raw_html_path():
+    """Raw-HTML td with style='text-align:center' -> align attr, style stripped (AC 2)."""
+    from app.routers.articles import _sanitize_html
+
+    html = '<table><tbody><tr><td style="text-align:center">cell</td></tr></tbody></table>'
+    result = _sanitize_html(html)
+    assert 'align="center"' in result
+    assert "style=" not in result
+
+
+def test_sanitize_html_table_style_to_align_case_insensitive():
+    """text-align value case-insensitive: TEXT-ALIGN:RIGHT -> align='right'."""
+    from app.routers.articles import _sanitize_html
+
+    html = '<table><tbody><tr><td style="TEXT-ALIGN:RIGHT">cell</td></tr></tbody></table>'
+    result = _sanitize_html(html)
+    assert 'align="right"' in result
+    assert "style=" not in result
+
+
+def test_sanitize_html_table_cell_security_style_event_stripped():
+    """style and on* event attrs on td/th are stripped; script inside td decomposed (AC 5)."""
+    from app.routers.articles import _sanitize_html
+
+    html = (
+        '<table><tbody>'
+        '<tr><td style="color:red" onmouseover="evil()">A</td></tr>'
+        '<tr><td><script>alert(1)</script>safe</td></tr>'
+        '</tbody></table>'
+    )
+    result = _sanitize_html(html)
+    assert "style=" not in result
+    assert "onmouseover" not in result
+    assert "<script" not in result.lower()
+    assert "<table" in result
+    assert "safe" in result
+
+
+# ---------------------------------------------------------------------------
 # GET /articles
 # ---------------------------------------------------------------------------
 

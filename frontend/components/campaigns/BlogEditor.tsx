@@ -27,10 +27,32 @@ interface BlogEditorProps {
   hideSaveButton?: boolean;
 }
 
-// Allowed tags/attrs mirror the backend _ALLOWED_TAGS / _ALLOWED_ATTRS in articles.py and campaigns.py
+// Allowed tags/attrs mirror the backend _ALLOWED_TAGS / _ALLOWED_ATTRS in html_sanitize.py.
+// Keep these two lists in sync whenever the backend allowlist changes.
+// Note: widening ALLOWED_TAGS here only prevents the save-sanitizer from double-stripping
+// API-authored content; it does NOT make these elements authorable in the Tiptap editor
+// (table, h5, h6, hr, s are not enabled as Tiptap extensions — that is a separate follow-up).
+// DATA-LOSS RISK: If a user opens an API-authored article containing <table> (or other
+// Tiptap-unregistered nodes) in this editor, Tiptap serialises its prosemirror document on
+// save — which has no table node schema — and the table content will be silently lost.
+// A guard preventing the editor from clobbering API-authored tables is tracked in
+// deferred-work.md and must ship as a near-term follow-up to this story.
 export const _DOMPURIFY_CONFIG: Config = {
-  ALLOWED_TAGS: ["h1", "h2", "h3", "h4", "p", "ul", "ol", "li", "strong", "em", "a", "br", "blockquote", "code", "pre", "img", "figure", "figcaption"],
-  ALLOWED_ATTR: ["href", "title", "rel", "target", "src", "alt", "width", "height"],
+  ALLOWED_TAGS: [
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "p", "ul", "ol", "li", "strong", "em", "a", "br", "blockquote", "code", "pre",
+    "img", "figure", "figcaption",
+    // Table family
+    "table", "thead", "tbody", "tr", "td", "th", "caption",
+    // Inline semantics
+    "s", "del",
+    // Section separator
+    "hr",
+  ],
+  ALLOWED_ATTR: ["href", "title", "rel", "target", "src", "alt", "width", "height",
+    // Table cell attributes
+    "colspan", "rowspan", "align", "scope",
+  ],
   FORBID_ATTR: ["style", "srcset", "onerror", "onload", "onclick"],
 };
 

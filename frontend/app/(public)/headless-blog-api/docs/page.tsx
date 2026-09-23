@@ -1182,6 +1182,49 @@ export default function HeadlessBlogApiDocsPage() {
                 </div>
                 <div className="mt-6 border border-border p-6 bg-paper">
                   <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-3">
+                    Supported formatting elements
+                  </p>
+                  <p className="text-sm text-ink leading-relaxed mb-3">
+                    Both{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">markdown</code>{" "}
+                    and{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">html</code>{" "}
+                    formats preserve the following elements end-to-end through the pipeline:
+                  </p>
+                  <ul className="space-y-2 text-sm text-ink leading-relaxed list-disc pl-5 mb-4">
+                    <li>
+                      <strong>Headings</strong>{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">h1</code>{" "}
+                      through{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">h6</code>{" "}
+                      (all six levels round-trip intact)
+                    </li>
+                    <li>
+                      <strong>Tables</strong>{" "} — GFM pipe tables in Markdown, or{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">{"<table>"}</code>{" "}
+                      in HTML. Column alignment (left, center, right) is preserved via the{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">align</code>{" "}
+                      attribute on{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">{"<th>"}</code>{" "}
+                      and{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">{"<td>"}</code>.
+                    </li>
+                    <li>
+                      <strong>Horizontal rules</strong> (Markdown{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">---</code>{" "}
+                      or HTML{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">{"<hr>"}</code>)
+                    </li>
+                    <li>
+                      <strong>Strikethrough</strong> (Markdown{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">~~text~~</code>{" "}
+                      or HTML{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">{"<s>"}</code>{" "}
+                      /{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">{"<del>"}</code>)
+                    </li>
+                  </ul>
+                  <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-3">
                     Known limits in v1
                   </p>
                   <ul className="space-y-2 text-sm text-ink leading-relaxed list-disc pl-5">
@@ -1196,15 +1239,16 @@ export default function HeadlessBlogApiDocsPage() {
                       .
                     </li>
                     <li>
-                      Markdown tables,{" "}
-                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">h5</code>{" "}
-                      and{" "}
-                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">h6</code>{" "}
-                      headings, and horizontal rules are flattened by the HTML allowlist. Use{" "}
-                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">h2</code>{" "}
-                      to{" "}
-                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">h4</code>{" "}
-                      for structure.
+                      Task lists (Markdown{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">- [ ] item</code>
+                      ) are not supported. The GFM task-list rule is not enabled, so the syntax
+                      renders as a plain list item with the literal characters{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">[ ]</code>{" "}
+                      or{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">[x]</code>{" "}
+                      as text. No{" "}
+                      <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">{"<input>"}</code>{" "}
+                      elements are produced or stored.
                     </li>
                   </ul>
                 </div>

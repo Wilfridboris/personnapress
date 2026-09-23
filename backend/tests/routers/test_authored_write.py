@@ -867,3 +867,102 @@ async def test_put_does_not_call_generation(monkeypatch):
             )
 
     assert called["hit"] is False
+
+
+# ---------------------------------------------------------------------------
+# Story 12.10: Content fidelity on PUT path (shared pipeline with POST)
+# ---------------------------------------------------------------------------
+
+async def test_put_markdown_pipe_table_produces_table_element():
+    """GFM pipe table in markdown PUT -> <table> preserved (AC 1, shared pipeline)."""
+    from app.routers.public_articles import update_authored_article
+
+    client_id = uuid.uuid4()
+    article = _make_article(client_id=client_id)
+    db = AsyncMock()
+    db.commit = AsyncMock(); db.refresh = AsyncMock(); db.add = MagicMock()
+
+    captured = {}
+
+    async def _update(session, art, fields, source):
+        captured["fields"] = fields
+        art.html = fields["html"]
+        return art
+
+    table_md = "| Name | Value |\n| --- | --- |\n| foo | bar |"
+    body = _jbody(title="Table PUT", content=table_md, format="markdown")
+    req = _make_request("Bearer ppw_x", body=body)
+
+    with patch("app.routers.public_articles.get_article", new=AsyncMock(return_value=article)):
+        with patch("app.routers.public_articles.update_article_content", new=_update):
+            resp = await update_authored_article(
+                article_id=article.id, request=req, client_id=client_id, db=db
+            )
+
+    assert resp.status_code == 200
+    html = captured["fields"]["html"]
+    assert "<table" in html
+    assert "<thead" in html
+    assert "<td" in html
+    assert "foo" in html
+
+
+async def test_put_markdown_table_alignment_no_style():
+    """Column alignment row in PUT -> align attr preserved, no style attr (AC 2)."""
+    from app.routers.public_articles import update_authored_article
+
+    client_id = uuid.uuid4()
+    article = _make_article(client_id=client_id)
+    db = AsyncMock()
+    db.commit = AsyncMock(); db.refresh = AsyncMock(); db.add = MagicMock()
+
+    captured = {}
+
+    async def _update(session, art, fields, source):
+        captured["fields"] = fields
+        return art
+
+    table_md = "| L | C | R |\n| :--- | :---: | ---: |\n| 1 | 2 | 3 |"
+    body = _jbody(title="Align PUT", content=table_md, format="markdown")
+    req = _make_request("Bearer ppw_x", body=body)
+
+    with patch("app.routers.public_articles.get_article", new=AsyncMock(return_value=article)):
+        with patch("app.routers.public_articles.update_article_content", new=_update):
+            await update_authored_article(
+                article_id=article.id, request=req, client_id=client_id, db=db
+            )
+
+    html = captured["fields"]["html"]
+    assert 'align="left"' in html
+    assert 'align="center"' in html
+    assert 'align="right"' in html
+    assert "style=" not in html
+
+
+async def test_put_markdown_strikethrough_produces_s_element():
+    """~~text~~ in markdown PUT -> <s>text</s> (AC 3, shared pipeline)."""
+    from app.routers.public_articles import update_authored_article
+
+    client_id = uuid.uuid4()
+    article = _make_article(client_id=client_id)
+    db = AsyncMock()
+    db.commit = AsyncMock(); db.refresh = AsyncMock(); db.add = MagicMock()
+
+    captured = {}
+
+    async def _update(session, art, fields, source):
+        captured["fields"] = fields
+        return art
+
+    body = _jbody(title="Strike PUT", content="This is ~~crossed~~ out.", format="markdown")
+    req = _make_request("Bearer ppw_x", body=body)
+
+    with patch("app.routers.public_articles.get_article", new=AsyncMock(return_value=article)):
+        with patch("app.routers.public_articles.update_article_content", new=_update):
+            await update_authored_article(
+                article_id=article.id, request=req, client_id=client_id, db=db
+            )
+
+    html = captured["fields"]["html"]
+    assert "<s>" in html
+    assert "crossed" in html

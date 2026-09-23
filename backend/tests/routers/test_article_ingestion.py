@@ -602,3 +602,211 @@ async def test_ingest_preserves_dashes_verbatim():
 
     assert "—" in captured["html"]  # em-dash preserved
     assert "--" in captured["html"]      # double dash preserved
+
+
+# ---------------------------------------------------------------------------
+# Story 12.10: Content fidelity — tables, headings, hr, strikethrough (POST)
+# ---------------------------------------------------------------------------
+
+async def test_ingest_markdown_pipe_table_produces_table_element():
+    """GFM pipe table in markdown -> <table> with thead/tbody/tr/th/td (AC 1)."""
+    from app.routers.public_articles import ingest_article
+
+    client_id = uuid.uuid4()
+    created = _make_article(client_id=client_id)
+    captured = {}
+
+    async def _capture_create(session, **fields):
+        captured.update(fields)
+        return created
+
+    db = AsyncMock()
+    db.commit = AsyncMock(); db.refresh = AsyncMock(); db.flush = AsyncMock()
+
+    table_md = "| Name | Value |\n| --- | --- |\n| foo | bar |"
+    body = _jbody(title="Table", content=table_md, format="markdown")
+    req = _make_request("Bearer ppw_x", body=body)
+
+    with patch("app.routers.public_articles.get_article_by_slug", new=AsyncMock(return_value=None)):
+        with patch("app.routers.public_articles._unique_slug", new=AsyncMock(return_value="table")):
+            with patch("app.routers.public_articles.create_article", new=_capture_create):
+                await ingest_article(request=req, client_id=client_id, db=db)
+
+    html = captured["html"]
+    assert "<table" in html
+    assert "<thead" in html
+    assert "<tbody" in html
+    assert "<tr" in html
+    assert "<th" in html
+    assert "<td" in html
+    # Content is preserved, not flattened to literal text
+    assert "Name" in html
+    assert "foo" in html
+
+
+async def test_ingest_markdown_table_alignment_preserved_no_style():
+    """Column alignment row -> align attr on cells, no style attr (AC 2)."""
+    from app.routers.public_articles import ingest_article
+
+    client_id = uuid.uuid4()
+    created = _make_article(client_id=client_id)
+    captured = {}
+
+    async def _capture_create(session, **fields):
+        captured.update(fields)
+        return created
+
+    db = AsyncMock()
+    db.commit = AsyncMock(); db.refresh = AsyncMock(); db.flush = AsyncMock()
+
+    table_md = "| Left | Center | Right |\n| :--- | :---: | ---: |\n| a | b | c |"
+    body = _jbody(title="Align", content=table_md, format="markdown")
+    req = _make_request("Bearer ppw_x", body=body)
+
+    with patch("app.routers.public_articles.get_article_by_slug", new=AsyncMock(return_value=None)):
+        with patch("app.routers.public_articles._unique_slug", new=AsyncMock(return_value="align")):
+            with patch("app.routers.public_articles.create_article", new=_capture_create):
+                await ingest_article(request=req, client_id=client_id, db=db)
+
+    html = captured["html"]
+    assert 'align="left"' in html
+    assert 'align="center"' in html
+    assert 'align="right"' in html
+    # style must not survive (it is banned)
+    assert "style=" not in html
+
+
+async def test_ingest_markdown_strikethrough_produces_s_element():
+    """~~text~~ in markdown -> <s>text</s> (AC 3)."""
+    from app.routers.public_articles import ingest_article
+
+    client_id = uuid.uuid4()
+    created = _make_article(client_id=client_id)
+    captured = {}
+
+    async def _capture_create(session, **fields):
+        captured.update(fields)
+        return created
+
+    db = AsyncMock()
+    db.commit = AsyncMock(); db.refresh = AsyncMock(); db.flush = AsyncMock()
+
+    body = _jbody(title="Strike", content="This is ~~crossed out~~ text.", format="markdown")
+    req = _make_request("Bearer ppw_x", body=body)
+
+    with patch("app.routers.public_articles.get_article_by_slug", new=AsyncMock(return_value=None)):
+        with patch("app.routers.public_articles._unique_slug", new=AsyncMock(return_value="strike")):
+            with patch("app.routers.public_articles.create_article", new=_capture_create):
+                await ingest_article(request=req, client_id=client_id, db=db)
+
+    html = captured["html"]
+    assert "<s>" in html
+    assert "crossed out" in html
+
+
+async def test_ingest_html_table_h5_h6_hr_s_del_preserved():
+    """format:html with new elements -> all survive sanitization (AC 4)."""
+    from app.routers.public_articles import ingest_article
+
+    client_id = uuid.uuid4()
+    created = _make_article(client_id=client_id)
+    captured = {}
+
+    async def _capture_create(session, **fields):
+        captured.update(fields)
+        return created
+
+    db = AsyncMock()
+    db.commit = AsyncMock(); db.refresh = AsyncMock(); db.flush = AsyncMock()
+
+    content = (
+        "<table><thead><tr><th>A</th></tr></thead>"
+        "<tbody><tr><td>B</td></tr></tbody></table>"
+        "<h5>Sub-sub heading</h5>"
+        "<h6>Deepest heading</h6>"
+        "<hr>"
+        "<s>struck</s>"
+        "<del>deleted</del>"
+    )
+    body = _jbody(title="All new tags", content=content, format="html")
+    req = _make_request("Bearer ppw_x", body=body)
+
+    with patch("app.routers.public_articles.get_article_by_slug", new=AsyncMock(return_value=None)):
+        with patch("app.routers.public_articles._unique_slug", new=AsyncMock(return_value="new-tags")):
+            with patch("app.routers.public_articles.create_article", new=_capture_create):
+                await ingest_article(request=req, client_id=client_id, db=db)
+
+    html = captured["html"]
+    assert "<table" in html
+    assert "<th>" in html
+    assert "<td>" in html
+    assert "<h5>" in html
+    assert "<h6>" in html
+    assert "<hr" in html
+    assert "<s>" in html
+    assert "<del>" in html
+
+
+async def test_ingest_table_security_style_and_event_stripped():
+    """style and event attrs on table cells are stripped; script inside td is decomposed (AC 5)."""
+    from app.routers.public_articles import ingest_article
+
+    client_id = uuid.uuid4()
+    created = _make_article(client_id=client_id)
+    captured = {}
+
+    async def _capture_create(session, **fields):
+        captured.update(fields)
+        return created
+
+    db = AsyncMock()
+    db.commit = AsyncMock(); db.refresh = AsyncMock(); db.flush = AsyncMock()
+
+    content = (
+        '<table><tbody>'
+        '<tr><td style="color:red" onmouseover="evil()">A</td></tr>'
+        '<tr><td><script>alert(1)</script>safe</td></tr>'
+        '</tbody></table>'
+    )
+    body = _jbody(title="Security", content=content, format="html")
+    req = _make_request("Bearer ppw_x", body=body)
+
+    with patch("app.routers.public_articles.get_article_by_slug", new=AsyncMock(return_value=None)):
+        with patch("app.routers.public_articles._unique_slug", new=AsyncMock(return_value="security")):
+            with patch("app.routers.public_articles.create_article", new=_capture_create):
+                await ingest_article(request=req, client_id=client_id, db=db)
+
+    html = captured["html"]
+    assert "style=" not in html
+    assert "onmouseover" not in html
+    assert "<script" not in html.lower()
+    # The table itself and its text content survive
+    assert "<table" in html
+    assert "safe" in html
+
+
+async def test_ingest_markdown_task_list_no_input_element():
+    """Task-list Markdown must not produce <input> elements (AC 6 narrowly)."""
+    from app.routers.public_articles import ingest_article
+
+    client_id = uuid.uuid4()
+    created = _make_article(client_id=client_id)
+    captured = {}
+
+    async def _capture_create(session, **fields):
+        captured.update(fields)
+        return created
+
+    db = AsyncMock()
+    db.commit = AsyncMock(); db.refresh = AsyncMock(); db.flush = AsyncMock()
+
+    body = _jbody(title="Tasks", content="- [ ] todo item\n- [x] done item", format="markdown")
+    req = _make_request("Bearer ppw_x", body=body)
+
+    with patch("app.routers.public_articles.get_article_by_slug", new=AsyncMock(return_value=None)):
+        with patch("app.routers.public_articles._unique_slug", new=AsyncMock(return_value="tasks")):
+            with patch("app.routers.public_articles.create_article", new=_capture_create):
+                await ingest_article(request=req, client_id=client_id, db=db)
+
+    html = captured["html"]
+    assert "<input" not in html.lower()

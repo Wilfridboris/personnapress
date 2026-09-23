@@ -10,6 +10,7 @@ the other.
 """
 
 import posixpath
+import re
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
@@ -22,17 +23,27 @@ _ALLOWED_BUCKETS = ("article-images", "generated-images")
 # HTML allowlist — mirrors frontend DOMPurify config in BlogEditor.tsx
 # ---------------------------------------------------------------------------
 _ALLOWED_TAGS = {
-    "h1", "h2", "h3", "h4",
+    "h1", "h2", "h3", "h4", "h5", "h6",
     "p", "ul", "ol", "li",
     "strong", "em",
     "a", "br",
     "blockquote",
     "code", "pre",
     "img", "figure", "figcaption",
+    # Table family (GFM tables + raw HTML format:"html" tables)
+    "table", "thead", "tbody", "tr", "td", "th", "caption",
+    # Inline semantics
+    "s", "del",
+    # Section separator
+    "hr",
 }
 _ALLOWED_ATTRS: dict[str, list[str]] = {
     "a": ["href", "title", "rel", "target"],
     "img": ["src", "alt", "width", "height"],
+    # Table cell attributes — colspan/rowspan for structure, align for alignment
+    # (style is banned; alignment is carried via the align attribute instead)
+    "td": ["colspan", "rowspan", "align"],
+    "th": ["colspan", "rowspan", "align", "scope"],
 }
 _BLOCK_TAGS = {
     "script", "style", "iframe", "object", "embed",
@@ -85,6 +96,21 @@ def _sanitize_html(raw: str) -> str:
         elif tag.name not in _ALLOWED_TAGS:
             tag.unwrap()
         else:
+            # Alignment preservation for table cells: markdown-it-py emits column
+            # alignment as style="text-align:left|center|right". style is banned,
+            # so we map the text-align value to an align attribute before stripping.
+            # Only the three CSS alignment literals are recognised; malformed or
+            # absent style is silently ignored (no crash, no align written).
+            if tag.name in ("td", "th"):
+                style = tag.get("style", "")
+                # BeautifulSoup may return multi-value attributes as lists on
+                # malformed HTML; normalise to a string before regex matching.
+                if isinstance(style, list):
+                    style = " ".join(style)
+                if style:
+                    m = re.search(r"text-align\s*:\s*(left|center|right)", style, re.IGNORECASE)
+                    if m:
+                        tag["align"] = m.group(1).lower()
             allowed = _ALLOWED_ATTRS.get(tag.name, [])
             attrs_to_remove = [a for a in list(tag.attrs) if a not in allowed]
             for a in attrs_to_remove:

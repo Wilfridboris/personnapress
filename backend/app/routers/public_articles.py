@@ -508,7 +508,16 @@ def _render_markdown(text: str) -> str:
     if _md_renderer is None:
         from markdown_it import MarkdownIt
 
-        _md_renderer = MarkdownIt("commonmark", {"html": False})
+        # Build and configure the renderer locally, then assign the singleton
+        # only once fully initialised. This prevents a thread-race window where
+        # a concurrent first-request could observe _md_renderer assigned but
+        # .enable() not yet called and receive output without the added rules.
+        # We deliberately do NOT switch to the full gfm-like preset because that
+        # preset also enables task lists, which emit <input type="checkbox"> — an
+        # element we do not want in the sanitizer allowlist.
+        _md = MarkdownIt("commonmark", {"html": False})
+        _md.enable(["table", "strikethrough"])
+        _md_renderer = _md
     return _md_renderer.render(text)
 
 

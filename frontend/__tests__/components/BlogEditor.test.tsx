@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { BlogEditor } from "@/components/campaigns/BlogEditor";
+import { BlogEditor, _DOMPURIFY_CONFIG } from "@/components/campaigns/BlogEditor";
 
 // Mock @tiptap/react
 const mockChain = {
@@ -320,5 +320,46 @@ describe("BlogEditor", () => {
       rel: "nofollow noopener noreferrer",
     });
     expect(mockChain.run).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 12.10: _DOMPURIFY_CONFIG mirrors backend allowlist (AC 7)
+// ---------------------------------------------------------------------------
+describe("_DOMPURIFY_CONFIG", () => {
+  it("allows the table family tags added in 12.10", () => {
+    const tags = _DOMPURIFY_CONFIG.ALLOWED_TAGS as string[];
+    for (const tag of ["table", "thead", "tbody", "tr", "td", "th", "caption"]) {
+      expect(tags).toContain(tag);
+    }
+  });
+
+  it("allows h5 and h6 (full heading depth)", () => {
+    const tags = _DOMPURIFY_CONFIG.ALLOWED_TAGS as string[];
+    expect(tags).toContain("h5");
+    expect(tags).toContain("h6");
+  });
+
+  it("allows strikethrough tags s and del", () => {
+    const tags = _DOMPURIFY_CONFIG.ALLOWED_TAGS as string[];
+    expect(tags).toContain("s");
+    expect(tags).toContain("del");
+  });
+
+  it("allows hr (horizontal rule)", () => {
+    const tags = _DOMPURIFY_CONFIG.ALLOWED_TAGS as string[];
+    expect(tags).toContain("hr");
+  });
+
+  it("allows table cell attributes colspan, rowspan, align, scope", () => {
+    const attrs = _DOMPURIFY_CONFIG.ALLOWED_ATTR as string[];
+    for (const attr of ["colspan", "rowspan", "align", "scope"]) {
+      expect(attrs).toContain(attr);
+    }
+  });
+
+  it("still forbids style (alignment must not reopen style injection)", () => {
+    const forbidden = _DOMPURIFY_CONFIG.FORBID_ATTR as string[];
+    expect(forbidden).toContain("style");
   });
 });

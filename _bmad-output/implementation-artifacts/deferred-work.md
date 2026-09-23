@@ -868,3 +868,23 @@ Cross-cutting gaps found while reviewing the post-analytics feature end-to-end (
 - source_spec: `_bmad-output/implementation-artifacts/spec-fix-scheduled-publish-catchup-reconciler.md`
   summary: Grace-period tests mock scheduler.get_job to return the same live object for any key string, so a wrong APScheduler job ID lookup would not be caught.
   evidence: `_catchup(..., scheduler_get_job_return=live_job)` is unconditional. The social branch looks up `str(sched_job.id)` and the headless branch `f"headless_{campaign.id}"` -- a typo in either key would still return the live mock.
+
+## Deferred from: review of write-API content fidelity (tables/headings) — 12-10 planning (2026-09-23)
+
+- source_spec: `_bmad-output/implementation-artifacts/12-10-write-api-content-fidelity-tables-headings.md`
+  summary: The in-app Tiptap editor cannot author — or even preserve — the elements 12-10 adds to the write-API allowlist. Tables (no `@tiptap/extension-table` loaded), strikethrough (`strike: false`), and horizontal rule (`horizontalRule: false`) are all off, and there is no h5/h6 toolbar control. Once the write API can store a table, opening that article in `BlogEditor` and saving silently DROPS the table, because Tiptap discards any node outside its schema on content load and then writes the reduced document back.
+  evidence: `frontend/components/campaigns/BlogEditor.tsx:93-100` configures `StarterKit` with `horizontalRule: false` and `strike: false` and loads only `StarterKit` + `Image` (no table extension). 12-10 widens the backend `_sanitize_html` allowlist and the mirrored `_DOMPURIFY_CONFIG` so API-authored tables round-trip and display, but the editor node schema is not touched. Follow-up must, in order of priority: (a) add a data-loss guard so the editor never clobbers content it cannot fully represent (e.g. detect unrepresentable nodes on load and open the article read-only / warn, rather than letting a save delete them); (b) optionally install `@tiptap/extension-table` (+ table-row / table-cell / table-header) with insert/edit toolbar UI, and re-enable `strike` + `horizontalRule` plus add h5/h6 controls, so these elements are authorable in-app. Item (a) is the near-term data-integrity fix and should ship close behind 12-10; item (b) is a full editor feature and can be scheduled independently.
+
+## Deferred from: step-04 review of 12-10-write-api-content-fidelity-tables-headings (2026-09-23)
+
+- source_spec: `_bmad-output/implementation-artifacts/12-10-write-api-content-fidelity-tables-headings.md`
+  summary: `tfoot`, `colgroup`, and `col` are absent from `_ALLOWED_TAGS`; an HTML-format article containing these table-model elements will have them silently unwrapped (inner text preserved, tag stripped), altering table structure without any error.
+  evidence: The table-family allowlist in `backend/app/core/html_sanitize.py` adds `table/thead/tbody/tr/td/th/caption` but omits the remaining HTML table element set. Low-frequency in practice, but silently alters structure when hit.
+
+- source_spec: `_bmad-output/implementation-artifacts/12-10-write-api-content-fidelity-tables-headings.md`
+  summary: The `_md_renderer` lazy singleton could be observed by a concurrent request in a state where `.enable()` has not yet been called if two requests race the `is None` guard — the thread-race window was closed but a similar pattern exists for the `_render_markdown` call site if the singleton is reset by tests.
+  evidence: Addressed in 12-10 by building locally then assigning. Remaining concern: `colspan`/`rowspan` cell attributes accept arbitrary values with no server-side integer validation; a value such as `rowspan="99999"` could cause rendering denial-of-service in consumer browsers. No guard or test.
+
+- source_spec: `_bmad-output/implementation-artifacts/12-10-write-api-content-fidelity-tables-headings.md`
+  summary: The DOMPurify `FORBID_ATTR` list in `BlogEditor.tsx` names only three specific `on*` event attributes (`onerror`, `onload`, `onclick`); all other `on*` attributes are not blocked client-side, unlike the backend which strips all `on*` via a prefix loop.
+  evidence: `frontend/components/campaigns/BlogEditor.tsx` `FORBID_ATTR: ["style", "srcset", "onerror", "onload", "onclick"]` — `onmouseover`, `onkeydown`, `oninput`, `onchange`, and all other `on*` attributes pass client-side sanitization. Pre-existing gap, not introduced by 12-10, but the widened ALLOWED_TAGS makes more tags susceptible.
