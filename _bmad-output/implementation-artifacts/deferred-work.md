@@ -886,5 +886,9 @@ Cross-cutting gaps found while reviewing the post-analytics feature end-to-end (
   evidence: Addressed in 12-10 by building locally then assigning. Remaining concern: `colspan`/`rowspan` cell attributes accept arbitrary values with no server-side integer validation; a value such as `rowspan="99999"` could cause rendering denial-of-service in consumer browsers. No guard or test.
 
 - source_spec: `_bmad-output/implementation-artifacts/12-10-write-api-content-fidelity-tables-headings.md`
+  summary: `campaigns.py` uses a separate nh3-based sanitizer (`_sanitize_blog_html`) not widened by 12-10; table, h5, h6, s, del, hr in campaign blog HTML will still be stripped.
+  evidence: `backend/app/routers/campaigns.py:44` defines `_sanitize_blog_html` via `nh3.clean()` with its own allowlist, independent of `html_sanitize._sanitize_html`. 12-10 only touches `html_sanitize.py` (used by public write API + article save); the campaigns path was not in scope. Pre-existing divergence surfaced by this review.
+
+- source_spec: `_bmad-output/implementation-artifacts/12-10-write-api-content-fidelity-tables-headings.md`
   summary: The DOMPurify `FORBID_ATTR` list in `BlogEditor.tsx` names only three specific `on*` event attributes (`onerror`, `onload`, `onclick`); all other `on*` attributes are not blocked client-side, unlike the backend which strips all `on*` via a prefix loop.
   evidence: `frontend/components/campaigns/BlogEditor.tsx` `FORBID_ATTR: ["style", "srcset", "onerror", "onload", "onclick"]` — `onmouseover`, `onkeydown`, `oninput`, `onchange`, and all other `on*` attributes pass client-side sanitization. Pre-existing gap, not introduced by 12-10, but the widened ALLOWED_TAGS makes more tags susceptible.
