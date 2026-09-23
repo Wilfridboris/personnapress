@@ -315,7 +315,7 @@ development_status:
   12-8-write-token-authored-article-readback: done
 
   # Epic 12 Write-token update/unpublish of published articles -- PUT /public/v1/authored/articles/{id} (full-content update in place, published edits live immediately, slug immutable, auto-revision source=edit + reading_time recompute) + DELETE /{id} (soft unpublish -> hidden, reversible, never hard-deletes); reuses update_article_content/set_article_status/get_article + 12.7 pipeline/response/limiter; POST 409 guardrail + public read routes untouched; PUT/DELETE not CORS-allowed; no migration/model/dep/frontend-app change; depends on 12-8
-  12-9-write-token-update-delete-published-article: ready-for-dev
+  12-9-write-token-update-delete-published-article: review
 
   # Sidebar client nav UX: "New client" in switcher, direct nav, back-link cleanup
   fix-sidebar-client-nav-ux: done

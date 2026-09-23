@@ -76,6 +76,8 @@ const TOC_SECTIONS = [
   { id: "list-tags", label: "List Tags" },
   { id: "create-article", label: "Create Article" },
   { id: "read-back", label: "Read Back Articles" },
+  { id: "update-article", label: "Update an Article" },
+  { id: "unpublish-article", label: "Unpublish an Article" },
   { id: "errors", label: "Error Reference" },
   { id: "caching", label: "Caching" },
   { id: "examples", label: "Code Examples" },
@@ -528,11 +530,15 @@ function EndpointBlock({
   responseAriaLabel,
   children,
 }: EndpointBlockProps) {
-  // POST endpoints use a distinct badge so the mutating verb is visually obvious.
+  // Mutating verbs use distinct badges so they are visually obvious. DELETE is
+  // styled with the danger token to flag the withdrawal gesture.
+  const mutatingBadge = "border border-highlighter bg-highlighter/10 text-ink font-mono text-xs px-2 py-0.5";
   const badgeClass =
-    method === "POST"
-      ? "border border-highlighter bg-highlighter/10 text-ink font-mono text-xs px-2 py-0.5"
-      : "border border-success bg-success-muted text-success font-mono text-xs px-2 py-0.5";
+    method === "DELETE"
+      ? "border border-danger bg-danger-muted text-danger font-mono text-xs px-2 py-0.5"
+      : method === "POST" || method === "PUT"
+        ? mutatingBadge
+        : "border border-success bg-success-muted text-success font-mono text-xs px-2 py-0.5";
   return (
     <div className="border border-border">
       <div className="border-b border-border px-6 py-4 flex items-baseline gap-3 flex-wrap">
@@ -697,6 +703,87 @@ curl --silent --fail-with-body \\
   "https://api.personnapress.com/public/v1/authored/articles/$ARTICLE_ID" \\
   -H "Authorization: Bearer ppw_your_write_token_here"`;
 
+const UPDATE_ARTICLE_REQUEST = `{
+  "title": "How We Cut Onboarding Time in Half (2026 update)",
+  "format": "markdown",
+  "content": "## The problem\\n\\nNew accounts took three days to activate.\\n\\nWe fixed it in two steps.",
+  "excerpt": "A short summary shown in list views.",
+  "meta_description": "How we cut onboarding time in half with two workflow changes.",
+  "author": "Alex Morgan",
+  "category": "Operations",
+  "tags": ["onboarding", "ops"],
+  "featured_image_alt": "Before and after onboarding timeline"
+}`;
+
+const UPDATE_ARTICLE_RESPONSE = `{
+  "id": "0f9c1e7a-4b2d-4a11-9c3e-2a7f8b6d5c40",
+  "slug": "cut-onboarding-time-in-half",
+  "status": "published",
+  "edit_url": "https://app.personnapress.com/articles/0f9c1e7a-4b2d-4a11-9c3e-2a7f8b6d5c40",
+  "created_at": "2026-09-20T14:02:11+00:00",
+  "updated_at": "2026-09-22T09:15:44+00:00",
+  "updated": true
+}`;
+
+const UNPUBLISH_ARTICLE_RESPONSE = `{
+  "id": "0f9c1e7a-4b2d-4a11-9c3e-2a7f8b6d5c40",
+  "slug": "cut-onboarding-time-in-half",
+  "status": "hidden",
+  "edit_url": "https://app.personnapress.com/articles/0f9c1e7a-4b2d-4a11-9c3e-2a7f8b6d5c40",
+  "created_at": "2026-09-20T14:02:11+00:00",
+  "updated_at": "2026-09-22T09:20:03+00:00",
+  "updated": true
+}`;
+
+const FULL_LOOP_CURL_SAMPLE = `# Step 1: create an article and capture the id
+RESPONSE=$(curl --silent --fail-with-body \\
+  -X POST "https://api.personnapress.com/public/v1/articles" \\
+  -H "Authorization: Bearer ppw_your_write_token_here" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "title": "How We Cut Onboarding Time in Half",
+    "format": "markdown",
+    "content": "## The problem\\n\\nNew accounts took three days to activate."
+  }')
+
+ARTICLE_ID=$(echo "$RESPONSE" | jq -r '.id')
+
+# Step 2: read it back by id to confirm the stored state
+curl --silent --fail-with-body \\
+  "https://api.personnapress.com/public/v1/authored/articles/$ARTICLE_ID" \\
+  -H "Authorization: Bearer ppw_your_write_token_here"
+
+# Step 3: update it in place (full replace, slug stays the same).
+# If the article is published this edit is live immediately.
+curl --silent --fail-with-body \\
+  -X PUT "https://api.personnapress.com/public/v1/authored/articles/$ARTICLE_ID" \\
+  -H "Authorization: Bearer ppw_your_write_token_here" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "title": "How We Cut Onboarding Time in Half (updated)",
+    "format": "markdown",
+    "content": "## The problem\\n\\nNew accounts took three days to activate. Now they take one."
+  }'
+
+# Step 4: unpublish it (reversible soft delete -> status becomes hidden).
+# The row and its revision history are preserved.
+curl --silent --fail-with-body \\
+  -X DELETE "https://api.personnapress.com/public/v1/authored/articles/$ARTICLE_ID" \\
+  -H "Authorization: Bearer ppw_your_write_token_here"`;
+
+const UPDATE_ARTICLE_PARAMS: ParamRow[] = [
+  { name: "title", type: "string", defaultVal: "-", description: "Article title. Trimmed, 1 to 300 characters.", required: true },
+  { name: "content", type: "string", defaultVal: "-", description: "Article body in the given format. Non-empty. Replaces the current body.", required: true },
+  { name: "format", type: '"markdown" | "html"', defaultVal: "-", description: "How to interpret content. Markdown is rendered to HTML; HTML is sanitized directly. The stored value is always sanitized HTML.", required: true },
+  { name: "excerpt", type: "string", defaultVal: "cleared", description: "Short summary, max 500 characters. Omit to clear the existing value.", required: false },
+  { name: "meta_description", type: "string", defaultVal: "cleared", description: "SEO meta description, max 320 characters. Omit to clear.", required: false },
+  { name: "author", type: "string", defaultVal: "cleared", description: "Author name, max 200 characters. Omit to clear.", required: false },
+  { name: "category", type: "string", defaultVal: "cleared", description: "Category name, max 100 characters. Omit to clear.", required: false },
+  { name: "tags", type: "string[]", defaultVal: "cleared", description: "Up to 20 tags, each max 50 characters. Omit to clear.", required: false },
+  { name: "featured_image_alt", type: "string", defaultVal: "cleared", description: "Alt text for the featured image, max 300 characters. Omit to clear.", required: false },
+  { name: "featured_image_url", type: "string", defaultVal: "cleared", description: "Featured image URL. Must be a valid http(s) URL. Omit to clear.", required: false },
+];
+
 const AUTHORED_LIST_PARAMS: ParamRow[] = [
   { name: "page", type: "int", defaultVal: "1", description: "Page number for pagination.", required: false },
   { name: "page_size", type: "int", defaultVal: "20", description: "Items per page. Minimum 1, maximum 50.", required: false },
@@ -715,12 +802,12 @@ const ERROR_ROWS: ErrorRow[] = [
   {
     code: "WRITE_SCOPE_REQUIRED",
     status: "403",
-    when: "A valid read-only (ppd_) token was used on the create or authored read-back endpoints. Use a write (ppw_) token.",
+    when: "A valid read-only (ppd_) token was used on a write endpoint (create, read-back, update, or unpublish). Use a write (ppw_) token.",
   },
   {
     code: "ARTICLE_NOT_FOUND",
     status: "404",
-    when: "Slug does not exist, article is hidden, or belongs to another client.",
+    when: "Slug or id does not exist, article is hidden (public read), or belongs to another client. Also returned by update and unpublish for an unknown or other-client id.",
   },
   {
     code: "SLUG_CONFLICT_PUBLISHED",
@@ -735,7 +822,7 @@ const ERROR_ROWS: ErrorRow[] = [
   {
     code: "VALIDATION_ERROR",
     status: "422",
-    when: "Create request body failed validation (missing/oversized field, bad format, or an unknown field).",
+    when: "Create or update request body failed validation (missing/oversized field, bad format, unknown field, a non-UUID id, or a slug sent to the update endpoint where it is immutable).",
   },
   {
     code: "RATE_LIMIT_EXCEEDED",
@@ -1214,6 +1301,178 @@ export default function HeadlessBlogApiDocsPage() {
                     content={READ_BACK_CURL_SAMPLE}
                     ariaLabel="cURL example that creates a hidden article then reads it back by id"
                   />
+                </div>
+              </section>
+
+              {/* Update an Article (write endpoint) */}
+              <section id="update-article">
+                <h2 className="font-display text-2xl font-bold text-ink mb-6">Update an Article</h2>
+                <div className="space-y-4 text-sm text-ink leading-relaxed mb-6">
+                  <p>
+                    Replace an existing article&apos;s content in place, addressed by its{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">id</code>{" "}
+                    (the value returned by the create response or the read-back endpoints). This
+                    works for a{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">hidden</code>{" "}
+                    or a{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      published
+                    </code>{" "}
+                    article. Editing a published article is live immediately and its status stays{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      published
+                    </code>
+                    . Requires a{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      Bearer ppw_
+                    </code>{" "}
+                    write token; a read-only{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">ppd_</code>{" "}
+                    token returns{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      403 WRITE_SCOPE_REQUIRED
+                    </code>
+                    . This route is rate limited to 60 requests per minute per token and the body is
+                    capped at 200 KB.
+                  </p>
+                  <p>
+                    This is a{" "}
+                    <strong>full replace, not a partial patch</strong>. Send the article&apos;s
+                    complete new state: any optional field you omit ({" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">excerpt</code>,{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">tags</code>,{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">category</code>,{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">author</code>,{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      meta_description
+                    </code>
+                    ,{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      featured_image_url
+                    </code>
+                    ,{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      featured_image_alt
+                    </code>
+                    ) is{" "}
+                    <strong>cleared to null</strong>, not left unchanged. Read the article back
+                    first if you want to preserve current values. Content is stored as sanitized
+                    HTML; no voice, generation, or AI transformation is applied.
+                  </p>
+                  <p>
+                    The{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">slug</code>{" "}
+                    is immutable through this endpoint. Sending a{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">slug</code>{" "}
+                    in the body returns{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      422 VALIDATION_ERROR
+                    </code>
+                    . An unknown or another client&apos;s id returns{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      404 ARTICLE_NOT_FOUND
+                    </code>{" "}
+                    (both cases are indistinguishable by design). Re-sending identical content is a
+                    no-op that still returns{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">200</code>.
+                  </p>
+                </div>
+                <EndpointBlock
+                  method="PUT"
+                  path="/public/v1/authored/articles/{id}"
+                  description="Full-content replace of an existing article in place."
+                  params={UPDATE_ARTICLE_PARAMS}
+                  paramsLabel="Request Fields"
+                  paramsCaption="Fields accepted by PUT /public/v1/authored/articles/{id}"
+                  requestJson={UPDATE_ARTICLE_REQUEST}
+                  requestAriaLabel="Example JSON request body for PUT /public/v1/authored/articles/id"
+                  responseJson={UPDATE_ARTICLE_RESPONSE}
+                  responseAriaLabel="Example success response for PUT showing the updated article; a published article stays published"
+                >
+                  <p>
+                    <strong>Path parameter:</strong>{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">id</code>{" "}
+                    (UUID, required). A non-UUID id returns{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">422</code>.
+                  </p>
+                </EndpointBlock>
+              </section>
+
+              {/* Unpublish an Article (write endpoint) */}
+              <section id="unpublish-article">
+                <h2 className="font-display text-2xl font-bold text-ink mb-6">
+                  Unpublish an Article
+                </h2>
+                <div className="space-y-4 text-sm text-ink leading-relaxed mb-6">
+                  <p>
+                    Take a published article down. This is a{" "}
+                    <strong>reversible unpublish</strong>, not a destructive delete: the
+                    article&apos;s status flips to{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">hidden</code>{" "}
+                    and it disappears from every public read endpoint, but the row, its content, and
+                    its full revision history are preserved. You can bring it back with a later PUT
+                    or by publishing it again in the app. Nothing is ever hard-deleted through this
+                    API.
+                  </p>
+                  <p>
+                    Requires a{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      Bearer ppw_
+                    </code>{" "}
+                    write token; a read-only{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">ppd_</code>{" "}
+                    token returns{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      403 WRITE_SCOPE_REQUIRED
+                    </code>
+                    . The call is idempotent: unpublishing an already-hidden article is a no-op that
+                    still returns{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">200</code>.
+                    An unknown or another client&apos;s id returns{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      404 ARTICLE_NOT_FOUND
+                    </code>
+                    ; a non-UUID id returns{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">422</code>.
+                  </p>
+                </div>
+                <EndpointBlock
+                  method="DELETE"
+                  path="/public/v1/authored/articles/{id}"
+                  description="Soft unpublish: set status to hidden, preserving the row and revisions."
+                  responseJson={UNPUBLISH_ARTICLE_RESPONSE}
+                  responseAriaLabel="Example success response for DELETE showing status changed to hidden"
+                >
+                  <p>
+                    <strong>Path parameter:</strong>{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">id</code>{" "}
+                    (UUID, required) is the article&apos;s{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">id</code>.
+                  </p>
+                </EndpointBlock>
+                <div className="mt-8">
+                  <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-3">
+                    Full loop: create, read back, update, then unpublish (cURL example)
+                  </p>
+                  <TerminalBlock
+                    content={FULL_LOOP_CURL_SAMPLE}
+                    ariaLabel="cURL example for the full write loop: create, read back, update, then unpublish an article"
+                  />
+                </div>
+                <div className="mt-6 border border-border p-6 bg-paper">
+                  <p className="font-mono text-xs text-graphite tracking-widest uppercase mb-3">
+                    Cache propagation
+                  </p>
+                  <p className="text-sm text-ink leading-relaxed">
+                    Edits and unpublishes are not instantly visible to already-cached public
+                    consumers. The public read routes carry{" "}
+                    <code className="font-mono text-sm bg-border text-ink px-1.5 py-0.5">
+                      public, max-age=60, stale-while-revalidate=300
+                    </code>
+                    , so a CDN or browser can keep serving the old content, or a withdrawn post, for
+                    up to that window before it revalidates. Plan for eventual, not instant,
+                    propagation.
+                  </p>
                 </div>
               </section>
 

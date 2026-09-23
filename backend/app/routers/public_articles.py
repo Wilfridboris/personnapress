@@ -29,6 +29,7 @@ from app.db.repositories.articles import (
     get_article,
     get_article_by_slug,
     list_articles,
+    set_article_status,
     update_article_content,
 )
 from app.db.repositories.delivery_tokens import (
@@ -511,15 +512,21 @@ def _render_markdown(text: str) -> str:
     return _md_renderer.render(text)
 
 
-class ArticleIngestRequest(BaseModel):
-    """Body for POST /public/v1/articles. extra='forbid' rejects unknown fields."""
+class _ArticleContentBase(BaseModel):
+    """Shared content fields + validators for the ingest and update bodies.
+
+    ``extra='forbid'`` rejects unknown fields on every subclass. The two concrete
+    request models differ only in the presence of ``slug``: ``ArticleIngestRequest``
+    adds it (create/upsert path), ``ArticleUpdateRequest`` omits it (slug is
+    immutable via PUT, so sending it lands as a 422 unknown-field). Keeping the
+    validators here avoids drift between the two contracts.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     title: str = Field(..., max_length=300)
     content: str = Field(...)
     format: str = Field(...)
-    slug: Optional[str] = Field(default=None, max_length=200)
     excerpt: Optional[str] = Field(default=None, max_length=500)
     meta_description: Optional[str] = Field(default=None, max_length=320)
     author: Optional[str] = Field(default=None, max_length=200)
@@ -576,6 +583,21 @@ class ArticleIngestRequest(BaseModel):
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
             raise ValueError("featured_image_url must be a valid http(s) URL")
         return v
+
+
+class ArticleIngestRequest(_ArticleContentBase):
+    """Body for POST /public/v1/articles. extra='forbid' rejects unknown fields."""
+
+    slug: Optional[str] = Field(default=None, max_length=200)
+
+
+class ArticleUpdateRequest(_ArticleContentBase):
+    """Body for PUT /public/v1/authored/articles/{id}.
+
+    Identical field set and caps as the ingest body **minus slug** (slug is
+    immutable via this endpoint). Because ``extra='forbid'`` is inherited, a
+    ``slug`` in the body is a 422 VALIDATION_ERROR rather than a silent no-op.
+    """
 
 
 def _ingest_response(article: Article, updated: bool, status_code: int) -> JSONResponse:
@@ -818,3 +840,132 @@ async def get_authored_article(
         "seo": seo,
     }
     return JSONResponse(content=body, headers={"Cache-Control": _CACHE_PRIVATE})
+
+
+# ---------------------------------------------------------------------------
+# Authored mutation endpoints — write-token required (Story 12.9)
+#
+# These deliberately cross the "never overwrite a live post" line that the POST
+# create path guards with its 409 — but only through an unambiguous, id-targeted
+# gesture. The POST create-flow guardrail and the public read routes are
+# untouched. PUT is a full-content replace in place (published edits go live
+# immediately, status unchanged, slug immutable). DELETE is a soft unpublish
+# (status -> hidden), never a hard row delete. No generation/voice/fidelity code
+# is ever invoked; content passes only through the render/sanitize pipeline.
+# ---------------------------------------------------------------------------
+
+@public_app.put("/v1/authored/articles/{article_id}")
+@public_limiter.limit(_WRITE_RATE_LIMIT)
+async def update_authored_article(
+    article_id: uuid.UUID,
+    request: Request,
+    client_id: uuid.UUID = Depends(get_delivery_client_write),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    """Full-content replace of an existing article in place.
+
+    Works for a hidden or a published target. Editing a published article is
+    immediately live and keeps status='published'. The body is the article's
+    complete new state: any omitted optional field is cleared to null.
+    """
+    # 1) Enforce the 200 KB body cap BEFORE parsing/rendering (413).
+    raw_body = await request.body()
+    if len(raw_body) > _MAX_BODY_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=_error_detail(
+                "CONTENT_TOO_LARGE",
+                f"Request body exceeds the {_MAX_BODY_BYTES // 1024} KB limit.",
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
+
+    # 2) Parse + validate (422 nested shape via _validation_handler). A slug in the
+    #    body is rejected here by extra='forbid'.
+    try:
+        payload = ArticleUpdateRequest.model_validate_json(raw_body)
+    except ValueError as exc:
+        raise RequestValidationError(_pydantic_errors(exc)) from exc
+
+    # 3) Fetch + tenant check — identical 404 for missing or other-tenant.
+    article = await get_article(db, article_id)
+    if article is None or article.client_id != client_id:
+        return JSONResponse(
+            status_code=404,
+            content=_ARTICLE_NOT_FOUND,
+            headers={"Cache-Control": _CACHE_PRIVATE},
+        )
+
+    # 4) Content pipeline — render (markdown) then sanitize, or sanitize (html).
+    #    No generation/voice; no house dash rule.
+    if payload.format == "markdown":
+        rendered = _render_markdown(payload.content)
+        html = _sanitize_html(rendered)
+    else:
+        html = _sanitize_html(payload.content)
+
+    # 5) Full replace. Every content field is passed (omitted -> None) so
+    #    update_article_content clears absent fields. It auto-revisions only on a
+    #    real change and recomputes reading_time when html changes.
+    content_fields = {
+        "title": payload.title,
+        "html": html,
+        "excerpt": payload.excerpt,
+        "meta_description": payload.meta_description,
+        "tags": payload.tags,
+        "category": payload.category,
+        "author": payload.author,
+    }
+    article = await update_article_content(db, article, content_fields, source="edit")
+    # featured_image_* are not content-revision fields, so set them unconditionally
+    # (None when omitted) — they obey the same full-replace rule as the text fields.
+    image_changed = (
+        article.featured_image_url != payload.featured_image_url
+        or article.featured_image_alt != payload.featured_image_alt
+    )
+    article.featured_image_url = payload.featured_image_url
+    article.featured_image_alt = payload.featured_image_alt
+    # An image-only edit (identical text) does not reach update_article_content's
+    # updated_at bump, so bump it here when only the image fields change. Otherwise
+    # the updated_at-keyed detail/list ETag and the JSON-LD dateModified never flip,
+    # and the new image never propagates to conditional or cached public consumers.
+    if image_changed:
+        article.updated_at = utcnow()
+    db.add(article)
+    await db.commit()
+    await db.refresh(article)
+    return _ingest_response(article, updated=True, status_code=200)
+
+
+@public_app.delete("/v1/authored/articles/{article_id}")
+@public_limiter.limit(_WRITE_RATE_LIMIT)
+async def unpublish_authored_article(
+    article_id: uuid.UUID,
+    request: Request,
+    client_id: uuid.UUID = Depends(get_delivery_client_write),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    """Soft unpublish: take a published article down by flipping status to hidden.
+
+    Reversible — the row, its content, and its revision history are preserved and
+    it becomes recoverable via the app or a later PUT. Never a hard row delete.
+    Idempotent: an already-hidden target is a 200 no-op with no status write.
+    """
+    # Tenant check — identical 404 for missing or other-tenant.
+    article = await get_article(db, article_id)
+    if article is None or article.client_id != client_id:
+        return JSONResponse(
+            status_code=404,
+            content=_ARTICLE_NOT_FOUND,
+            headers={"Cache-Control": _CACHE_PRIVATE},
+        )
+
+    status_value = article.status.value if hasattr(article.status, "value") else article.status
+    if status_value == ArticleStatus.published.value:
+        # set_article_status flips status without creating a revision.
+        article = await set_article_status(db, article, ArticleStatus.hidden)
+        await db.commit()
+        await db.refresh(article)
+    # Already hidden -> idempotent no-op (no status write, no commit needed).
+
+    return _ingest_response(article, updated=True, status_code=200)
