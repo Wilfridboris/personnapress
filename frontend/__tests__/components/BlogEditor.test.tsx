@@ -9,6 +9,7 @@ const mockChain = {
   toggleItalic: vi.fn().mockReturnThis(),
   toggleHeading: vi.fn().mockReturnThis(),
   toggleBlockquote: vi.fn().mockReturnThis(),
+  extendMarkRange: vi.fn().mockReturnThis(),
   setLink: vi.fn().mockReturnThis(),
   unsetLink: vi.fn().mockReturnThis(),
   undo: vi.fn().mockReturnThis(),
@@ -21,7 +22,9 @@ const mockChain = {
 
 const mockEditor = {
   chain: vi.fn(() => mockChain),
-  isActive: vi.fn(() => false),
+  // Typed param (non-optional string) is required so `mockImplementation((type) => type === "link")`
+  // type-checks; `void type` marks it intentionally unused.
+  isActive: vi.fn((type: string): boolean => { void type; return false; }),
   can: vi.fn(() => ({ undo: () => true })),
   getHTML: vi.fn(() => "<p>edited content</p>"),
   getAttributes: vi.fn(() => ({})),
@@ -208,6 +211,7 @@ describe("BlogEditor", () => {
     expect(mockChain.setLink).toHaveBeenCalledWith({
       href: "https://example.com",
       rel: "nofollow noopener noreferrer",
+      target: "_blank",
     });
     expect(mockChain.run).toHaveBeenCalled();
   });
@@ -225,6 +229,7 @@ describe("BlogEditor", () => {
     expect(mockChain.setLink).toHaveBeenCalledWith({
       href: "https://example.com",
       rel: "noopener noreferrer",
+      target: undefined,
     });
     expect(mockChain.run).toHaveBeenCalled();
   });
@@ -318,8 +323,65 @@ describe("BlogEditor", () => {
     expect(mockChain.setLink).toHaveBeenCalledWith({
       href: "https://enter-test.com",
       rel: "nofollow noopener noreferrer",
+      target: "_blank",
     });
     expect(mockChain.run).toHaveBeenCalled();
+  });
+
+  // ── Link type persistence when editing an existing link ────────────────────
+  // Regression: setLink is setMark with no range extension, so on a collapsed
+  // cursor inside an existing link it only sets stored marks and never rewrites
+  // the link's rel. handleLinkConfirm must extendMarkRange("link") first.
+  // See spec-fix-link-type-toggle-persistence.md.
+
+  it("editing an existing link extends the mark range before setLink so the whole link is rewritten", () => {
+    mockEditor.isActive.mockImplementation((type: string) => type === "link");
+    mockEditor.getAttributes.mockReturnValue({ href: "https://x.com", rel: "nofollow noopener noreferrer" });
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /insert or edit link/i }));
+    // Flip the existing nofollow link to dofollow, then confirm.
+    fireEvent.click(screen.getByRole("button", { name: /^dofollow$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /update link/i }));
+    expect(mockChain.extendMarkRange).toHaveBeenCalledWith("link");
+    expect(mockChain.setLink).toHaveBeenCalledWith({
+      href: "https://x.com",
+      rel: "noopener noreferrer",
+      target: undefined,
+    });
+    expect(mockChain.run).toHaveBeenCalled();
+  });
+
+  it("editing a link with no rel (token-API published) flips it to dofollow", () => {
+    // Token-API links arrive as <a href> with no rel; openLinkDialog shows them
+    // as Nofollow. Switching to Dofollow must rewrite the whole existing link.
+    mockEditor.isActive.mockImplementation((type: string) => type === "link");
+    mockEditor.getAttributes.mockReturnValue({ href: "https://token.example" });
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /insert or edit link/i }));
+    expect(screen.getByRole("button", { name: /^nofollow$/i })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: /^dofollow$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /update link/i }));
+    expect(mockChain.extendMarkRange).toHaveBeenCalledWith("link");
+    expect(mockChain.setLink).toHaveBeenCalledWith({
+      href: "https://token.example",
+      rel: "noopener noreferrer",
+      target: undefined,
+    });
+  });
+
+  it("flipping an existing dofollow link to nofollow adds target=_blank and extends the mark range", () => {
+    mockEditor.isActive.mockImplementation((type: string) => type === "link");
+    mockEditor.getAttributes.mockReturnValue({ href: "https://y.com", rel: "noopener noreferrer" });
+    render(<BlogEditor initialHtml="<p>Hello</p>" campaignId="camp-1" clientId="client-1" readOnly={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /insert or edit link/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^nofollow$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /update link/i }));
+    expect(mockChain.extendMarkRange).toHaveBeenCalledWith("link");
+    expect(mockChain.setLink).toHaveBeenCalledWith({
+      href: "https://y.com",
+      rel: "nofollow noopener noreferrer",
+      target: "_blank",
+    });
   });
 });
 

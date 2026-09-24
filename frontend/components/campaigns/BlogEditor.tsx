@@ -281,7 +281,7 @@ const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(
 
     const handleLinkConfirm = useCallback(() => {
       if (!editor || !isValidLinkUrl(linkDialog.url)) return;
-      editor.chain().focus().setLink({
+      editor.chain().focus().extendMarkRange("link").setLink({
         href: linkDialog.url.trim(),
         rel: linkDialog.nofollow ? "nofollow noopener noreferrer" : "noopener noreferrer",
         target: linkDialog.nofollow ? "_blank" : undefined,

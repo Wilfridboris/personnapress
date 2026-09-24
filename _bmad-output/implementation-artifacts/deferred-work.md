@@ -892,3 +892,9 @@ Cross-cutting gaps found while reviewing the post-analytics feature end-to-end (
 - source_spec: `_bmad-output/implementation-artifacts/12-10-write-api-content-fidelity-tables-headings.md`
   summary: The DOMPurify `FORBID_ATTR` list in `BlogEditor.tsx` names only three specific `on*` event attributes (`onerror`, `onload`, `onclick`); all other `on*` attributes are not blocked client-side, unlike the backend which strips all `on*` via a prefix loop.
   evidence: `frontend/components/campaigns/BlogEditor.tsx` `FORBID_ATTR: ["style", "srcset", "onerror", "onload", "onclick"]` — `onmouseover`, `onkeydown`, `oninput`, `onchange`, and all other `on*` attributes pass client-side sanitization. Pre-existing gap, not introduced by 12-10, but the widened ALLOWED_TAGS makes more tags susceptible.
+
+## Deferred from: code review of fix-link-type-toggle-persistence (2026-09-23)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-fix-link-type-toggle-persistence.md`
+  summary: Editing any link through the blog editor link dialog collapses its `rel` to the binary nofollow/dofollow model, silently dropping non-standard tokens (`sponsored`, `ugc`, `me`) that a token-API-imported link may carry.
+  evidence: `handleLinkConfirm` in `frontend/components/campaigns/BlogEditor.tsx` hard-codes `rel` to either `"nofollow noopener noreferrer"` or `"noopener noreferrer"`; `openLinkDialog` only classifies rel as nofollow/dofollow. Pre-existing rel-reconstruction, but the `extendMarkRange("link")` fix now makes edits actually rewrite the whole link, so the token loss (previously a no-op on collapsed cursor) is now realized. Low impact: the editor UI only exposes the binary choice, and those tokens are not authorable in-product.
